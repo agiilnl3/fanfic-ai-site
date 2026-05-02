@@ -6,6 +6,9 @@ import {
   useUpdateStory,
   useDeleteIllustration,
   useGenerateIllustration,
+  useRegenerateIllustration,
+  useRegenerateStoryText,
+  useRegenerateStorySection,
   getGetStoryQueryKey,
   getGetIllustrationsQueryKey,
 } from "@workspace/api-client-react";
@@ -15,14 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthor } from "@/hooks/use-author";
 import { format } from "date-fns";
-import { BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2, RotateCcw } from "lucide-react";
+import { BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2, RotateCcw, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json() as Promise<T>;
-}
 
 export default function StoryReading() {
   const [, params] = useRoute("/story/:id");
@@ -30,8 +28,7 @@ export default function StoryReading() {
   const { authorName } = useAuthor();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [regeneratingStory, setRegeneratingStory] = useState(false);
-  const [regeneratingIllId, setRegeneratingIllId] = useState<number | null>(null);
+  const [regeneratingSectionIdx, setRegeneratingSectionIdx] = useState<number | null>(null);
 
   const { data: story, isLoading, error } = useGetStory(storyId, {
     query: {
@@ -43,13 +40,15 @@ export default function StoryReading() {
   const updateMutation = useUpdateStory();
   const deleteIllustrationMutation = useDeleteIllustration();
   const generateIllustrationMutation = useGenerateIllustration();
+  const regenerateIllustrationMutation = useRegenerateIllustration();
+  const regenerateStoryTextMutation = useRegenerateStoryText();
+  const regenerateStorySectionMutation = useRegenerateStorySection();
 
   const isAuthor = story?.authorName === authorName;
 
   const togglePublish = () => {
     if (!story) return;
     const newStatus = story.status === "published" ? "draft" : "published";
-
     updateMutation.mutate(
       { id: story.id, data: { status: newStatus } },
       {
@@ -70,49 +69,48 @@ export default function StoryReading() {
     );
   };
 
-  const handleRegenerateStoryText = async () => {
+  const handleRegenerateStoryText = () => {
     if (!story) return;
-    setRegeneratingStory(true);
-    try {
-      const updated = await apiFetch<typeof story>(`/api/stories/${story.id}/regenerate`, {
-        method: "POST",
-      });
-      queryClient.setQueryData(getGetStoryQueryKey(story.id), {
-        ...story,
-        ...updated,
-      });
-      toast({ title: "Story Rewritten", description: "Fresh prose has been conjured." });
-    } catch {
-      toast({ title: "Regeneration Failed", description: "Could not regenerate story text.", variant: "destructive" });
-    } finally {
-      setRegeneratingStory(false);
-    }
+    regenerateStoryTextMutation.mutate(
+      { id: story.id },
+      {
+        onSuccess: (updated) => {
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), {
+            ...story,
+            ...updated,
+          });
+          toast({ title: "Story Rewritten", description: "Fresh prose has been conjured." });
+        },
+        onError: () => {
+          toast({ title: "Regeneration Failed", description: "Could not regenerate story text.", variant: "destructive" });
+        },
+      },
+    );
   };
 
-  const handleRegenerateIllustration = async (ill: Illustration) => {
+  const handleRegenerateIllustration = (ill: Illustration) => {
     if (!story) return;
-    setRegeneratingIllId(ill.id);
-    try {
-      const updated = await apiFetch<Illustration>(
-        `/api/stories/${story.id}/illustrations/${ill.id}/regenerate`,
-        { method: "POST" },
-      );
-      queryClient.setQueryData(getGetStoryQueryKey(story.id), (old: typeof story | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          illustrations: old.illustrations.map((i) =>
-            i.id === ill.id ? updated : i,
-          ),
-          coverImageUrl: ill.sectionIndex === 0 ? updated.imageUrl : old.coverImageUrl,
-        };
-      });
-      toast({ title: "Illustration Regenerated", description: "A new scene has been painted." });
-    } catch {
-      toast({ title: "Regeneration Failed", description: "Could not regenerate illustration.", variant: "destructive" });
-    } finally {
-      setRegeneratingIllId(null);
-    }
+    regenerateIllustrationMutation.mutate(
+      { id: story.id, illustrationId: ill.id },
+      {
+        onSuccess: (updated) => {
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), (old: typeof story | undefined) => {
+            if (!old) return old;
+            return {
+              ...old,
+              illustrations: old.illustrations.map((i) =>
+                i.id === ill.id ? updated : i,
+              ),
+              coverImageUrl: ill.sectionIndex === 0 ? updated.imageUrl : old.coverImageUrl,
+            };
+          });
+          toast({ title: "Illustration Regenerated", description: "A new scene has been painted." });
+        },
+        onError: () => {
+          toast({ title: "Regeneration Failed", description: "Could not regenerate illustration.", variant: "destructive" });
+        },
+      },
+    );
   };
 
   const handleDeleteIllustration = (ill: Illustration) => {
@@ -154,6 +152,50 @@ export default function StoryReading() {
     );
   };
 
+  const handleRegenerateSection = (sectionIndex: number, currentSectionText: string) => {
+    if (!story) return;
+    setRegeneratingSectionIdx(sectionIndex);
+    regenerateStorySectionMutation.mutate(
+      { id: story.id, sectionIndex, data: { currentSectionText } },
+      {
+        onSuccess: (result) => {
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), (old: typeof story | undefined) => {
+            if (!old) return old;
+            const paragraphs = (old.fullText ?? "").split(/\n\n+/);
+            const numSections = Math.max(4, illustrations.length);
+            const paragraphsPerSection = Math.max(1, Math.ceil(paragraphs.length / numSections));
+            const startIdx = sectionIndex * paragraphsPerSection;
+            const endIdx = Math.min(startIdx + paragraphsPerSection, paragraphs.length);
+            const newParagraphs = [...paragraphs];
+            newParagraphs.splice(startIdx, endIdx - startIdx, ...result.rewrittenText.split(/\n\n+/));
+            const updatedIllustrations = result.illustration
+              ? old.illustrations.map((i) =>
+                  i.sectionIndex === sectionIndex ? result.illustration! : i,
+                ).concat(
+                  old.illustrations.some((i) => i.sectionIndex === sectionIndex) ? [] : [result.illustration],
+                )
+              : old.illustrations;
+            return {
+              ...old,
+              fullText: newParagraphs.join("\n\n"),
+              illustrations: updatedIllustrations,
+              coverImageUrl: sectionIndex === 0 && result.illustration
+                ? result.illustration.imageUrl
+                : old.coverImageUrl,
+            };
+          });
+          toast({ title: "Section Rewritten", description: "This passage has been reimagined." });
+        },
+        onError: () => {
+          toast({ title: "Failed", description: "Could not regenerate this section.", variant: "destructive" });
+        },
+        onSettled: () => {
+          setRegeneratingSectionIdx(null);
+        },
+      },
+    );
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -187,30 +229,74 @@ export default function StoryReading() {
     );
   }
 
-  const paragraphs = (story.fullText || "").split(/\n\n+/);
+  const paragraphs = (story.fullText || "").split(/\n\n+/).filter((p) => p.trim());
   const illustrations = [...(story.illustrations || [])].sort(
     (a, b) => a.sectionIndex - b.sectionIndex,
   );
-  let illIndex = 0;
+
+  const numSections = illustrations.length > 0
+    ? illustrations[illustrations.length - 1].sectionIndex + 1
+    : 1;
+
+  const illBySection = new Map<number, Illustration>();
+  for (const ill of illustrations) {
+    illBySection.set(ill.sectionIndex, ill);
+  }
+
+  const insertAfterParagraph = new Map<number, number>();
+  for (const ill of illustrations) {
+    const s = ill.sectionIndex;
+    const paraIdx = Math.min(
+      Math.floor(((s + 1) * paragraphs.length) / numSections) - 1,
+      paragraphs.length - 1,
+    );
+    insertAfterParagraph.set(Math.max(0, paraIdx), s);
+  }
+
+  const paragraphSectionIndex = (paraIdx: number): number =>
+    Math.floor((paraIdx * numSections) / Math.max(paragraphs.length, 1));
+
+  const isRegeneratingIll = (ill: Illustration) =>
+    regenerateIllustrationMutation.isPending &&
+    (regenerateIllustrationMutation.variables as { illustrationId: number } | undefined)?.illustrationId === ill.id;
 
   const elements: React.ReactNode[] = [];
   paragraphs.forEach((p, i) => {
-    if (p.trim()) {
-      elements.push(
-        <p key={`p-${i}`} className="mb-6 leading-relaxed">
-          {p}
-        </p>,
-      );
-    }
+    const thisSectionIdx = paragraphSectionIndex(i);
+    const isRegenSection = regeneratingSectionIdx === thisSectionIdx;
 
-    if (i > 0 && i % 3 === 0) {
-      const ill = illIndex < illustrations.length ? illustrations[illIndex] : null;
+    elements.push(
+      <div key={`p-wrap-${i}`} className={`relative group/para ${isRegenSection ? "opacity-40 pointer-events-none" : ""}`}>
+        {isAuthor && (
+          <div className="absolute -left-10 top-1 opacity-0 group-hover/para:opacity-100 transition-opacity">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6"
+              title="Rewrite this section"
+              disabled={regenerateStorySectionMutation.isPending || isRegenSection}
+              onClick={() => handleRegenerateSection(thisSectionIdx, p)}
+            >
+              {isRegenSection ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Pencil className="w-3 h-3" />
+              )}
+            </Button>
+          </div>
+        )}
+        <p className="mb-6 leading-relaxed">{p}</p>
+      </div>,
+    );
 
+    const sectionForIll = insertAfterParagraph.get(i);
+    if (sectionForIll !== undefined) {
+      const ill = illBySection.get(sectionForIll);
       if (ill) {
         elements.push(
           <figure key={`ill-${ill.id}`} className="my-12 relative group">
             <div className="rounded-xl overflow-hidden book-shadow relative">
-              {regeneratingIllId === ill.id ? (
+              {isRegeneratingIll(ill) ? (
                 <div className="w-full h-64 flex items-center justify-center bg-muted/30">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
                   <span className="ml-2 text-muted-foreground">Painting new scene...</span>
@@ -220,14 +306,13 @@ export default function StoryReading() {
               )}
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 pointer-events-none rounded-xl" />
             </div>
-
             {isAuthor && (
               <div className="mt-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   size="sm"
                   variant="secondary"
                   className="text-xs h-7"
-                  disabled={regeneratingIllId === ill.id}
+                  disabled={isRegeneratingIll(ill)}
                   onClick={() => handleRegenerateIllustration(ill)}
                 >
                   <RefreshCw className="w-3 h-3 mr-1" />
@@ -245,7 +330,6 @@ export default function StoryReading() {
                 </Button>
               </div>
             )}
-
             {ill.caption && (
               <figcaption className="text-center text-muted-foreground text-sm italic mt-4 px-8">
                 {ill.caption}
@@ -253,9 +337,10 @@ export default function StoryReading() {
             )}
           </figure>,
         );
-        illIndex++;
       } else if (isAuthor) {
-        const sectionText = paragraphs.slice(Math.max(0, i - 2), i + 1).join("\n\n");
+        const sectionText = paragraphs
+          .slice(Math.max(0, i - 1), i + 2)
+          .join("\n\n");
         elements.push(
           <div key={`add-ill-${i}`} className="my-8 flex justify-center">
             <Button
@@ -263,7 +348,7 @@ export default function StoryReading() {
               variant="outline"
               className="border-dashed text-xs opacity-50 hover:opacity-100 transition-opacity"
               disabled={generateIllustrationMutation.isPending}
-              onClick={() => handleAddIllustration(illIndex, sectionText)}
+              onClick={() => handleAddIllustration(sectionForIll, sectionText)}
             >
               {generateIllustrationMutation.isPending ? (
                 <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -312,9 +397,9 @@ export default function StoryReading() {
               size="sm"
               className="rounded-full shadow-lg backdrop-blur-md"
               onClick={handleRegenerateStoryText}
-              disabled={regeneratingStory}
+              disabled={regenerateStoryTextMutation.isPending}
             >
-              {regeneratingStory ? (
+              {regenerateStoryTextMutation.isPending ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <RotateCcw className="w-4 h-4 mr-2" />
@@ -341,7 +426,7 @@ export default function StoryReading() {
           </div>
         )}
 
-        {regeneratingStory && (
+        {regenerateStoryTextMutation.isPending && (
           <div className="container mx-auto px-4 max-w-3xl mt-8">
             <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl text-primary">
               <Loader2 className="w-5 h-5 animate-spin shrink-0" />

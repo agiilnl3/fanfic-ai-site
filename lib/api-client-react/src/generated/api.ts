@@ -24,6 +24,8 @@ import type {
   HealthStatus,
   Illustration,
   ListStoriesParams,
+  RegenerateSectionBody,
+  RegenerateSectionResponse,
   Story,
   StoryStats,
   StoryWithIllustrations,
@@ -1153,4 +1155,274 @@ export const useDeleteIllustration = <
   TContext
 > => {
   return useMutation(getDeleteIllustrationMutationOptions(options));
+};
+
+/**
+ * @summary Regenerate an existing illustration using its stored prompt
+ */
+export const getRegenerateIllustrationUrl = (
+  id: number,
+  illustrationId: number,
+) => {
+  return `/api/stories/${id}/illustrations/${illustrationId}/regenerate`;
+};
+
+export const regenerateIllustration = async (
+  id: number,
+  illustrationId: number,
+  options?: RequestInit,
+): Promise<Illustration> => {
+  return customFetch<Illustration>(
+    getRegenerateIllustrationUrl(id, illustrationId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRegenerateIllustrationMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateIllustration>>,
+    TError,
+    { id: number; illustrationId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateIllustration>>,
+  TError,
+  { id: number; illustrationId: number },
+  TContext
+> => {
+  const mutationKey = ["regenerateIllustration"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateIllustration>>,
+    { id: number; illustrationId: number }
+  > = (props) => {
+    const { id, illustrationId } = props ?? {};
+
+    return regenerateIllustration(id, illustrationId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateIllustrationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateIllustration>>
+>;
+
+export type RegenerateIllustrationMutationError = ErrorType<void>;
+
+/**
+ * @summary Regenerate an existing illustration using its stored prompt
+ */
+export const useRegenerateIllustration = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateIllustration>>,
+    TError,
+    { id: number; illustrationId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateIllustration>>,
+  TError,
+  { id: number; illustrationId: number },
+  TContext
+> => {
+  return useMutation(getRegenerateIllustrationMutationOptions(options));
+};
+
+/**
+ * @summary Regenerate full story text using the same genre, style, and seed
+ */
+export const getRegenerateStoryTextUrl = (id: number) => {
+  return `/api/stories/${id}/regenerate`;
+};
+
+export const regenerateStoryText = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Story> => {
+  return customFetch<Story>(getRegenerateStoryTextUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRegenerateStoryTextMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateStoryText>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateStoryText>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["regenerateStoryText"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateStoryText>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return regenerateStoryText(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateStoryTextMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateStoryText>>
+>;
+
+export type RegenerateStoryTextMutationError = ErrorType<void>;
+
+/**
+ * @summary Regenerate full story text using the same genre, style, and seed
+ */
+export const useRegenerateStoryText = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateStoryText>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateStoryText>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRegenerateStoryTextMutationOptions(options));
+};
+
+/**
+ * @summary Regenerate text for a specific section and its illustration
+ */
+export const getRegenerateStorySectionUrl = (
+  id: number,
+  sectionIndex: number,
+) => {
+  return `/api/stories/${id}/sections/${sectionIndex}/regenerate`;
+};
+
+export const regenerateStorySection = async (
+  id: number,
+  sectionIndex: number,
+  regenerateSectionBody: RegenerateSectionBody,
+  options?: RequestInit,
+): Promise<RegenerateSectionResponse> => {
+  return customFetch<RegenerateSectionResponse>(
+    getRegenerateStorySectionUrl(id, sectionIndex),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(regenerateSectionBody),
+    },
+  );
+};
+
+export const getRegenerateStorySectionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateStorySection>>,
+    TError,
+    { id: number; sectionIndex: number; data: BodyType<RegenerateSectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof regenerateStorySection>>,
+  TError,
+  { id: number; sectionIndex: number; data: BodyType<RegenerateSectionBody> },
+  TContext
+> => {
+  const mutationKey = ["regenerateStorySection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof regenerateStorySection>>,
+    { id: number; sectionIndex: number; data: BodyType<RegenerateSectionBody> }
+  > = (props) => {
+    const { id, sectionIndex, data } = props ?? {};
+
+    return regenerateStorySection(id, sectionIndex, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegenerateStorySectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof regenerateStorySection>>
+>;
+export type RegenerateStorySectionMutationBody =
+  BodyType<RegenerateSectionBody>;
+export type RegenerateStorySectionMutationError = ErrorType<void>;
+
+/**
+ * @summary Regenerate text for a specific section and its illustration
+ */
+export const useRegenerateStorySection = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof regenerateStorySection>>,
+    TError,
+    { id: number; sectionIndex: number; data: BodyType<RegenerateSectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof regenerateStorySection>>,
+  TError,
+  { id: number; sectionIndex: number; data: BodyType<RegenerateSectionBody> },
+  TContext
+> => {
+  return useMutation(getRegenerateStorySectionMutationOptions(options));
 };

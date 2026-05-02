@@ -289,6 +289,85 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/illustrations/{illustrationId}/regenerate:
+    post:
+      operationId: regenerateIllustration
+      tags: [illustrations]
+      summary: Regenerate an existing illustration using its stored prompt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: illustrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Regenerated illustration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Illustration"
+        "404":
+          description: Not found
+
+  /stories/{id}/regenerate:
+    post:
+      operationId: regenerateStoryText
+      tags: [stories]
+      summary: Regenerate full story text using the same genre, style, and seed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Story with updated text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "404":
+          description: Not found
+
+  /stories/{id}/sections/{sectionIndex}/regenerate:
+    post:
+      operationId: regenerateStorySection
+      tags: [stories]
+      summary: Regenerate text for a specific section and its illustration
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sectionIndex
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegenerateSectionBody"
+      responses:
+        "200":
+          description: Regenerated section text and new illustration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegenerateSectionResponse"
+        "404":
+          description: Not found
+
 components:
   schemas:
     HealthStatus:
@@ -495,3 +574,25 @@ components:
       required:
         - sectionIndex
         - sectionText
+
+    RegenerateSectionBody:
+      type: object
+      properties:
+        currentSectionText:
+          type: string
+          description: The current paragraph text to be rewritten
+      required:
+        - currentSectionText
+
+    RegenerateSectionResponse:
+      type: object
+      properties:
+        sectionIndex:
+          type: integer
+        rewrittenText:
+          type: string
+        illustration:
+          $ref: "#/components/schemas/Illustration"
+      required:
+        - sectionIndex
+        - rewrittenText

@@ -263,16 +263,73 @@ export const DeleteIllustrationParams = zod.object({
 });
 
 /**
- * @summary Regenerate a specific illustration
+ * @summary Regenerate an existing illustration using its stored prompt
  */
 export const RegenerateIllustrationParams = zod.object({
   id: zod.coerce.number(),
   illustrationId: zod.coerce.number(),
 });
 
+export const RegenerateIllustrationResponse = zod.object({
+  id: zod.number(),
+  storyId: zod.number(),
+  sectionIndex: zod.number(),
+  prompt: zod.string(),
+  imageUrl: zod.string(),
+  caption: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
 /**
- * @summary Regenerate the full story text using the same settings
+ * @summary Regenerate full story text using the same genre, style, and seed
  */
 export const RegenerateStoryTextParams = zod.object({
   id: zod.coerce.number(),
+});
+
+export const RegenerateStoryTextResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod.enum(["draft", "published"]),
+  authorName: zod.string(),
+  coverImageUrl: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Regenerate text for a specific section and its illustration
+ */
+export const RegenerateStorySectionParams = zod.object({
+  id: zod.coerce.number(),
+  sectionIndex: zod.coerce.number(),
+});
+
+export const RegenerateStorySectionBody = zod.object({
+  currentSectionText: zod
+    .string()
+    .describe("The current paragraph text to be rewritten"),
+});
+
+export const RegenerateStorySectionResponse = zod.object({
+  sectionIndex: zod.number(),
+  rewrittenText: zod.string(),
+  illustration: zod
+    .object({
+      id: zod.number(),
+      storyId: zod.number(),
+      sectionIndex: zod.number(),
+      prompt: zod.string(),
+      imageUrl: zod.string(),
+      caption: zod.string().nullish(),
+      createdAt: zod.string(),
+    })
+    .optional(),
 });

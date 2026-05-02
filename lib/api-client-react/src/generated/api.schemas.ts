@@ -146,6 +146,17 @@ export interface GenerateIllustrationBody {
   caption?: string;
 }
 
+export interface RegenerateSectionBody {
+  /** The current paragraph text to be rewritten */
+  currentSectionText: string;
+}
+
+export interface RegenerateSectionResponse {
+  sectionIndex: number;
+  rewrittenText: string;
+  illustration?: Illustration;
+}
+
 export type ListStoriesParams = {
   status?: ListStoriesStatus;
   genre?: string;

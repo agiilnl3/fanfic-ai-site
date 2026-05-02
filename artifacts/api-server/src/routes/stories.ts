@@ -17,6 +17,8 @@ import {
   DeleteIllustrationParams,
   RegenerateIllustrationParams,
   RegenerateStoryTextParams,
+  RegenerateStorySectionParams,
+  RegenerateStorySectionBody,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -546,7 +548,121 @@ router.post("/stories/:id/regenerate", async (req, res): Promise<void> => {
     .where(eq(storiesTable.id, story.id))
     .returning();
 
-  res.json({ ...updated, sections: generated.sections });
+  res.json(updated ?? story);
 });
+
+router.post(
+  "/stories/:id/sections/:sectionIndex/regenerate",
+  async (req, res): Promise<void> => {
+    const idParam = RegenerateStorySectionParams.safeParse(req.params);
+    if (!idParam.success) {
+      res.status(400).json({ error: idParam.error.message });
+      return;
+    }
+
+    const sectionIndex = idParam.data.sectionIndex;
+
+    const bodyParsed = RegenerateStorySectionBody.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ error: bodyParsed.error.message });
+      return;
+    }
+
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, idParam.data.id));
+
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+
+    req.log.info({ storyId: story.id, sectionIndex }, "Regenerating section text");
+
+    const sectionSystemPrompt = `You are a creative fiction writer continuing a ${story.genre} story in ${story.artStyle} style. Rewrite the given passage to be more vivid and compelling while keeping the same plot points.`;
+    const sectionResponse = await openai.chat.completions.create({
+      model: "gpt-5.1",
+      max_completion_tokens: 1024,
+      messages: [
+        { role: "system", content: sectionSystemPrompt },
+        {
+          role: "user",
+          content: `Rewrite this passage (return only the rewritten text, no JSON wrapper):\n\n${bodyParsed.data.currentSectionText}`,
+        },
+      ],
+    });
+    const rewrittenText = sectionResponse.choices[0]?.message?.content ?? bodyParsed.data.currentSectionText;
+
+    const paragraphs = (story.fullText ?? "").split(/\n\n+/);
+    const numSections = 4;
+    const paragraphsPerSection = Math.max(1, Math.ceil(paragraphs.length / numSections));
+    const startIdx = sectionIndex * paragraphsPerSection;
+    const endIdx = Math.min(startIdx + paragraphsPerSection, paragraphs.length);
+    const newParagraphs = [...paragraphs];
+    const rewrittenParagraphs = rewrittenText.split(/\n\n+/);
+    newParagraphs.splice(startIdx, endIdx - startIdx, ...rewrittenParagraphs);
+    const newFullText = newParagraphs.join("\n\n");
+
+    await db
+      .update(storiesTable)
+      .set({ fullText: newFullText, updatedAt: new Date() })
+      .where(eq(storiesTable.id, story.id));
+
+    const illustrationPrompt = buildIllustrationPrompt(
+      rewrittenText,
+      story.genre,
+      story.artStyle,
+      story.characters,
+    );
+    const buffer = await generateImageBuffer(illustrationPrompt, "1024x1024");
+    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+
+    const existingIlls = await db
+      .select()
+      .from(illustrationsTable)
+      .where(
+        and(
+          eq(illustrationsTable.storyId, story.id),
+          eq(illustrationsTable.sectionIndex, sectionIndex),
+        ),
+      );
+
+    let illustration;
+    if (existingIlls[0]) {
+      const [updated] = await db
+        .update(illustrationsTable)
+        .set({ imageUrl: dataUrl, prompt: illustrationPrompt })
+        .where(eq(illustrationsTable.id, existingIlls[0].id))
+        .returning();
+      illustration = updated;
+    } else {
+      const [inserted] = await db
+        .insert(illustrationsTable)
+        .values({
+          storyId: story.id,
+          sectionIndex,
+          prompt: illustrationPrompt,
+          imageUrl: dataUrl,
+          caption: null,
+        })
+        .returning();
+      illustration = inserted;
+    }
+
+    if (sectionIndex === 0 && illustration) {
+      await db
+        .update(storiesTable)
+        .set({ coverImageUrl: dataUrl })
+        .where(eq(storiesTable.id, story.id));
+    }
+
+    res.json({
+      sectionIndex,
+      rewrittenText,
+      illustration: illustration ?? null,
+    });
+  },
+);
 
 export default router;
