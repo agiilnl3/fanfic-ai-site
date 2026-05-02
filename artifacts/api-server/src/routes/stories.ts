@@ -57,17 +57,20 @@ async function generateStoryText(
   const wordTarget =
     lengthSetting === "short" ? 600 : lengthSetting === "long" ? 2500 : 1400;
 
+  const maxTokens =
+    lengthSetting === "short" ? 16000 : lengthSetting === "long" ? 65536 : 32000;
+
   const systemPrompt = `You are a creative fiction writer. Write engaging, coherent ${genre} stories with vivid descriptions and compelling characters. The art style for illustrations will be: ${artStyle}. Always respond in valid JSON.`;
 
   const userPrompt = seedPrompt
     ? `Write a ${genre} fanfiction story of approximately ${wordTarget} words. Seed idea: "${seedPrompt}". 
-Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (split fullText into 3-4 narrative sections for illustration) }`
+Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (3-4 brief 1-2 sentence scene descriptions for illustration prompts — do NOT repeat fullText) }`
     : `Write an original ${genre} fiction story of approximately ${wordTarget} words with memorable characters and a satisfying plot arc.
-Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (split fullText into 3-4 narrative sections for illustration) }`;
+Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (3-4 brief 1-2 sentence scene descriptions for illustration prompts — do NOT repeat fullText) }`;
 
   const response = await openai.chat.completions.create({
     model: "gpt-5.1",
-    max_completion_tokens: 4096,
+    max_completion_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -76,13 +79,21 @@ Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 
   });
 
   const raw = response.choices[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(raw);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`AI returned malformed JSON. The story may have been too long. Try a shorter length setting. (raw length: ${raw.length})`);
+  }
+  const p = parsed as Record<string, unknown>;
   return {
-    title: parsed.title ?? "Untitled Story",
-    fullText: parsed.fullText ?? "",
-    summary: parsed.summary ?? "",
-    characters: parsed.characters ?? "",
-    sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+    title: typeof p.title === "string" ? p.title : "Untitled Story",
+    fullText: typeof p.fullText === "string" ? p.fullText : "",
+    summary: typeof p.summary === "string" ? p.summary : "",
+    characters: typeof p.characters === "string" ? p.characters : "",
+    sections: Array.isArray(p.sections)
+      ? p.sections.filter((s): s is string => typeof s === "string")
+      : [],
   };
 }
 
