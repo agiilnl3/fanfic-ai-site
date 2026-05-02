@@ -1,9 +1,13 @@
-import rateLimit, { type RateLimitRequestHandler } from "express-rate-limit";
+import rateLimit, {
+  ipKeyGenerator,
+  type RateLimitRequestHandler,
+} from "express-rate-limit";
+import type { Request } from "express";
 
-function clientKey(req: { ip?: string; headers: Record<string, unknown> }): string {
+function clientKey(req: Request): string {
   const author = req.headers["x-author-name"];
   if (typeof author === "string" && author.length > 0) return `author:${author}`;
-  return req.ip ?? "unknown";
+  return ipKeyGenerator(req.ip ?? "unknown");
 }
 
 export const aiGenerationLimiter: RateLimitRequestHandler = rateLimit({

@@ -23,6 +23,7 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { logger } from "../lib/logger";
+import { buildIllustrationPrompt } from "../lib/prompt";
 import {
   aiGenerationLimiter,
   illustrationLimiter,
@@ -30,22 +31,6 @@ import {
 } from "../middlewares/rate-limit";
 
 const router: IRouter = Router();
-
-function buildIllustrationPrompt(
-  sectionText: string,
-  genre: string,
-  artStyle: string,
-  characters: string | null | undefined,
-  summary: string | null | undefined,
-): string {
-  const characterHint = characters
-    ? ` Characters: ${characters.slice(0, 200)}.`
-    : "";
-  const storyContext = summary
-    ? ` Story context: ${summary.slice(0, 200)}.`
-    : "";
-  return `${artStyle} illustration for a ${genre} story.${storyContext}${characterHint} Scene: ${sectionText.slice(0, 300)}. High quality, detailed, no text or watermarks.`;
-}
 
 async function generateStoryText(
   genre: string,

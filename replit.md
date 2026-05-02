@@ -73,4 +73,17 @@ Dark indigo and warm amber theme ("candlelit writer's study"). Fraunces serif fo
 - Story generation uses `gpt-5.1` model with `json_object` response format
 - Illustrations generated in parallel after text generation, limited to 4 per story
 
+## Performance & Hardening (May 2026)
+
+- **Code-splitting**: `App.tsx` lazy-loads Create/Story/Feed/Dashboard pages with React.lazy + Suspense
+- **Feed virtualization**: `pages/feed.tsx` uses `@tanstack/react-virtual` window virtualizer when ≥50 stories
+- **Hover prefetch**: `StoryCard` prefetches `getStory(id)` on hover/focus/touch with 30s staleTime
+- **Lazy images**: All `<img>` tags use `loading="lazy" decoding="async"`
+- **Rate limiting**: `src/middlewares/rate-limit.ts` — `aiGenerationLimiter` (20/h), `illustrationLimiter` (60/h), `writeLimiter` (30/min); key = `X-Author-Name` header or `ipKeyGenerator(req.ip)` (IPv6-safe). `app.set("trust proxy", 1)` set in `app.ts`
+- **Tests**: Vitest configured for api-server. `pnpm --filter @workspace/api-server test`. Pure helpers (e.g. `buildIllustrationPrompt` in `src/lib/prompt.ts`) unit-tested
+
+## Deferred (will be configured later via admin panel)
+
+- Auth (Clerk), background queue for AI jobs, PostHog analytics, Sentry error tracking, expanded e2e tests
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
