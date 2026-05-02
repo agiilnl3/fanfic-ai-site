@@ -1,19 +1,37 @@
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Story } from "@workspace/api-client-react";
+import { Story, getGetStoryQueryOptions } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
 
 export function StoryCard({ story }: { story: Story }) {
+  const queryClient = useQueryClient();
+
+  const handlePrefetch = () => {
+    queryClient.prefetchQuery({
+      ...getGetStoryQueryOptions(story.id),
+      staleTime: 30_000,
+    });
+  };
+
   return (
-    <Link href={`/story/${story.id}`} className="block group h-full">
+    <Link
+      href={`/story/${story.id}`}
+      className="block group h-full"
+      onMouseEnter={handlePrefetch}
+      onFocus={handlePrefetch}
+      onTouchStart={handlePrefetch}
+    >
       <Card className="h-full bg-card hover:bg-card/80 transition-all border-border/50 overflow-hidden flex flex-col book-shadow hover:-translate-y-1 duration-300">
         <div className="aspect-[3/4] w-full relative bg-muted overflow-hidden">
           {story.coverImageUrl ? (
-            <img 
-              src={story.coverImageUrl} 
-              alt={story.title} 
+            <img
+              src={story.coverImageUrl}
+              alt={story.title}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
             />
           ) : (

@@ -23,6 +23,11 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { logger } from "../lib/logger";
+import {
+  aiGenerationLimiter,
+  illustrationLimiter,
+  writeLimiter,
+} from "../middlewares/rate-limit";
 
 const router: IRouter = Router();
 
@@ -125,7 +130,7 @@ router.get("/stories", async (req, res): Promise<void> => {
   res.json(stories);
 });
 
-router.post("/stories", async (req, res): Promise<void> => {
+router.post("/stories", writeLimiter, async (req, res): Promise<void> => {
   const parsed = CreateStoryBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -143,7 +148,7 @@ router.post("/stories", async (req, res): Promise<void> => {
   res.status(201).json(story);
 });
 
-router.post("/stories/generate", async (req, res): Promise<void> => {
+router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<void> => {
   const parsed = GenerateStoryBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -403,7 +408,7 @@ router.get("/stories/:id/illustrations", async (req, res): Promise<void> => {
   res.json(illustrations);
 });
 
-router.post("/stories/:id/illustrations", async (req, res): Promise<void> => {
+router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res): Promise<void> => {
   const params = GenerateIllustrationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -482,6 +487,7 @@ router.delete(
 
 router.post(
   "/stories/:id/illustrations/:illustrationId/regenerate",
+  illustrationLimiter,
   async (req, res): Promise<void> => {
     const params = RegenerateIllustrationParams.safeParse(req.params);
     if (!params.success) {
@@ -535,7 +541,7 @@ router.post(
   },
 );
 
-router.post("/stories/:id/regenerate", async (req, res): Promise<void> => {
+router.post("/stories/:id/regenerate", aiGenerationLimiter, async (req, res): Promise<void> => {
   const params = RegenerateStoryTextParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -577,6 +583,7 @@ router.post("/stories/:id/regenerate", async (req, res): Promise<void> => {
 
 router.post(
   "/stories/:id/sections/:sectionIndex/regenerate",
+  aiGenerationLimiter,
   async (req, res): Promise<void> => {
     const idParam = RegenerateStorySectionParams.safeParse(req.params);
     if (!idParam.success) {

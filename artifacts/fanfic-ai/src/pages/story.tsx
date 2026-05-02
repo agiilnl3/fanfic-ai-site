@@ -325,7 +325,13 @@ export default function StoryReading() {
                   <span className="ml-2 text-muted-foreground">Painting new scene…</span>
                 </div>
               ) : (
-                <img src={ill.imageUrl} alt={ill.prompt} className="w-full h-auto object-cover" />
+                <img
+                  src={ill.imageUrl}
+                  alt={ill.prompt}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-auto object-cover"
+                />
               )}
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 pointer-events-none rounded-xl" />
             </div>
