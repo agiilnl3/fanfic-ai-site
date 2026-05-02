@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { useGetStoryStats, useGetPublicFeed } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout";
+import { Seo } from "@/components/seo";
 import { Button } from "@/components/ui/button";
 import { StoryCard } from "@/components/story-card";
 import { Sparkles, BookOpen, PenTool, Users, ArrowRight } from "lucide-react";
@@ -12,6 +13,7 @@ export default function Home() {
 
   return (
     <Layout>
+      <Seo />
       {/* Hero Section */}
       <section className="relative pt-24 pb-32 overflow-hidden flex flex-col items-center justify-center min-h-[70vh]">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/10 via-background to-background" />

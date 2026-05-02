@@ -37,6 +37,28 @@ export const ART_STYLES = [
   "Cinematic", "Photography",
 ];
 
+export const ART_STYLE_PREVIEWS: Record<string, { emoji: string; gradient: string; hint: string }> = {
+  "Watercolor":      { emoji: "🎨", gradient: "from-sky-200 via-rose-200 to-amber-200", hint: "Soft, dreamlike washes" },
+  "Oil Painting":    { emoji: "🖌️", gradient: "from-amber-700 via-rose-800 to-stone-900", hint: "Rich, textured strokes" },
+  "Acrylic":         { emoji: "🖼️", gradient: "from-emerald-300 via-teal-400 to-cyan-500", hint: "Bold, vibrant colors" },
+  "Digital Art":     { emoji: "🖥️", gradient: "from-indigo-500 via-purple-500 to-pink-500", hint: "Crisp, modern rendering" },
+  "Concept Art":     { emoji: "🗺️", gradient: "from-slate-700 via-slate-900 to-amber-900", hint: "Cinematic worldbuilding" },
+  "Pixel Art":       { emoji: "👾", gradient: "from-lime-400 via-emerald-500 to-cyan-500", hint: "8/16-bit retro charm" },
+  "Ink Sketch":      { emoji: "✒️", gradient: "from-stone-100 via-stone-300 to-stone-700", hint: "Loose monochrome lines" },
+  "Pen & Ink":       { emoji: "🖋️", gradient: "from-zinc-100 via-zinc-400 to-zinc-900", hint: "Precise crosshatching" },
+  "Charcoal":        { emoji: "✏️", gradient: "from-stone-200 via-stone-500 to-neutral-900", hint: "Smoky, dramatic shading" },
+  "Comic Book":      { emoji: "💥", gradient: "from-red-500 via-yellow-400 to-blue-500", hint: "Bold lines, pop colors" },
+  "Manga":           { emoji: "🌸", gradient: "from-rose-200 via-fuchsia-300 to-indigo-400", hint: "Expressive Japanese style" },
+  "Graphic Novel":   { emoji: "📖", gradient: "from-amber-800 via-stone-700 to-slate-900", hint: "Mature, illustrated panels" },
+  "Impressionist":   { emoji: "🌅", gradient: "from-amber-200 via-rose-300 to-violet-400", hint: "Light & atmosphere" },
+  "Art Nouveau":     { emoji: "🌿", gradient: "from-emerald-700 via-amber-500 to-rose-600", hint: "Elegant, organic curves" },
+  "Art Deco":        { emoji: "💎", gradient: "from-amber-400 via-yellow-300 to-stone-900", hint: "Geometric luxury" },
+  "Surrealist":      { emoji: "🌀", gradient: "from-indigo-600 via-fuchsia-500 to-amber-400", hint: "Dreamlike, impossible" },
+  "Expressionist":   { emoji: "🔥", gradient: "from-red-600 via-orange-500 to-yellow-400", hint: "Raw emotional color" },
+  "Cinematic":       { emoji: "🎬", gradient: "from-amber-600 via-stone-900 to-slate-900", hint: "Filmic lighting & framing" },
+  "Photography":     { emoji: "📷", gradient: "from-stone-300 via-stone-600 to-stone-900", hint: "Photorealistic detail" },
+};
+
 type Phase = "idle" | "writing" | "illustrating" | "done";
 
 const NUM_SECTIONS = 4;
@@ -59,6 +81,7 @@ export default function CreateStory() {
   const [lengthSetting, setLengthSetting] = useState<"short" | "medium" | "long">("medium");
   const [seedPrompt, setSeedPrompt] = useState<string>("");
   const [withIllustrations, setWithIllustrations] = useState<boolean>(true);
+  const [model, setModel] = useState<"gpt-5.1" | "gpt-5-mini">("gpt-5.1");
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [generatedStory, setGeneratedStory] = useState<Story | null>(null);
@@ -88,6 +111,7 @@ export default function CreateStory() {
         authorName: authorName.trim(),
         seedPrompt: seedPrompt.trim() || undefined,
         generateIllustrations: false,
+        model,
       });
       setGeneratedStory(story);
 
@@ -343,12 +367,45 @@ export default function CreateStory() {
                       <SelectValue placeholder="Select art style" />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
-                      {ART_STYLES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
+                      {ART_STYLES.map((s) => {
+                        const p = ART_STYLE_PREVIEWS[s];
+                        return (
+                          <SelectItem key={s} value={s}>
+                            <span className="mr-2">{p?.emoji ?? "🎨"}</span>{s}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
+                  {ART_STYLE_PREVIEWS[artStyle] && (
+                    <div
+                      className={`mt-2 rounded-lg p-3 flex items-center gap-3 bg-gradient-to-br ${ART_STYLE_PREVIEWS[artStyle].gradient} text-white shadow-inner`}
+                      data-testid="art-style-preview"
+                    >
+                      <span className="text-3xl drop-shadow">{ART_STYLE_PREVIEWS[artStyle].emoji}</span>
+                      <div className="flex-1">
+                        <div className="font-serif font-semibold drop-shadow-sm">{artStyle}</div>
+                        <div className="text-xs opacity-90 drop-shadow-sm">{ART_STYLE_PREVIEWS[artStyle].hint}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="space-y-2 pt-4">
+                <Label>AI Model</Label>
+                <Select value={model} onValueChange={(val) => setModel(val as "gpt-5.1" | "gpt-5-mini")}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-5.1">GPT-5.1 — Higher Quality (slower)</SelectItem>
+                    <SelectItem value="gpt-5-mini">GPT-5 Mini — Faster & Cheaper</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose the trade-off between richness of prose and generation speed.
+                </p>
               </div>
 
               <div className="space-y-2 pt-4">

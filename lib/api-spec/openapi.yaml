@@ -315,6 +315,153 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/like:
+    get:
+      operationId: getStoryLike
+      tags: [likes]
+      summary: Get like count and whether the current user has liked the story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: authorName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Like info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryLikeInfo"
+    post:
+      operationId: likeStory
+      tags: [likes]
+      summary: Like a story (idempotent — repeated requests do nothing)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LikeBody"
+      responses:
+        "200":
+          description: Updated like info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryLikeInfo"
+    delete:
+      operationId: unlikeStory
+      tags: [likes]
+      summary: Remove the current user's like
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: authorName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated like info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryLikeInfo"
+
+  /stories/{id}/continue:
+    post:
+      operationId: continueStory
+      tags: [stories]
+      summary: Append a new chapter to an existing story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContinueStoryBody"
+      responses:
+        "200":
+          description: Story with appended chapter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "404":
+          description: Not found
+
+  /stories/{id}/audio:
+    get:
+      operationId: getStoryAudio
+      tags: [stories]
+      summary: Generate (or stream) TTS audio for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: voice
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [alloy, echo, fable, onyx, nova, shimmer]
+            default: nova
+      responses:
+        "200":
+          description: MP3 audio stream
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+
+  /stories/{id}/export.pdf:
+    get:
+      operationId: exportStoryPdf
+      tags: [stories]
+      summary: Export the story as a PDF document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PDF binary
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+
   /stories/{id}/regenerate:
     post:
       operationId: regenerateStoryText
@@ -517,6 +664,39 @@ components:
         - lengthSetting
         - authorName
 
+    ContinueStoryBody:
+      type: object
+      required: [authorName]
+      properties:
+        authorName:
+          type: string
+          minLength: 1
+          description: Pen name of the requester. Must match the story author.
+        seedPrompt:
+          type: string
+          description: Optional hint for what should happen in the next chapter.
+        generateIllustration:
+          type: boolean
+          default: true
+
+    StoryLikeInfo:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        likeCount:
+          type: integer
+        hasLiked:
+          type: boolean
+      required: [storyId, likeCount, hasLiked]
+
+    LikeBody:
+      type: object
+      properties:
+        authorName:
+          type: string
+      required: [authorName]
+
     GenerateStoryBody:
       type: object
       properties:
@@ -534,6 +714,11 @@ components:
         generateIllustrations:
           type: boolean
           default: true
+        model:
+          type: string
+          enum: [gpt-5.1, gpt-5-mini]
+          default: gpt-5.1
+          description: Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.
       required:
         - genre
         - artStyle

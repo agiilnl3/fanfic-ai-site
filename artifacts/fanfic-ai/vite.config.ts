@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { VitePWA } from "vite-plugin-pwa";
 
 const rawPort = process.env.PORT;
 
@@ -32,6 +33,56 @@ export default defineConfig({
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: false,
+      includeAssets: ["favicon.svg", "opengraph.jpg"],
+      manifest: {
+        name: "FanFic AI — Living Stories",
+        short_name: "FanFic AI",
+        description: "AI-crafted fiction with bespoke illustrations.",
+        theme_color: "#0b0b14",
+        background_color: "#0b0b14",
+        display: "standalone",
+        start_url: basePath,
+        scope: basePath,
+        icons: [
+          { src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+        ],
+      },
+      workbox: {
+        navigateFallback: `${basePath.replace(/\/$/, "")}/index.html`,
+        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ["**/*.{js,css,html,svg,png,jpg,jpeg,webp,woff2}"],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/stories") && url.pathname.match(/\/stories\/\d+$/) !== null,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "fanfic-stories",
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 7 },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith("/api/stories") && url.pathname.includes("/illustrations"),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "fanfic-illustrations",
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts",
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
+      devOptions: { enabled: true, type: "module" },
+    }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

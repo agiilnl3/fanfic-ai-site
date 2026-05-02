@@ -1,0 +1,43 @@
+{
+  "nav": {
+    "home": "Home",
+    "library": "Library",
+    "create": "Conjure Story",
+    "dashboard": "My Desk"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "share": "Share",
+    "back": "Back",
+    "language": "Language"
+  },
+  "home": {
+    "tagline": "AI-Crafted Fiction with Living Illustrations",
+    "subtitle": "Conjure entire worlds — original prose woven with bespoke art, in seconds.",
+    "ctaCreate": "Begin a New Tale",
+    "ctaFeed": "Browse the Library"
+  },
+  "story": {
+    "listen": "Listen",
+    "hideAudio": "Hide Audio",
+    "downloadPdf": "Download PDF",
+    "shareStory": "Share Story",
+    "addNextChapter": "Add Next Chapter",
+    "backToTop": "Back to Top",
+    "theEnd": "The End"
+  },
+  "create": {
+    "title": "Conjure a New Tale",
+    "subtitle": "Set the scene — let the muses do the rest.",
+    "penName": "Pen Name",
+    "genre": "Genre",
+    "illustrationStyle": "Illustration Style",
+    "model": "AI Model",
+    "seedPrompt": "Seed Prompt (Optional)",
+    "withIllustrations": "Generate Illustrations",
+    "generate": "Conjure Story"
+  }
+}

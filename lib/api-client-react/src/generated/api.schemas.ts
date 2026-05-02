@@ -94,6 +94,27 @@ export interface CreateStoryBody {
   authorName: string;
 }
 
+export interface ContinueStoryBody {
+  /**
+   * Pen name of the requester. Must match the story author.
+   * @minLength 1
+   */
+  authorName: string;
+  /** Optional hint for what should happen in the next chapter. */
+  seedPrompt?: string;
+  generateIllustration?: boolean;
+}
+
+export interface StoryLikeInfo {
+  storyId: number;
+  likeCount: number;
+  hasLiked: boolean;
+}
+
+export interface LikeBody {
+  authorName: string;
+}
+
 export type GenerateStoryBodyLengthSetting =
   (typeof GenerateStoryBodyLengthSetting)[keyof typeof GenerateStoryBodyLengthSetting];
 
@@ -103,6 +124,17 @@ export const GenerateStoryBodyLengthSetting = {
   long: "long",
 } as const;
 
+/**
+ * Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.
+ */
+export type GenerateStoryBodyModel =
+  (typeof GenerateStoryBodyModel)[keyof typeof GenerateStoryBodyModel];
+
+export const GenerateStoryBodyModel = {
+  "gpt-51": "gpt-5.1",
+  "gpt-5-mini": "gpt-5-mini",
+} as const;
+
 export interface GenerateStoryBody {
   genre: string;
   artStyle: string;
@@ -110,6 +142,8 @@ export interface GenerateStoryBody {
   seedPrompt?: string;
   authorName: string;
   generateIllustrations?: boolean;
+  /** Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper. */
+  model?: GenerateStoryBodyModel;
 }
 
 export type UpdateStoryBodyLengthSetting =
@@ -175,3 +209,27 @@ export type GetPublicFeedParams = {
   genre?: string;
   limit?: number;
 };
+
+export type GetStoryLikeParams = {
+  authorName?: string;
+};
+
+export type UnlikeStoryParams = {
+  authorName: string;
+};
+
+export type GetStoryAudioParams = {
+  voice?: GetStoryAudioVoice;
+};
+
+export type GetStoryAudioVoice =
+  (typeof GetStoryAudioVoice)[keyof typeof GetStoryAudioVoice];
+
+export const GetStoryAudioVoice = {
+  alloy: "alloy",
+  echo: "echo",
+  fable: "fable",
+  onyx: "onyx",
+  nova: "nova",
+  shimmer: "shimmer",
+} as const;

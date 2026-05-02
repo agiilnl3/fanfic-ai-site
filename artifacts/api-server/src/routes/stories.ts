@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, count, and } from "drizzle-orm";
-import { db, storiesTable, illustrationsTable } from "@workspace/db";
+import { eq, desc, count, and, sql } from "drizzle-orm";
+import { db, storiesTable, illustrationsTable, storyLikesTable } from "@workspace/db";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -19,9 +19,21 @@ import {
   RegenerateStoryTextParams,
   RegenerateStorySectionParams,
   RegenerateStorySectionBody,
+  GetStoryLikeParams,
+  GetStoryLikeQueryParams,
+  LikeStoryParams,
+  LikeStoryBody,
+  UnlikeStoryParams,
+  UnlikeStoryQueryParams,
+  ContinueStoryParams,
+  ContinueStoryBody,
+  GetStoryAudioParams,
+  GetStoryAudioQueryParams,
+  ExportStoryPdfParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
+import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
 import { buildIllustrationPrompt } from "../lib/prompt";
 import {
@@ -37,6 +49,7 @@ async function generateStoryText(
   artStyle: string,
   lengthSetting: string,
   seedPrompt?: string,
+  model: string = "gpt-5.1",
 ): Promise<{
   title: string;
   fullText: string;
@@ -59,7 +72,7 @@ Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 
 Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (3-4 brief 1-2 sentence scene descriptions for illustration prompts — do NOT repeat fullText) }`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.1",
+    model,
     max_completion_tokens: maxTokens,
     messages: [
       { role: "system", content: systemPrompt },
@@ -140,16 +153,17 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
     return;
   }
 
-  const { genre, artStyle, lengthSetting, seedPrompt, authorName, generateIllustrations } =
+  const { genre, artStyle, lengthSetting, seedPrompt, authorName, generateIllustrations, model } =
     parsed.data;
 
-  req.log.info({ genre, artStyle, lengthSetting }, "Generating story with AI");
+  req.log.info({ genre, artStyle, lengthSetting, model }, "Generating story with AI");
 
   const generated = await generateStoryText(
     genre,
     artStyle,
     lengthSetting,
     seedPrompt,
+    model,
   );
 
   const [story] = await db
@@ -681,5 +695,339 @@ router.post(
     });
   },
 );
+
+// ---------- Continuation ----------
+
+router.post(
+  "/stories/:id/continue",
+  aiGenerationLimiter,
+  async (req, res): Promise<void> => {
+    const params = ContinueStoryParams.safeParse(req.params);
+    const body = ContinueStoryBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid parameters" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const requester = body.data.authorName.trim();
+    if (!requester || requester !== story.authorName) {
+      res.status(403).json({ error: "Only the story's author may add chapters" });
+      return;
+    }
+
+    const previousChapter = (story.fullText ?? "").slice(-3000);
+    const userPrompt = `You are continuing a ${story.genre} story titled "${story.title}".
+Previously: ${previousChapter}
+
+${body.data.seedPrompt ? `Hint for the next chapter: "${body.data.seedPrompt}".` : ""}
+
+Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent. Return JSON:
+{ "chapterTitle": string, "chapterText": string, "newSection": string (1-2 sentence scene description for an illustration prompt) }`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-5.1",
+      max_completion_tokens: 16000,
+      messages: [
+        { role: "system", content: `You are continuing an ongoing ${story.genre} story. Always respond in valid JSON.` },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "{}";
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      res.status(502).json({ error: "AI returned malformed JSON" });
+      return;
+    }
+    const chapterTitle = typeof parsed.chapterTitle === "string" ? parsed.chapterTitle : "Next Chapter";
+    const chapterText = typeof parsed.chapterText === "string" ? parsed.chapterText : "";
+    const newSection = typeof parsed.newSection === "string" ? parsed.newSection : "";
+
+    if (!chapterText) {
+      res.status(502).json({ error: "AI returned empty chapter" });
+      return;
+    }
+
+    const appended = `${story.fullText ?? ""}\n\n## ${chapterTitle}\n\n${chapterText}`;
+
+    const [updated] = await db
+      .update(storiesTable)
+      .set({ fullText: appended, updatedAt: new Date() })
+      .where(eq(storiesTable.id, story.id))
+      .returning();
+
+    if (body.data.generateIllustration !== false && newSection) {
+      try {
+        const [{ value: existingCount }] = await db
+          .select({ value: count() })
+          .from(illustrationsTable)
+          .where(eq(illustrationsTable.storyId, story.id));
+        const sectionIndex = existingCount;
+        const prompt = buildIllustrationPrompt(
+          newSection,
+          story.genre,
+          story.artStyle,
+          story.characters,
+          story.summary,
+        );
+        const buffer = await generateImageBuffer(prompt, "1024x1024");
+        const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+        await db.insert(illustrationsTable).values({
+          storyId: story.id,
+          sectionIndex,
+          prompt,
+          imageUrl: dataUrl,
+          caption: chapterTitle,
+        });
+      } catch (err) {
+        req.log.error({ err }, "Failed to generate continuation illustration");
+      }
+    }
+
+    res.json(updated);
+  },
+);
+
+// ---------- TTS ----------
+
+router.get("/stories/:id/audio", aiGenerationLimiter, async (req, res): Promise<void> => {
+  const params = GetStoryAudioParams.safeParse(req.params);
+  const query = GetStoryAudioQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story || !story.fullText) {
+    res.status(404).json({ error: "Story has no text" });
+    return;
+  }
+
+  const voice = query.data.voice ?? "nova";
+  const text = story.fullText.slice(0, 4000);
+
+  const response = await openai.audio.speech.create({
+    model: "tts-1",
+    voice,
+    input: text,
+    response_format: "mp3",
+  });
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.setHeader("Content-Length", buffer.length.toString());
+  res.send(buffer);
+});
+
+// ---------- PDF Export ----------
+
+router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<void> => {
+  const params = ExportStoryPdfParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const illustrations = await db
+    .select()
+    .from(illustrationsTable)
+    .where(eq(illustrationsTable.storyId, story.id))
+    .orderBy(illustrationsTable.sectionIndex);
+
+  const doc = new PDFDocument({ size: "A4", margin: 60, info: { Title: story.title, Author: story.authorName } });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${story.title.replace(/[^a-z0-9]/gi, "_").slice(0, 60) || "story"}.pdf"`,
+  );
+  doc.pipe(res);
+
+  function decodeImage(url: string): Buffer | null {
+    const match = url.match(/^data:image\/[^;]+;base64,(.+)$/);
+    if (!match) return null;
+    try {
+      return Buffer.from(match[1], "base64");
+    } catch {
+      return null;
+    }
+  }
+
+  // Cover
+  const coverBuf = story.coverImageUrl ? decodeImage(story.coverImageUrl) : null;
+  if (coverBuf) {
+    try {
+      doc.image(coverBuf, { fit: [475, 500], align: "center" });
+    } catch {
+      /* ignore */
+    }
+    doc.moveDown(2);
+  }
+  doc.font("Times-Bold").fontSize(28).text(story.title, { align: "center" });
+  doc.moveDown(0.5);
+  doc.font("Times-Italic").fontSize(14).text(`by ${story.authorName}`, { align: "center" });
+  doc.moveDown(0.5);
+  doc.font("Times-Roman").fontSize(11).fillColor("#666").text(`${story.genre} · ${story.lengthSetting}`, { align: "center" });
+  doc.fillColor("black");
+
+  if (story.summary) {
+    doc.addPage();
+    doc.font("Times-Bold").fontSize(16).text("Summary");
+    doc.moveDown(0.5);
+    doc.font("Times-Italic").fontSize(12).text(story.summary, { align: "justify" });
+  }
+
+  doc.addPage();
+  const chapters = (story.fullText ?? "").split(/\n\n## /);
+  let illIdx = 0;
+  chapters.forEach((chunk, i) => {
+    if (i > 0) {
+      const newlinePos = chunk.indexOf("\n");
+      const heading = newlinePos > 0 ? chunk.slice(0, newlinePos) : `Chapter ${i + 1}`;
+      const body = newlinePos > 0 ? chunk.slice(newlinePos + 1) : "";
+      doc.moveDown(1);
+      doc.font("Times-Bold").fontSize(18).text(heading);
+      doc.moveDown(0.5);
+      doc.font("Times-Roman").fontSize(12).text(body, { align: "justify" });
+    } else {
+      doc.font("Times-Roman").fontSize(12).text(chunk, { align: "justify" });
+    }
+    if (illIdx < illustrations.length) {
+      const ill = illustrations[illIdx++];
+      const buf = decodeImage(ill.imageUrl);
+      if (buf) {
+        doc.moveDown(1);
+        try {
+          doc.image(buf, { fit: [400, 300], align: "center" });
+          if (ill.caption) {
+            doc.moveDown(0.3);
+            doc.font("Times-Italic").fontSize(10).fillColor("#555").text(ill.caption, { align: "center" });
+            doc.fillColor("black");
+          }
+        } catch {
+          /* ignore image errors */
+        }
+        doc.moveDown(1);
+      }
+    }
+  });
+
+  doc.end();
+});
+
+async function getLikeInfo(storyId: number, authorName?: string | null) {
+  const [{ value: likeCount }] = await db
+    .select({ value: count() })
+    .from(storyLikesTable)
+    .where(eq(storyLikesTable.storyId, storyId));
+
+  let hasLiked = false;
+  if (authorName && authorName.trim()) {
+    const [row] = await db
+      .select({ id: storyLikesTable.id })
+      .from(storyLikesTable)
+      .where(
+        and(
+          eq(storyLikesTable.storyId, storyId),
+          eq(storyLikesTable.authorName, authorName.trim()),
+        ),
+      )
+      .limit(1);
+    hasLiked = !!row;
+  }
+  return { storyId, likeCount, hasLiked };
+}
+
+router.get("/stories/:id/like", async (req, res): Promise<void> => {
+  const params = GetStoryLikeParams.safeParse(req.params);
+  const query = GetStoryLikeQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const info = await getLikeInfo(params.data.id, query.data.authorName);
+  res.json(info);
+});
+
+router.post("/stories/:id/like", writeLimiter, async (req, res): Promise<void> => {
+  const params = LikeStoryParams.safeParse(req.params);
+  const body = LikeStoryBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const authorName = body.data.authorName.trim();
+  if (!authorName) {
+    res.status(400).json({ error: "authorName required" });
+    return;
+  }
+
+  const [story] = await db
+    .select({ id: storiesTable.id })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+
+  await db
+    .insert(storyLikesTable)
+    .values({ storyId: params.data.id, authorName })
+    .onConflictDoNothing();
+
+  const info = await getLikeInfo(params.data.id, authorName);
+  res.json(info);
+});
+
+router.delete("/stories/:id/like", writeLimiter, async (req, res): Promise<void> => {
+  const params = UnlikeStoryParams.safeParse(req.params);
+  const query = UnlikeStoryQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const authorName = query.data.authorName.trim();
+  if (!authorName) {
+    res.status(400).json({ error: "authorName required" });
+    return;
+  }
+  await db
+    .delete(storyLikesTable)
+    .where(
+      and(
+        eq(storyLikesTable.storyId, params.data.id),
+        eq(storyLikesTable.authorName, authorName),
+      ),
+    );
+  const info = await getLikeInfo(params.data.id, authorName);
+  res.json(info);
+});
 
 export default router;

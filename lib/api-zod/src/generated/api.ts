@@ -61,6 +61,7 @@ export const CreateStoryBody = zod.object({
  * @summary Generate a complete story with AI
  */
 export const generateStoryBodyGenerateIllustrationsDefault = true;
+export const generateStoryBodyModelDefault = `gpt-5.1`;
 
 export const GenerateStoryBody = zod.object({
   genre: zod.string(),
@@ -71,6 +72,12 @@ export const GenerateStoryBody = zod.object({
   generateIllustrations: zod
     .boolean()
     .default(generateStoryBodyGenerateIllustrationsDefault),
+  model: zod
+    .enum(["gpt-5.1", "gpt-5-mini"])
+    .default(generateStoryBodyModelDefault)
+    .describe(
+      "Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.",
+    ),
 });
 
 /**
@@ -278,6 +285,119 @@ export const RegenerateIllustrationResponse = zod.object({
   imageUrl: zod.string(),
   caption: zod.string().nullish(),
   createdAt: zod.string(),
+});
+
+/**
+ * @summary Get like count and whether the current user has liked the story
+ */
+export const GetStoryLikeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryLikeQueryParams = zod.object({
+  authorName: zod.coerce.string().optional(),
+});
+
+export const GetStoryLikeResponse = zod.object({
+  storyId: zod.number(),
+  likeCount: zod.number(),
+  hasLiked: zod.boolean(),
+});
+
+/**
+ * @summary Like a story (idempotent — repeated requests do nothing)
+ */
+export const LikeStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const LikeStoryBody = zod.object({
+  authorName: zod.string(),
+});
+
+export const LikeStoryResponse = zod.object({
+  storyId: zod.number(),
+  likeCount: zod.number(),
+  hasLiked: zod.boolean(),
+});
+
+/**
+ * @summary Remove the current user's like
+ */
+export const UnlikeStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UnlikeStoryQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+export const UnlikeStoryResponse = zod.object({
+  storyId: zod.number(),
+  likeCount: zod.number(),
+  hasLiked: zod.boolean(),
+});
+
+/**
+ * @summary Append a new chapter to an existing story
+ */
+export const ContinueStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const continueStoryBodyGenerateIllustrationDefault = true;
+
+export const ContinueStoryBody = zod.object({
+  authorName: zod
+    .string()
+    .min(1)
+    .describe("Pen name of the requester. Must match the story author."),
+  seedPrompt: zod
+    .string()
+    .optional()
+    .describe("Optional hint for what should happen in the next chapter."),
+  generateIllustration: zod
+    .boolean()
+    .default(continueStoryBodyGenerateIllustrationDefault),
+});
+
+export const ContinueStoryResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod.enum(["draft", "published"]),
+  authorName: zod.string(),
+  coverImageUrl: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Generate (or stream) TTS audio for a story
+ */
+export const GetStoryAudioParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getStoryAudioQueryVoiceDefault = `nova`;
+
+export const GetStoryAudioQueryParams = zod.object({
+  voice: zod
+    .enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"])
+    .default(getStoryAudioQueryVoiceDefault),
+});
+
+/**
+ * @summary Export the story as a PDF document
+ */
+export const ExportStoryPdfParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

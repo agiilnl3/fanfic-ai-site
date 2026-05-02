@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen } from "lucide-react";
+import { LikeButton } from "@/components/like-button";
 
 export function StoryCard({ story }: { story: Story }) {
   const queryClient = useQueryClient();
@@ -60,7 +61,10 @@ export function StoryCard({ story }: { story: Story }) {
           )}
         </CardContent>
         <CardFooter className="p-4 pt-0 text-xs text-muted-foreground flex justify-between items-center border-t border-border/10">
-          <span>{story.lengthSetting}</span>
+          <div className="flex items-center gap-2">
+            <span>{story.lengthSetting}</span>
+            <LikeButton storyId={story.id} />
+          </div>
           <span>{format(new Date(story.createdAt), "MMM d, yyyy")}</span>
         </CardFooter>
       </Card>

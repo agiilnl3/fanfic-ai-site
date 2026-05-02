@@ -17,18 +17,24 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  ContinueStoryBody,
   CreateStoryBody,
   GenerateIllustrationBody,
   GenerateStoryBody,
   GetPublicFeedParams,
+  GetStoryAudioParams,
+  GetStoryLikeParams,
   HealthStatus,
   Illustration,
+  LikeBody,
   ListStoriesParams,
   RegenerateSectionBody,
   RegenerateSectionResponse,
   Story,
+  StoryLikeInfo,
   StoryStats,
   StoryWithIllustrations,
+  UnlikeStoryParams,
   UpdateStoryBody,
 } from "./api.schemas";
 
@@ -1247,6 +1253,579 @@ export const useRegenerateIllustration = <
 > => {
   return useMutation(getRegenerateIllustrationMutationOptions(options));
 };
+
+/**
+ * @summary Get like count and whether the current user has liked the story
+ */
+export const getGetStoryLikeUrl = (id: number, params?: GetStoryLikeParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/like?${stringifiedParams}`
+    : `/api/stories/${id}/like`;
+};
+
+export const getStoryLike = async (
+  id: number,
+  params?: GetStoryLikeParams,
+  options?: RequestInit,
+): Promise<StoryLikeInfo> => {
+  return customFetch<StoryLikeInfo>(getGetStoryLikeUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryLikeQueryKey = (
+  id: number,
+  params?: GetStoryLikeParams,
+) => {
+  return [`/api/stories/${id}/like`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStoryLikeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryLike>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetStoryLikeParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryLike>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStoryLikeQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoryLike>>> = ({
+    signal,
+  }) => getStoryLike(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryLike>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryLikeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryLike>>
+>;
+export type GetStoryLikeQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get like count and whether the current user has liked the story
+ */
+
+export function useGetStoryLike<
+  TData = Awaited<ReturnType<typeof getStoryLike>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetStoryLikeParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryLike>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryLikeQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Like a story (idempotent — repeated requests do nothing)
+ */
+export const getLikeStoryUrl = (id: number) => {
+  return `/api/stories/${id}/like`;
+};
+
+export const likeStory = async (
+  id: number,
+  likeBody: LikeBody,
+  options?: RequestInit,
+): Promise<StoryLikeInfo> => {
+  return customFetch<StoryLikeInfo>(getLikeStoryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(likeBody),
+  });
+};
+
+export const getLikeStoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof likeStory>>,
+    TError,
+    { id: number; data: BodyType<LikeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof likeStory>>,
+  TError,
+  { id: number; data: BodyType<LikeBody> },
+  TContext
+> => {
+  const mutationKey = ["likeStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof likeStory>>,
+    { id: number; data: BodyType<LikeBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return likeStory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LikeStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof likeStory>>
+>;
+export type LikeStoryMutationBody = BodyType<LikeBody>;
+export type LikeStoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Like a story (idempotent — repeated requests do nothing)
+ */
+export const useLikeStory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof likeStory>>,
+    TError,
+    { id: number; data: BodyType<LikeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof likeStory>>,
+  TError,
+  { id: number; data: BodyType<LikeBody> },
+  TContext
+> => {
+  return useMutation(getLikeStoryMutationOptions(options));
+};
+
+/**
+ * @summary Remove the current user's like
+ */
+export const getUnlikeStoryUrl = (id: number, params: UnlikeStoryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/like?${stringifiedParams}`
+    : `/api/stories/${id}/like`;
+};
+
+export const unlikeStory = async (
+  id: number,
+  params: UnlikeStoryParams,
+  options?: RequestInit,
+): Promise<StoryLikeInfo> => {
+  return customFetch<StoryLikeInfo>(getUnlikeStoryUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnlikeStoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlikeStory>>,
+    TError,
+    { id: number; params: UnlikeStoryParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlikeStory>>,
+  TError,
+  { id: number; params: UnlikeStoryParams },
+  TContext
+> => {
+  const mutationKey = ["unlikeStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlikeStory>>,
+    { id: number; params: UnlikeStoryParams }
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return unlikeStory(id, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlikeStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlikeStory>>
+>;
+
+export type UnlikeStoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove the current user's like
+ */
+export const useUnlikeStory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlikeStory>>,
+    TError,
+    { id: number; params: UnlikeStoryParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlikeStory>>,
+  TError,
+  { id: number; params: UnlikeStoryParams },
+  TContext
+> => {
+  return useMutation(getUnlikeStoryMutationOptions(options));
+};
+
+/**
+ * @summary Append a new chapter to an existing story
+ */
+export const getContinueStoryUrl = (id: number) => {
+  return `/api/stories/${id}/continue`;
+};
+
+export const continueStory = async (
+  id: number,
+  continueStoryBody?: ContinueStoryBody,
+  options?: RequestInit,
+): Promise<Story> => {
+  return customFetch<Story>(getContinueStoryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(continueStoryBody),
+  });
+};
+
+export const getContinueStoryMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof continueStory>>,
+    TError,
+    { id: number; data: BodyType<ContinueStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof continueStory>>,
+  TError,
+  { id: number; data: BodyType<ContinueStoryBody> },
+  TContext
+> => {
+  const mutationKey = ["continueStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof continueStory>>,
+    { id: number; data: BodyType<ContinueStoryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return continueStory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ContinueStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof continueStory>>
+>;
+export type ContinueStoryMutationBody = BodyType<ContinueStoryBody>;
+export type ContinueStoryMutationError = ErrorType<void>;
+
+/**
+ * @summary Append a new chapter to an existing story
+ */
+export const useContinueStory = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof continueStory>>,
+    TError,
+    { id: number; data: BodyType<ContinueStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof continueStory>>,
+  TError,
+  { id: number; data: BodyType<ContinueStoryBody> },
+  TContext
+> => {
+  return useMutation(getContinueStoryMutationOptions(options));
+};
+
+/**
+ * @summary Generate (or stream) TTS audio for a story
+ */
+export const getGetStoryAudioUrl = (
+  id: number,
+  params?: GetStoryAudioParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/audio?${stringifiedParams}`
+    : `/api/stories/${id}/audio`;
+};
+
+export const getStoryAudio = async (
+  id: number,
+  params?: GetStoryAudioParams,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetStoryAudioUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryAudioQueryKey = (
+  id: number,
+  params?: GetStoryAudioParams,
+) => {
+  return [`/api/stories/${id}/audio`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStoryAudioQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryAudio>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetStoryAudioParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryAudio>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStoryAudioQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoryAudio>>> = ({
+    signal,
+  }) => getStoryAudio(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryAudio>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryAudioQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryAudio>>
+>;
+export type GetStoryAudioQueryError = ErrorType<void>;
+
+/**
+ * @summary Generate (or stream) TTS audio for a story
+ */
+
+export function useGetStoryAudio<
+  TData = Awaited<ReturnType<typeof getStoryAudio>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetStoryAudioParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryAudio>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryAudioQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Export the story as a PDF document
+ */
+export const getExportStoryPdfUrl = (id: number) => {
+  return `/api/stories/${id}/export.pdf`;
+};
+
+export const exportStoryPdf = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getExportStoryPdfUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportStoryPdfQueryKey = (id: number) => {
+  return [`/api/stories/${id}/export.pdf`] as const;
+};
+
+export const getExportStoryPdfQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportStoryPdf>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportStoryPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportStoryPdfQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportStoryPdf>>> = ({
+    signal,
+  }) => exportStoryPdf(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportStoryPdf>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportStoryPdfQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportStoryPdf>>
+>;
+export type ExportStoryPdfQueryError = ErrorType<void>;
+
+/**
+ * @summary Export the story as a PDF document
+ */
+
+export function useExportStoryPdf<
+  TData = Awaited<ReturnType<typeof exportStoryPdf>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof exportStoryPdf>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportStoryPdfQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Regenerate full story text using the same genre, style, and seed

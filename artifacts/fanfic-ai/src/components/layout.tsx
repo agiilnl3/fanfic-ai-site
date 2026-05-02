@@ -1,15 +1,17 @@
 import { Link, useLocation } from "wouter";
 import { BookOpen, Home, Library, PenTool, Sparkles, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { t } = useTranslation();
 
   const navItems = [
-    { href: "/", label: "Home", icon: Home },
-    { href: "/feed", label: "Library", icon: Library },
-    { href: "/create", label: "Conjure Story", icon: Sparkles },
-    { href: "/dashboard", label: "My Desk", icon: PenTool },
+    { href: "/", label: t("nav.home"), icon: Home },
+    { href: "/feed", label: t("nav.library"), icon: Library },
+    { href: "/create", label: t("nav.create"), icon: Sparkles },
+    { href: "/dashboard", label: t("nav.dashboard"), icon: PenTool },
   ];
 
   return (
@@ -42,7 +44,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="md:hidden flex gap-2">
+          <div className="hidden md:flex items-center gap-2">
+            <LanguageSwitcher />
+          </div>
+
+          <div className="md:hidden flex items-center gap-2">
+            <LanguageSwitcher />
             <Link href="/create" className="text-primary flex items-center justify-center p-2">
               <Sparkles className="w-5 h-5" />
             </Link>

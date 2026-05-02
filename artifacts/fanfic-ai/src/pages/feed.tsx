@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/layout";
+import { Seo } from "@/components/seo";
 import { useGetPublicFeed, type Story } from "@workspace/api-client-react";
 import { StoryCard } from "@/components/story-card";
 import { Input } from "@/components/ui/input";
@@ -110,6 +111,10 @@ export default function Feed() {
 
   return (
     <Layout>
+      <Seo
+        title="The Grand Library"
+        description="Explore a curated feed of AI-generated, illustrated fanfiction stories from the FanFic AI community."
+      />
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col items-center mb-12 text-center">
           <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4 glow-text">The Grand Library</h1>

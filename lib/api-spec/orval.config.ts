@@ -53,7 +53,7 @@ export default defineConfig({
       target: "generated",
 
       mode: "split",
-      clean: true,
+      clean: false,
       prettier: true,
       override: {
         zod: {

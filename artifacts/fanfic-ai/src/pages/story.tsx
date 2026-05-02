@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { Layout } from "@/components/layout";
+import { Seo } from "@/components/seo";
+import { LikeButton } from "@/components/like-button";
 import {
   useGetStory,
   useUpdateStory,
@@ -9,8 +11,11 @@ import {
   useRegenerateIllustration,
   useRegenerateStoryText,
   useRegenerateStorySection,
+  useContinueStory,
   getGetStoryQueryKey,
   getGetIllustrationsQueryKey,
+  getGetStoryAudioUrl,
+  getExportStoryPdfUrl,
 } from "@workspace/api-client-react";
 import type { Illustration } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +26,7 @@ import { useAuthor } from "@/hooks/use-author";
 import { format } from "date-fns";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -49,6 +54,20 @@ export default function StoryReading() {
   const regenerateIllustrationMutation = useRegenerateIllustration();
   const regenerateStoryTextMutation = useRegenerateStoryText();
   const regenerateStorySectionMutation = useRegenerateStorySection();
+  const continueStoryMutation = useContinueStory({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetStoryQueryKey(storyId) });
+        queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(storyId) });
+        toast({ title: "New chapter added", description: "Scroll down to read the continuation." });
+      },
+      onError: () => toast({ title: "Failed to continue story", variant: "destructive" }),
+    },
+  });
+
+  const [audioOpen, setAudioOpen] = useState(false);
+  const audioUrl = getGetStoryAudioUrl(storyId);
+  const pdfUrl = getExportStoryPdfUrl(storyId);
 
   const isAuthor = story?.authorName === authorName;
 
@@ -392,6 +411,14 @@ export default function StoryReading() {
 
   return (
     <Layout>
+      <Seo
+        title={story.title}
+        description={story.summary ?? `A ${story.genre} story by ${story.authorName}`}
+        image={story.coverImageUrl ?? undefined}
+        type="article"
+        author={story.authorName}
+        publishedTime={story.createdAt}
+      />
       <article className="pb-32 animate-in fade-in duration-700">
         <header className="relative w-full h-[50vh] min-h-[400px] flex items-end justify-center pb-16 overflow-hidden">
           {story.coverImageUrl ? (
@@ -414,6 +441,9 @@ export default function StoryReading() {
             <p className="text-sm text-white/50 mt-4 uppercase tracking-widest">
               {format(new Date(story.createdAt), "MMMM do, yyyy")}
             </p>
+            <div className="mt-6 flex justify-center">
+              <LikeButton storyId={story.id} size="lg" variant="outline" className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 hover:text-rose-400 px-4" />
+            </div>
           </div>
         </header>
 
@@ -544,7 +574,7 @@ export default function StoryReading() {
               <p className="text-muted-foreground mb-8">
                 Conjured using {story.artStyle} illustrations in the {story.genre} genre.
               </p>
-              <div className="flex gap-4">
+              <div className="flex gap-3 flex-wrap justify-center">
                 <Button
                   variant="outline"
                   onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -557,10 +587,54 @@ export default function StoryReading() {
                     navigator.clipboard.writeText(window.location.href);
                     toast({ title: "Link Copied", description: "Share your tale with the world." });
                   }}
+                  data-testid="button-share"
                 >
                   <Share2 className="w-4 h-4 mr-2" /> Share Story
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setAudioOpen((v) => !v)}
+                  data-testid="button-listen"
+                >
+                  <Volume2 className="w-4 h-4 mr-2" /> {audioOpen ? "Hide Audio" : "Listen"}
+                </Button>
+                <Button asChild variant="outline" data-testid="button-pdf">
+                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                    <FileDown className="w-4 h-4 mr-2" /> Download PDF
+                  </a>
+                </Button>
+                {isAuthor && (
+                  <Button
+                    variant="default"
+                    onClick={() => continueStoryMutation.mutate({ id: storyId, data: { authorName, generateIllustration: true } })}
+                    disabled={continueStoryMutation.isPending}
+                    data-testid="button-continue"
+                  >
+                    {continueStoryMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <BookPlus className="w-4 h-4 mr-2" />
+                    )}
+                    Add Next Chapter
+                  </Button>
+                )}
               </div>
+              {audioOpen && (
+                <div className="mt-6 w-full max-w-md">
+                  <audio
+                    controls
+                    preload="none"
+                    src={audioUrl}
+                    className="w-full"
+                    data-testid="audio-player"
+                  >
+                    Your browser does not support the audio element.
+                  </audio>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    First play takes ~10 seconds while the narration is generated.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
