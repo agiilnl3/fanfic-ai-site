@@ -31,11 +31,15 @@ function buildIllustrationPrompt(
   genre: string,
   artStyle: string,
   characters: string | null | undefined,
+  summary: string | null | undefined,
 ): string {
   const characterHint = characters
     ? ` Characters: ${characters.slice(0, 200)}.`
     : "";
-  return `${artStyle} illustration for a ${genre} story. Scene: ${sectionText.slice(0, 300)}.${characterHint} High quality, detailed, no text or watermarks.`;
+  const storyContext = summary
+    ? ` Story context: ${summary.slice(0, 200)}.`
+    : "";
+  return `${artStyle} illustration for a ${genre} story.${storyContext}${characterHint} Scene: ${sectionText.slice(0, 300)}. High quality, detailed, no text or watermarks.`;
 }
 
 async function generateStoryText(
@@ -163,33 +167,37 @@ router.post("/stories/generate", async (req, res): Promise<void> => {
     })
     .returning();
 
+  const failedSections: number[] = [];
+
   if (generateIllustrations !== false && generated.sections.length > 0) {
-    const illustrationPromises = generated.sections
-      .slice(0, 4)
-      .map(async (section, idx) => {
-        try {
-          const prompt = buildIllustrationPrompt(
-            section,
-            genre,
-            artStyle,
-            generated.characters,
-          );
-          const buffer = await generateImageBuffer(prompt, "1024x1024");
-          const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+    const illustrationResults = await Promise.allSettled(
+      generated.sections.slice(0, 4).map(async (section, idx) => {
+        const prompt = buildIllustrationPrompt(
+          section,
+          genre,
+          artStyle,
+          generated.characters,
+          generated.summary,
+        );
+        const buffer = await generateImageBuffer(prompt, "1024x1024");
+        const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+        await db.insert(illustrationsTable).values({
+          storyId: story.id,
+          sectionIndex: idx,
+          prompt,
+          imageUrl: dataUrl,
+          caption: null,
+        });
+        return idx;
+      }),
+    );
 
-          await db.insert(illustrationsTable).values({
-            storyId: story.id,
-            sectionIndex: idx,
-            prompt,
-            imageUrl: dataUrl,
-            caption: null,
-          });
-        } catch (err) {
-          req.log.error({ err, idx }, "Failed to generate illustration");
-        }
-      });
-
-    await Promise.all(illustrationPromises);
+    illustrationResults.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        req.log.error({ err: result.reason, idx }, "Failed to generate illustration");
+        failedSections.push(idx);
+      }
+    });
 
     const firstIllustration = await db
       .select()
@@ -213,7 +221,11 @@ router.post("/stories/generate", async (req, res): Promise<void> => {
     .where(eq(storiesTable.id, story.id))
     .limit(1);
 
-  res.status(201).json(finalStory[0] ?? story);
+  const responseBody = {
+    ...(finalStory[0] ?? story),
+    ...(failedSections.length > 0 ? { illustrationWarnings: `${failedSections.length} illustration(s) could not be generated for section(s): ${failedSections.join(", ")}` } : {}),
+  };
+  res.status(201).json(responseBody);
 });
 
 router.get("/stories/feed", async (req, res): Promise<void> => {
@@ -408,6 +420,7 @@ router.post("/stories/:id/illustrations", async (req, res): Promise<void> => {
     story.genre,
     story.artStyle,
     story.characters,
+    story.summary,
   );
 
   req.log.info({ storyId: story.id }, "Generating illustration");
@@ -614,6 +627,7 @@ router.post(
       story.genre,
       story.artStyle,
       story.characters,
+      story.summary,
     );
     const buffer = await generateImageBuffer(illustrationPrompt, "1024x1024");
     const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
