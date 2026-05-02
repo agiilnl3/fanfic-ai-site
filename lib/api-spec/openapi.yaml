@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: API specification for FanFic AI
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: stories
+    description: Story CRUD and generation
+  - name: illustrations
+    description: Illustration generation per story
 paths:
   /healthz:
     get:
@@ -24,6 +28,267 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /stories:
+    get:
+      operationId: listStories
+      tags: [stories]
+      summary: List all stories (public feed)
+      description: Returns published and draft stories, optionally filtered by status
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [draft, published]
+        - name: genre
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: authorName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+    post:
+      operationId: createStory
+      tags: [stories]
+      summary: Create a new story (saves without generating)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoryBody"
+      responses:
+        "201":
+          description: Story created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+
+  /stories/generate:
+    post:
+      operationId: generateStory
+      tags: [stories]
+      summary: Generate a complete story with AI
+      description: Uses AI to generate a story based on provided parameters, saves it, and returns the result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateStoryBody"
+      responses:
+        "201":
+          description: Generated story
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+
+  /stories/feed:
+    get:
+      operationId: getPublicFeed
+      tags: [stories]
+      summary: Get public story feed (published only, sorted by newest)
+      parameters:
+        - name: genre
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Published stories feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+
+  /stories/stats:
+    get:
+      operationId: getStoryStats
+      tags: [stories]
+      summary: Get aggregate statistics across all stories
+      responses:
+        "200":
+          description: Platform statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryStats"
+
+  /stories/{id}:
+    get:
+      operationId: getStory
+      tags: [stories]
+      summary: Get a single story by ID with its illustrations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Story with illustrations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryWithIllustrations"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateStory
+      tags: [stories]
+      summary: Update a story (title, status, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStoryBody"
+      responses:
+        "200":
+          description: Updated story
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteStory
+      tags: [stories]
+      summary: Delete a story and its illustrations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /stories/{id}/publish:
+    post:
+      operationId: publishStory
+      tags: [stories]
+      summary: Publish a story to the public feed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Published story
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "404":
+          description: Not found
+
+  /stories/{id}/illustrations:
+    get:
+      operationId: getIllustrations
+      tags: [illustrations]
+      summary: Get all illustrations for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of illustrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Illustration"
+    post:
+      operationId: generateIllustration
+      tags: [illustrations]
+      summary: Generate an AI illustration for a story section
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateIllustrationBody"
+      responses:
+        "201":
+          description: Generated illustration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Illustration"
+        "404":
+          description: Story not found
+
+  /stories/{id}/illustrations/{illustrationId}:
+    delete:
+      operationId: deleteIllustration
+      tags: [illustrations]
+      summary: Delete an illustration
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: illustrationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +299,199 @@ components:
       required:
         - status
 
+    Story:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        genre:
+          type: string
+        artStyle:
+          type: string
+        lengthSetting:
+          type: string
+          enum: [short, medium, long]
+        seedPrompt:
+          type: ["string", "null"]
+        fullText:
+          type: ["string", "null"]
+        summary:
+          type: ["string", "null"]
+        characters:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, published]
+        authorName:
+          type: string
+        coverImageUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - genre
+        - artStyle
+        - lengthSetting
+        - status
+        - authorName
+        - createdAt
+        - updatedAt
+
+    StoryWithIllustrations:
+      allOf:
+        - $ref: "#/components/schemas/Story"
+        - type: object
+          properties:
+            illustrations:
+              type: array
+              items:
+                $ref: "#/components/schemas/Illustration"
+          required:
+            - illustrations
+
+    Illustration:
+      type: object
+      properties:
+        id:
+          type: integer
+        storyId:
+          type: integer
+        sectionIndex:
+          type: integer
+        prompt:
+          type: string
+        imageUrl:
+          type: string
+        caption:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - storyId
+        - sectionIndex
+        - prompt
+        - imageUrl
+        - createdAt
+
+    StoryStats:
+      type: object
+      properties:
+        totalStories:
+          type: integer
+        publishedStories:
+          type: integer
+        draftStories:
+          type: integer
+        totalIllustrations:
+          type: integer
+        genreBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenreCount"
+      required:
+        - totalStories
+        - publishedStories
+        - draftStories
+        - totalIllustrations
+        - genreBreakdown
+
+    GenreCount:
+      type: object
+      properties:
+        genre:
+          type: string
+        count:
+          type: integer
+      required:
+        - genre
+        - count
+
+    CreateStoryBody:
+      type: object
+      properties:
+        title:
+          type: string
+        genre:
+          type: string
+        artStyle:
+          type: string
+        lengthSetting:
+          type: string
+          enum: [short, medium, long]
+        seedPrompt:
+          type: string
+        fullText:
+          type: string
+        authorName:
+          type: string
+      required:
+        - title
+        - genre
+        - artStyle
+        - lengthSetting
+        - authorName
+
+    GenerateStoryBody:
+      type: object
+      properties:
+        genre:
+          type: string
+        artStyle:
+          type: string
+        lengthSetting:
+          type: string
+          enum: [short, medium, long]
+        seedPrompt:
+          type: string
+        authorName:
+          type: string
+        generateIllustrations:
+          type: boolean
+          default: true
+      required:
+        - genre
+        - artStyle
+        - lengthSetting
+        - authorName
+
+    UpdateStoryBody:
+      type: object
+      properties:
+        title:
+          type: string
+        genre:
+          type: string
+        artStyle:
+          type: string
+        lengthSetting:
+          type: string
+          enum: [short, medium, long]
+        fullText:
+          type: string
+        status:
+          type: string
+          enum: [draft, published]
+        authorName:
+          type: string
+        coverImageUrl:
+          type: string
+
+    GenerateIllustrationBody:
+      type: object
+      properties:
+        sectionIndex:
+          type: integer
+        sectionText:
+          type: string
+        caption:
+          type: string
+      required:
+        - sectionIndex
+        - sectionText

@@ -1,0 +1,51 @@
+import { Link } from "wouter";
+import { format } from "date-fns";
+import { Story } from "@workspace/api-client-react";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { BookOpen } from "lucide-react";
+
+export function StoryCard({ story }: { story: Story }) {
+  return (
+    <Link href={`/story/${story.id}`} className="block group h-full">
+      <Card className="h-full bg-card hover:bg-card/80 transition-all border-border/50 overflow-hidden flex flex-col book-shadow hover:-translate-y-1 duration-300">
+        <div className="aspect-[3/4] w-full relative bg-muted overflow-hidden">
+          {story.coverImageUrl ? (
+            <img 
+              src={story.coverImageUrl} 
+              alt={story.title} 
+              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-secondary">
+              <BookOpen className="w-12 h-12 text-muted-foreground/30" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+          <div className="absolute bottom-3 left-3 right-3">
+            <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm mb-2">
+              {story.genre}
+            </Badge>
+          </div>
+        </div>
+        <CardHeader className="p-4 pb-2">
+          <h3 className="font-serif text-xl font-bold line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+            {story.title}
+          </h3>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 flex-1">
+          <p className="text-muted-foreground text-sm italic">by {story.authorName}</p>
+          {story.summary && (
+            <p className="text-sm text-foreground/70 mt-3 line-clamp-3 leading-relaxed">
+              {story.summary}
+            </p>
+          )}
+        </CardContent>
+        <CardFooter className="p-4 pt-0 text-xs text-muted-foreground flex justify-between items-center border-t border-border/10">
+          <span>{story.lengthSetting}</span>
+          <span>{format(new Date(story.createdAt), "MMM d, yyyy")}</span>
+        </CardFooter>
+      </Card>
+    </Link>
+  );
+}
