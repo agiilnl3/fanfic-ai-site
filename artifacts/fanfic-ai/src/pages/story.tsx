@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { Layout } from "@/components/layout";
 import {
@@ -16,9 +16,13 @@ import type { Illustration } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuthor } from "@/hooks/use-author";
 import { format } from "date-fns";
-import { BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2, RotateCcw, Pencil } from "lucide-react";
+import {
+  BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
+  RotateCcw, Pencil, Edit3, Check, X,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -29,6 +33,8 @@ export default function StoryReading() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [regeneratingSectionIdx, setRegeneratingSectionIdx] = useState<number | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editText, setEditText] = useState("");
 
   const { data: story, isLoading, error } = useGetStory(storyId, {
     query: {
@@ -46,6 +52,32 @@ export default function StoryReading() {
 
   const isAuthor = story?.authorName === authorName;
 
+  useEffect(() => {
+    if (editMode && story?.fullText) {
+      setEditText(story.fullText);
+    }
+  }, [editMode, story?.fullText]);
+
+  const handleEnterEdit = () => setEditMode(true);
+  const handleCancelEdit = () => setEditMode(false);
+
+  const handleSaveEdit = () => {
+    if (!story) return;
+    updateMutation.mutate(
+      { id: story.id, data: { fullText: editText } },
+      {
+        onSuccess: (updated) => {
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
+          setEditMode(false);
+          toast({ title: "Story Saved", description: "Your edits have been preserved." });
+        },
+        onError: () => {
+          toast({ title: "Save Failed", description: "Could not save your changes.", variant: "destructive" });
+        },
+      },
+    );
+  };
+
   const togglePublish = () => {
     if (!story) return;
     const newStatus = story.status === "published" ? "draft" : "published";
@@ -53,10 +85,7 @@ export default function StoryReading() {
       { id: story.id, data: { status: newStatus } },
       {
         onSuccess: (updated) => {
-          queryClient.setQueryData(getGetStoryQueryKey(story.id), {
-            ...story,
-            ...updated,
-          });
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
           toast({
             title: newStatus === "published" ? "Story Published" : "Story Unpublished",
             description:
@@ -75,10 +104,7 @@ export default function StoryReading() {
       { id: story.id },
       {
         onSuccess: (updated) => {
-          queryClient.setQueryData(getGetStoryQueryKey(story.id), {
-            ...story,
-            ...updated,
-          });
+          queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
           toast({ title: "Story Rewritten", description: "Fresh prose has been conjured." });
         },
         onError: () => {
@@ -98,9 +124,7 @@ export default function StoryReading() {
             if (!old) return old;
             return {
               ...old,
-              illustrations: old.illustrations.map((i) =>
-                i.id === ill.id ? updated : i,
-              ),
+              illustrations: old.illustrations.map((i) => (i.id === ill.id ? updated : i)),
               coverImageUrl: ill.sectionIndex === 0 ? updated.imageUrl : old.coverImageUrl,
             };
           });
@@ -121,10 +145,7 @@ export default function StoryReading() {
         onSuccess: () => {
           queryClient.setQueryData(getGetStoryQueryKey(story.id), (old: typeof story | undefined) => {
             if (!old) return old;
-            return {
-              ...old,
-              illustrations: old.illustrations.filter((i) => i.id !== ill.id),
-            };
+            return { ...old, illustrations: old.illustrations.filter((i) => i.id !== ill.id) };
           });
           queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(story.id) });
           toast({ title: "Illustration Removed" });
@@ -143,7 +164,7 @@ export default function StoryReading() {
             if (!old) return old;
             return { ...old, illustrations: [...old.illustrations, newIll] };
           });
-          toast({ title: "Illustration Added", description: "A new scene was painted for this section." });
+          toast({ title: "Illustration Added" });
         },
         onError: () => {
           toast({ title: "Failed", description: "Could not generate illustration.", variant: "destructive" });
@@ -179,19 +200,18 @@ export default function StoryReading() {
               ...old,
               fullText: newParagraphs.join("\n\n"),
               illustrations: updatedIllustrations,
-              coverImageUrl: sectionIndex === 0 && result.illustration
-                ? result.illustration.imageUrl
-                : old.coverImageUrl,
+              coverImageUrl:
+                sectionIndex === 0 && result.illustration
+                  ? result.illustration.imageUrl
+                  : old.coverImageUrl,
             };
           });
-          toast({ title: "Section Rewritten", description: "This passage has been reimagined." });
+          toast({ title: "Section Rewritten" });
         },
         onError: () => {
           toast({ title: "Failed", description: "Could not regenerate this section.", variant: "destructive" });
         },
-        onSettled: () => {
-          setRegeneratingSectionIdx(null);
-        },
+        onSettled: () => setRegeneratingSectionIdx(null),
       },
     );
   };
@@ -266,14 +286,17 @@ export default function StoryReading() {
     const isRegenSection = regeneratingSectionIdx === thisSectionIdx;
 
     elements.push(
-      <div key={`p-wrap-${i}`} className={`relative group/para ${isRegenSection ? "opacity-40 pointer-events-none" : ""}`}>
-        {isAuthor && (
+      <div
+        key={`p-wrap-${i}`}
+        className={`relative group/para ${isRegenSection ? "opacity-40 pointer-events-none" : ""}`}
+      >
+        {isAuthor && !editMode && (
           <div className="absolute -left-10 top-1 opacity-0 group-hover/para:opacity-100 transition-opacity">
             <Button
               size="icon"
               variant="ghost"
               className="h-6 w-6"
-              title="Rewrite this section"
+              title="Rewrite this section with AI"
               disabled={regenerateStorySectionMutation.isPending || isRegenSection}
               onClick={() => handleRegenerateSection(thisSectionIdx, p)}
             >
@@ -299,14 +322,14 @@ export default function StoryReading() {
               {isRegeneratingIll(ill) ? (
                 <div className="w-full h-64 flex items-center justify-center bg-muted/30">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground">Painting new scene...</span>
+                  <span className="ml-2 text-muted-foreground">Painting new scene…</span>
                 </div>
               ) : (
                 <img src={ill.imageUrl} alt={ill.prompt} className="w-full h-auto object-cover" />
               )}
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 pointer-events-none rounded-xl" />
             </div>
-            {isAuthor && (
+            {isAuthor && !editMode && (
               <div className="mt-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   size="sm"
@@ -337,10 +360,8 @@ export default function StoryReading() {
             )}
           </figure>,
         );
-      } else if (isAuthor) {
-        const sectionText = paragraphs
-          .slice(Math.max(0, i - 1), i + 2)
-          .join("\n\n");
+      } else if (isAuthor && !editMode) {
+        const sectionText = paragraphs.slice(Math.max(0, i - 1), i + 2).join("\n\n");
         elements.push(
           <div key={`add-ill-${i}`} className="my-8 flex justify-center">
             <Button
@@ -392,37 +413,73 @@ export default function StoryReading() {
 
         {isAuthor && (
           <div className="container mx-auto px-4 max-w-4xl -mt-4 relative z-20 flex justify-end gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full shadow-lg backdrop-blur-md"
-              onClick={handleRegenerateStoryText}
-              disabled={regenerateStoryTextMutation.isPending}
-            >
-              {regenerateStoryTextMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <RotateCcw className="w-4 h-4 mr-2" />
-              )}
-              Rewrite Story
-            </Button>
-            <Button
-              variant={story.status === "published" ? "outline" : "default"}
-              size="sm"
-              className="rounded-full shadow-lg backdrop-blur-md"
-              onClick={togglePublish}
-              disabled={updateMutation.isPending}
-            >
-              {story.status === "published" ? (
-                <>
-                  <Lock className="w-4 h-4 mr-2" /> Make Draft
-                </>
-              ) : (
-                <>
-                  <Globe className="w-4 h-4 mr-2" /> Publish to Feed
-                </>
-              )}
-            </Button>
+            {editMode ? (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="rounded-full shadow-lg"
+                  onClick={handleSaveEdit}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shadow-lg backdrop-blur-md"
+                  onClick={handleCancelEdit}
+                  disabled={updateMutation.isPending}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shadow-lg backdrop-blur-md"
+                  onClick={handleEnterEdit}
+                >
+                  <Edit3 className="w-4 h-4 mr-2" />
+                  Edit Text
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full shadow-lg backdrop-blur-md"
+                  onClick={handleRegenerateStoryText}
+                  disabled={regenerateStoryTextMutation.isPending}
+                >
+                  {regenerateStoryTextMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                  )}
+                  Rewrite Story
+                </Button>
+                <Button
+                  variant={story.status === "published" ? "outline" : "default"}
+                  size="sm"
+                  className="rounded-full shadow-lg backdrop-blur-md"
+                  onClick={togglePublish}
+                  disabled={updateMutation.isPending}
+                >
+                  {story.status === "published" ? (
+                    <><Lock className="w-4 h-4 mr-2" /> Make Draft</>
+                  ) : (
+                    <><Globe className="w-4 h-4 mr-2" /> Publish to Feed</>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         )}
 
@@ -430,7 +487,7 @@ export default function StoryReading() {
           <div className="container mx-auto px-4 max-w-3xl mt-8">
             <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl text-primary">
               <Loader2 className="w-5 h-5 animate-spin shrink-0" />
-              <p className="font-serif">Conjuring new prose... this may take a moment.</p>
+              <p className="font-serif">Conjuring new prose… this may take a moment.</p>
             </div>
           </div>
         )}
@@ -439,32 +496,67 @@ export default function StoryReading() {
           <div className="absolute top-0 left-0 bottom-0 w-px bg-gradient-to-b from-transparent via-border/50 to-transparent -translate-x-8 md:-translate-x-12" />
           <div className="absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-transparent via-border/50 to-transparent translate-x-8 md:translate-x-12" />
 
-          <div className="story-prose">{elements}</div>
-
-          <div className="mt-24 pt-12 border-t border-border/50 text-center flex flex-col items-center">
-            <div className="w-12 h-1 bg-primary/50 mb-12 rounded-full" />
-            <h3 className="font-serif text-2xl mb-4">The End</h3>
-            <p className="text-muted-foreground mb-8">
-              Conjured using {story.artStyle} illustrations in the {story.genre} genre.
-            </p>
-            <div className="flex gap-4">
-              <Button
-                variant="outline"
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              >
-                Back to Top
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast({ title: "Link Copied", description: "Share your tale with the world." });
-                }}
-              >
-                <Share2 className="w-4 h-4 mr-2" /> Share Story
-              </Button>
+          {editMode ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+                <Edit3 className="w-4 h-4" />
+                <span>Edit mode — change the text directly. Illustrations are preserved.</span>
+              </div>
+              <Textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                className="min-h-[600px] font-serif text-base leading-relaxed resize-y bg-card/50 border-primary/20 focus:border-primary/50"
+                placeholder="Your story text…"
+              />
+              <div className="flex gap-3 pt-2">
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateMutation.isPending}
+                  className="font-serif"
+                >
+                  {updateMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4 mr-2" />
+                  )}
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="story-prose">{elements}</div>
+          )}
+
+          {!editMode && (
+            <div className="mt-24 pt-12 border-t border-border/50 text-center flex flex-col items-center">
+              <div className="w-12 h-1 bg-primary/50 mb-12 rounded-full" />
+              <h3 className="font-serif text-2xl mb-4">The End</h3>
+              <p className="text-muted-foreground mb-8">
+                Conjured using {story.artStyle} illustrations in the {story.genre} genre.
+              </p>
+              <div className="flex gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                >
+                  Back to Top
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    toast({ title: "Link Copied", description: "Share your tale with the world." });
+                  }}
+                >
+                  <Share2 className="w-4 h-4 mr-2" /> Share Story
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </article>
     </Layout>

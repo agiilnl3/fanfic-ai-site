@@ -7,7 +7,17 @@ import { Search, BookOpen } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const GENRES = ["All Genres", "Fantasy", "Romance", "Science Fiction", "Mystery", "Horror", "Adventure", "Historical", "Contemporary"];
+const GENRES = [
+  "All Genres",
+  "Fantasy", "High Fantasy", "Dark Fantasy",
+  "Romance", "Paranormal Romance",
+  "Science Fiction", "Space Opera", "Cyberpunk", "Solarpunk",
+  "Mystery", "Thriller", "Noir",
+  "Horror", "Gothic Horror",
+  "Adventure", "Historical", "Contemporary",
+  "Fairy Tale", "Mythology",
+  "Steampunk", "Dystopian",
+];
 
 export default function Feed() {
   const [search, setSearch] = useState("");
