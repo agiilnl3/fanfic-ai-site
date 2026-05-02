@@ -20,8 +20,9 @@ export default function Dashboard() {
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(authorName);
   
+  const listQueryKey = getListStoriesQueryKey({ authorName });
   const { data: stories, isLoading } = useListStories({ authorName }, {
-    query: { enabled: !!authorName }
+    query: { enabled: !!authorName, queryKey: listQueryKey }
   });
 
   const drafts = stories?.filter(s => s.status === "draft") || [];

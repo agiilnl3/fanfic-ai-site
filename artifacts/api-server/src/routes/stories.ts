@@ -15,6 +15,8 @@ import {
   GenerateIllustrationBody,
   GenerateIllustrationParams,
   DeleteIllustrationParams,
+  RegenerateIllustrationParams,
+  RegenerateStoryTextParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -451,5 +453,100 @@ router.delete(
     res.sendStatus(204);
   },
 );
+
+router.post(
+  "/stories/:id/illustrations/:illustrationId/regenerate",
+  async (req, res): Promise<void> => {
+    const params = RegenerateIllustrationParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(illustrationsTable)
+      .where(
+        and(
+          eq(illustrationsTable.id, params.data.illustrationId),
+          eq(illustrationsTable.storyId, params.data.id),
+        ),
+      );
+
+    if (!existing) {
+      res.status(404).json({ error: "Illustration not found" });
+      return;
+    }
+
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id));
+
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+
+    req.log.info({ illustrationId: existing.id }, "Regenerating illustration");
+    const buffer = await generateImageBuffer(existing.prompt, "1024x1024");
+    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+
+    const [updated] = await db
+      .update(illustrationsTable)
+      .set({ imageUrl: dataUrl })
+      .where(eq(illustrationsTable.id, existing.id))
+      .returning();
+
+    if (existing.sectionIndex === 0) {
+      await db
+        .update(storiesTable)
+        .set({ coverImageUrl: dataUrl })
+        .where(eq(storiesTable.id, params.data.id));
+    }
+
+    res.json(updated);
+  },
+);
+
+router.post("/stories/:id/regenerate", async (req, res): Promise<void> => {
+  const params = RegenerateStoryTextParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id));
+
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+
+  req.log.info({ storyId: story.id }, "Regenerating story text");
+  const generated = await generateStoryText(
+    story.genre,
+    story.artStyle,
+    story.lengthSetting,
+    story.seedPrompt ?? undefined,
+  );
+
+  const [updated] = await db
+    .update(storiesTable)
+    .set({
+      title: generated.title,
+      fullText: generated.fullText,
+      summary: generated.summary,
+      characters: generated.characters,
+      updatedAt: new Date(),
+    })
+    .where(eq(storiesTable.id, story.id))
+    .returning();
+
+  res.json({ ...updated, sections: generated.sections });
+});
 
 export default router;

@@ -261,3 +261,18 @@ export const DeleteIllustrationParams = zod.object({
   id: zod.coerce.number(),
   illustrationId: zod.coerce.number(),
 });
+
+/**
+ * @summary Regenerate a specific illustration
+ */
+export const RegenerateIllustrationParams = zod.object({
+  id: zod.coerce.number(),
+  illustrationId: zod.coerce.number(),
+});
+
+/**
+ * @summary Regenerate the full story text using the same settings
+ */
+export const RegenerateStoryTextParams = zod.object({
+  id: zod.coerce.number(),
+});

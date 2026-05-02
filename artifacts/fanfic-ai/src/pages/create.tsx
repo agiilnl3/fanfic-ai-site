@@ -117,7 +117,7 @@ export default function CreateStory() {
                   
                   <div className="space-y-2">
                     <Label>Length</Label>
-                    <Select value={lengthSetting} onValueChange={(val: any) => setLengthSetting(val)}>
+                    <Select value={lengthSetting} onValueChange={(val) => setLengthSetting(val as "short" | "medium" | "long")}>
                       <SelectTrigger className="bg-background/50">
                         <SelectValue placeholder="Select length" />
                       </SelectTrigger>
