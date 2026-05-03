@@ -1846,6 +1846,160 @@ paths:
       responses:
         "200": { description: Prefs, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPrefs" } } } }
 
+  /characters:
+    get:
+      operationId: listCharacters
+      tags: [characters]
+      summary: List characters owned by an author (optionally scoped to a series)
+      parameters:
+        - name: ownerHandle
+          in: query
+          required: true
+          schema: { type: string }
+        - name: seriesId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Characters
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Character" }
+    post:
+      operationId: createCharacter
+      tags: [characters]
+      summary: Create a reusable character profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCharacterBody" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Character" }
+
+  /characters/{id}:
+    patch:
+      operationId: updateCharacter
+      tags: [characters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCharacterBody" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Character" }
+    delete:
+      operationId: deleteCharacter
+      tags: [characters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: ownerHandle
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+
+  /characters/{id}/reference:
+    post:
+      operationId: uploadCharacterReference
+      tags: [characters]
+      summary: Upload a reference image for a character (base64 PNG/JPEG)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadCharacterReferenceBody" }
+      responses:
+        "200":
+          description: Updated character with reference URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Character" }
+
+  /stories/{id}/characters:
+    get:
+      operationId: listStoryCharacters
+      tags: [characters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Characters linked to this story
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Character" }
+    put:
+      operationId: setStoryCharacters
+      tags: [characters]
+      summary: Replace the set of characters linked to this story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetStoryCharactersBody" }
+      responses:
+        "200":
+          description: Updated link set
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Character" }
+
+  /series/{id}/characters:
+    get:
+      operationId: listSeriesCharacters
+      tags: [characters]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Characters scoped to this series
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Character" }
+
 components:
   schemas:
     HealthStatus:
@@ -2813,4 +2967,69 @@ components:
       properties:
         viewerName: { type: ["string", "null"] }
         completed: { type: boolean }
+      additionalProperties: false
+
+    Character:
+      type: object
+      properties:
+        id: { type: integer }
+        ownerUserId: { type: ["integer", "null"] }
+        ownerHandle: { type: string }
+        seriesId: { type: ["integer", "null"] }
+        name: { type: string }
+        description: { type: string }
+        referenceImageUrl: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - ownerHandle
+        - name
+        - description
+        - createdAt
+        - updatedAt
+
+    CreateCharacterBody:
+      type: object
+      properties:
+        ownerHandle: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 1000 }
+        seriesId: { type: ["integer", "null"] }
+      required: [ownerHandle, name]
+      additionalProperties: false
+
+    UpdateCharacterBody:
+      type: object
+      properties:
+        ownerHandle: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        description: { type: string, maxLength: 1000 }
+        seriesId: { type: ["integer", "null"] }
+      required: [ownerHandle]
+      additionalProperties: false
+
+    UploadCharacterReferenceBody:
+      type: object
+      properties:
+        ownerHandle: { type: string, minLength: 1 }
+        imageBase64:
+          type: string
+          minLength: 1
+          description: "Raw base64 (no data prefix) of a PNG/JPEG image, max ~6 MB encoded."
+        contentType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+          default: image/png
+      required: [ownerHandle, imageBase64]
+      additionalProperties: false
+
+    SetStoryCharactersBody:
+      type: object
+      properties:
+        ownerHandle: { type: string, minLength: 1 }
+        characterIds:
+          type: array
+          items: { type: integer }
+      required: [ownerHandle, characterIds]
       additionalProperties: false

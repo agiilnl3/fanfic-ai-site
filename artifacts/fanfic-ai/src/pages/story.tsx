@@ -8,6 +8,7 @@ import { RepostButton } from "@/components/repost-button";
 import { IllustrationReorderDialog } from "@/components/illustration-reorder-dialog";
 import { CommentsSection } from "@/components/comments-section";
 import { ManageCollaboratorsDialog } from "@/components/manage-collaborators-dialog";
+import { CharactersDialog } from "@/components/characters-dialog";
 import {
   useGetStory,
   useUpdateStory,
@@ -938,19 +939,39 @@ export default function StoryReading() {
                       })}
                 </p>
               </div>
-              <ManageCollaboratorsDialog
-                storyId={story.id}
-                trigger={
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    data-testid="button-manage-collaborators"
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    {t("collab.manageButton")}
-                  </Button>
-                }
-              />
+              <div className="flex gap-2 flex-wrap">
+                <ManageCollaboratorsDialog
+                  storyId={story.id}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="button-manage-collaborators"
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      {t("collab.manageButton")}
+                    </Button>
+                  }
+                />
+                {authorName && (
+                  <CharactersDialog
+                    mode="story"
+                    ownerHandle={authorName}
+                    storyId={story.id}
+                    seriesId={seriesContext?.seriesId ?? null}
+                    trigger={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="button-manage-characters"
+                      >
+                        <Users className="w-4 h-4 mr-2" />
+                        {t("characters.button", "Characters")}
+                      </Button>
+                    }
+                  />
+                )}
+              </div>
             </div>
           </div>
         )}

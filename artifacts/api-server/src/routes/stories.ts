@@ -81,6 +81,11 @@ import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
 import { buildIllustrationPrompt } from "../lib/prompt";
 import {
+  loadStoryCharacters,
+  toCharacterRefs,
+  generateIllustrationForCharacters,
+} from "../lib/characterContext";
+import {
   aiGenerationLimiter,
   illustrationLimiter,
   writeLimiter,
@@ -1070,16 +1075,25 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
     return;
   }
 
+  const linkedChars = await loadStoryCharacters(story.id);
   const prompt = buildIllustrationPrompt(
     parsed.data.sectionText,
     story.genre,
     story.artStyle,
     story.characters,
     story.summary,
+    toCharacterRefs(linkedChars),
   );
 
-  req.log.info({ storyId: story.id }, "Generating illustration");
-  const buffer = await generateImageBuffer(prompt, "1024x1024");
+  req.log.info(
+    { storyId: story.id, characterCount: linkedChars.length },
+    "Generating illustration",
+  );
+  const buffer = await generateIllustrationForCharacters(
+    prompt,
+    linkedChars,
+    "1024x1024",
+  );
   const imageUrl = await uploadIllustrationBuffer(buffer);
 
   const [illustration] = await db
@@ -1250,7 +1264,12 @@ router.post(
     const finalPrompt = typeof promptOverride === "string" && promptOverride.trim()
       ? promptOverride.trim()
       : existing.prompt;
-    const buffer = await generateImageBuffer(finalPrompt, "1024x1024");
+    const linkedChars = await loadStoryCharacters(story.id);
+    const buffer = await generateIllustrationForCharacters(
+      finalPrompt,
+      linkedChars,
+      "1024x1024",
+    );
     const newImageUrl = await uploadIllustrationBuffer(buffer);
 
     const [updated] = await db
@@ -1377,14 +1396,20 @@ router.post(
       .set({ fullText: newFullText, updatedAt: new Date() })
       .where(eq(storiesTable.id, story.id));
 
+    const linkedChars = await loadStoryCharacters(story.id);
     const illustrationPrompt = buildIllustrationPrompt(
       rewrittenText,
       story.genre,
       story.artStyle,
       story.characters,
       story.summary,
+      toCharacterRefs(linkedChars),
     );
-    const buffer = await generateImageBuffer(illustrationPrompt, "1024x1024");
+    const buffer = await generateIllustrationForCharacters(
+      illustrationPrompt,
+      linkedChars,
+      "1024x1024",
+    );
     const newImageUrl = await uploadIllustrationBuffer(buffer);
 
     const existingIlls = await db
@@ -1558,14 +1583,20 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
           .from(illustrationsTable)
           .where(eq(illustrationsTable.storyId, story.id));
         const sectionIndex = existingCount;
+        const linkedChars = await loadStoryCharacters(story.id);
         const prompt = buildIllustrationPrompt(
           newSection,
           story.genre,
           story.artStyle,
           story.characters,
           story.summary,
+          toCharacterRefs(linkedChars),
         );
-        const buffer = await generateImageBuffer(prompt, "1024x1024");
+        const buffer = await generateIllustrationForCharacters(
+          prompt,
+          linkedChars,
+          "1024x1024",
+        );
         const imageUrl = await uploadIllustrationBuffer(buffer);
         await db.insert(illustrationsTable).values({
           storyId: story.id,

@@ -27,7 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trash2, Loader2, Plus, BookOpen } from "lucide-react";
+import { Trash2, Loader2, Plus, BookOpen, Users } from "lucide-react";
+import { CharactersDialog } from "@/components/characters-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SeriesDetailPage() {
@@ -155,6 +156,19 @@ export default function SeriesDetailPage() {
               >
                 <Trash2 className="w-4 h-4 mr-1" /> {t("series.deleteSeries")}
               </Button>
+              {authorName && (
+                <CharactersDialog
+                  mode="series"
+                  ownerHandle={authorName}
+                  seriesId={seriesId}
+                  trigger={
+                    <Button size="sm" variant="outline">
+                      <Users className="w-4 h-4 mr-1" />
+                      {t("characters.button", "Characters")}
+                    </Button>
+                  }
+                />
+              )}
             </div>
 
             <div className="flex gap-2 items-center pt-2 border-t border-border/30">

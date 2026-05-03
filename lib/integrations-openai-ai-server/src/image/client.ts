@@ -32,6 +32,31 @@ export async function generateImageBuffer(
   return Buffer.from(base64, "base64");
 }
 
+// Edit an image by passing in raw buffers as character references. Used
+// to keep characters visually consistent across illustrations: callers
+// pass the reference image(s) plus a scene prompt and get a new image
+// where the same faces/outfits appear in the new scene.
+export async function editImagesFromBuffers(
+  imageBuffers: Buffer[],
+  prompt: string,
+  size: "1024x1024" | "512x512" | "256x256" = "1024x1024",
+  contentType: string = "image/png",
+): Promise<Buffer> {
+  const images = await Promise.all(
+    imageBuffers.map((buf, i) =>
+      toFile(buf, `ref-${i}.png`, { type: contentType }),
+    ),
+  );
+  const response = await openai.images.edit({
+    model: "gpt-image-1",
+    image: images,
+    prompt,
+    size,
+  });
+  const b64 = (response.data ?? [])[0]?.b64_json ?? "";
+  return Buffer.from(b64, "base64");
+}
+
 export async function editImages(
   imageFiles: string[],
   prompt: string,

@@ -2226,3 +2226,173 @@ export const UpdateNotificationPrefsResponse = zod.object({
   repost: zod.boolean(),
   coAuthorChapter: zod.boolean(),
 });
+
+/**
+ * @summary List characters owned by an author (optionally scoped to a series)
+ */
+export const ListCharactersQueryParams = zod.object({
+  ownerHandle: zod.coerce.string(),
+  seriesId: zod.coerce.number().optional(),
+});
+
+export const ListCharactersResponseItem = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListCharactersResponse = zod.array(ListCharactersResponseItem);
+
+/**
+ * @summary Create a reusable character profile
+ */
+
+export const createCharacterBodyNameMax = 80;
+
+export const createCharacterBodyDescriptionMax = 1000;
+
+export const CreateCharacterBody = zod.object({
+  ownerHandle: zod.string().min(1),
+  name: zod.string().min(1).max(createCharacterBodyNameMax),
+  description: zod.string().max(createCharacterBodyDescriptionMax).optional(),
+  seriesId: zod.number().nullish(),
+});
+
+export const UpdateCharacterParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const updateCharacterBodyNameMax = 80;
+
+export const updateCharacterBodyDescriptionMax = 1000;
+
+export const UpdateCharacterBody = zod.object({
+  ownerHandle: zod.string().min(1),
+  name: zod.string().min(1).max(updateCharacterBodyNameMax).optional(),
+  description: zod.string().max(updateCharacterBodyDescriptionMax).optional(),
+  seriesId: zod.number().nullish(),
+});
+
+export const UpdateCharacterResponse = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+export const DeleteCharacterParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteCharacterQueryParams = zod.object({
+  ownerHandle: zod.coerce.string(),
+});
+
+/**
+ * @summary Upload a reference image for a character (base64 PNG/JPEG)
+ */
+export const UploadCharacterReferenceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const uploadCharacterReferenceBodyContentTypeDefault = `image/png`;
+
+export const UploadCharacterReferenceBody = zod.object({
+  ownerHandle: zod.string().min(1),
+  imageBase64: zod
+    .string()
+    .min(1)
+    .describe(
+      "Raw base64 (no data prefix) of a PNG\/JPEG image, max ~6 MB encoded.",
+    ),
+  contentType: zod
+    .enum(["image/png", "image/jpeg", "image/webp"])
+    .default(uploadCharacterReferenceBodyContentTypeDefault),
+});
+
+export const UploadCharacterReferenceResponse = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+export const ListStoryCharactersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListStoryCharactersResponseItem = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListStoryCharactersResponse = zod.array(
+  ListStoryCharactersResponseItem,
+);
+
+/**
+ * @summary Replace the set of characters linked to this story
+ */
+export const SetStoryCharactersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SetStoryCharactersBody = zod.object({
+  ownerHandle: zod.string().min(1),
+  characterIds: zod.array(zod.number()),
+});
+
+export const SetStoryCharactersResponseItem = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const SetStoryCharactersResponse = zod.array(
+  SetStoryCharactersResponseItem,
+);
+
+export const ListSeriesCharactersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListSeriesCharactersResponseItem = zod.object({
+  id: zod.number(),
+  ownerUserId: zod.number().nullish(),
+  ownerHandle: zod.string(),
+  seriesId: zod.number().nullish(),
+  name: zod.string(),
+  description: zod.string(),
+  referenceImageUrl: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListSeriesCharactersResponse = zod.array(
+  ListSeriesCharactersResponseItem,
+);

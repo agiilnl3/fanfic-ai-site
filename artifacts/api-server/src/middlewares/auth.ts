@@ -158,6 +158,7 @@ const IDENTITY_BODY_KEYS = [
   "recipientName",
   "actorName",
   "ownerName",
+  "ownerHandle",
   "userName",
 ] as const;
 
@@ -168,6 +169,7 @@ const IDENTITY_QUERY_KEYS = [
   "reposterName",
   "recipientName",
   "ownerName",
+  "ownerHandle",
 ] as const;
 
 function isPublicWritePath(path: string): boolean {

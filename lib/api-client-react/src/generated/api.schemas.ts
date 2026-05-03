@@ -799,6 +799,75 @@ export interface StoryViewBody {
   completed?: boolean;
 }
 
+export interface Character {
+  id: number;
+  /** @nullable */
+  ownerUserId?: number | null;
+  ownerHandle: string;
+  /** @nullable */
+  seriesId?: number | null;
+  name: string;
+  description: string;
+  /** @nullable */
+  referenceImageUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCharacterBody {
+  /** @minLength 1 */
+  ownerHandle: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /** @nullable */
+  seriesId?: number | null;
+}
+
+export interface UpdateCharacterBody {
+  /** @minLength 1 */
+  ownerHandle: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  name?: string;
+  /** @maxLength 1000 */
+  description?: string;
+  /** @nullable */
+  seriesId?: number | null;
+}
+
+export type UploadCharacterReferenceBodyContentType =
+  (typeof UploadCharacterReferenceBodyContentType)[keyof typeof UploadCharacterReferenceBodyContentType];
+
+export const UploadCharacterReferenceBodyContentType = {
+  "image/png": "image/png",
+  "image/jpeg": "image/jpeg",
+  "image/webp": "image/webp",
+} as const;
+
+export interface UploadCharacterReferenceBody {
+  /** @minLength 1 */
+  ownerHandle: string;
+  /**
+   * Raw base64 (no data prefix) of a PNG/JPEG image, max ~6 MB encoded.
+   * @minLength 1
+   */
+  imageBase64: string;
+  contentType?: UploadCharacterReferenceBodyContentType;
+}
+
+export interface SetStoryCharactersBody {
+  /** @minLength 1 */
+  ownerHandle: string;
+  characterIds: number[];
+}
+
 export type ListStoriesParams = {
   status?: ListStoriesStatus;
   genre?: string;
@@ -963,4 +1032,13 @@ export type DeleteSeriesParams = {
 
 export type RemoveStoryFromSeriesParams = {
   requesterAuthorName: string;
+};
+
+export type ListCharactersParams = {
+  ownerHandle: string;
+  seriesId?: number;
+};
+
+export type DeleteCharacterParams = {
+  ownerHandle: string;
 };

@@ -16,6 +16,7 @@ import settingsRouter from "./settings";
 import analyticsRouter from "./analytics";
 import moderationRouter from "./moderation";
 import meRouter from "./me";
+import charactersRouter from "./characters";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(settingsRouter);
 router.use(analyticsRouter);
 router.use(moderationRouter);
 router.use(meRouter);
+router.use(charactersRouter);
 
 export default router;

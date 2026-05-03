@@ -34,14 +34,17 @@ import type {
   BookmarkBody,
   BookmarkInfo,
   ChapterAuthorList,
+  Character,
   CoAuthorList,
   CoAuthorMutationBody,
   CoAuthorRemoveBody,
   CollaboratorList,
   ContinueStoryBody,
+  CreateCharacterBody,
   CreateReportBody,
   CreateSeriesBody,
   CreateStoryBody,
+  DeleteCharacterParams,
   DeleteSeriesParams,
   DeleteStoryCommentParams,
   FollowBody,
@@ -63,6 +66,7 @@ import type {
   Illustration,
   InviteCollaboratorBody,
   LikeBody,
+  ListCharactersParams,
   ListNotificationsParams,
   ListSeriesParams,
   ListStoriesParams,
@@ -85,6 +89,7 @@ import type {
   SearchAuthorsParams,
   Series,
   SeriesWithStories,
+  SetStoryCharactersBody,
   SetUserBannedBody,
   Story,
   StoryAnalytics,
@@ -100,12 +105,14 @@ import type {
   UnlikeStoryParams,
   UnreadCount,
   UnrepostStoryParams,
+  UpdateCharacterBody,
   UpdateNotificationPrefsBody,
   UpdateReadingProgressBody,
   UpdateSeriesBody,
   UpdateStoryBody,
   UpdateStoryTagsBody,
   UpdateTariffBody,
+  UploadCharacterReferenceBody,
   UsageInfo,
 } from "./api.schemas";
 
@@ -7616,3 +7623,694 @@ export const useUpdateNotificationPrefs = <
 > => {
   return useMutation(getUpdateNotificationPrefsMutationOptions(options));
 };
+
+/**
+ * @summary List characters owned by an author (optionally scoped to a series)
+ */
+export const getListCharactersUrl = (params: ListCharactersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/characters?${stringifiedParams}`
+    : `/api/characters`;
+};
+
+export const listCharacters = async (
+  params: ListCharactersParams,
+  options?: RequestInit,
+): Promise<Character[]> => {
+  return customFetch<Character[]>(getListCharactersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCharactersQueryKey = (params?: ListCharactersParams) => {
+  return [`/api/characters`, ...(params ? [params] : [])] as const;
+};
+
+export const getListCharactersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListCharactersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCharactersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCharacters>>> = ({
+    signal,
+  }) => listCharacters(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCharacters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCharactersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCharacters>>
+>;
+export type ListCharactersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List characters owned by an author (optionally scoped to a series)
+ */
+
+export function useListCharacters<
+  TData = Awaited<ReturnType<typeof listCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListCharactersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCharactersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a reusable character profile
+ */
+export const getCreateCharacterUrl = () => {
+  return `/api/characters`;
+};
+
+export const createCharacter = async (
+  createCharacterBody: CreateCharacterBody,
+  options?: RequestInit,
+): Promise<Character> => {
+  return customFetch<Character>(getCreateCharacterUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createCharacterBody),
+  });
+};
+
+export const getCreateCharacterMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCharacter>>,
+    TError,
+    { data: BodyType<CreateCharacterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createCharacter>>,
+  TError,
+  { data: BodyType<CreateCharacterBody> },
+  TContext
+> => {
+  const mutationKey = ["createCharacter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createCharacter>>,
+    { data: BodyType<CreateCharacterBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createCharacter(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateCharacterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createCharacter>>
+>;
+export type CreateCharacterMutationBody = BodyType<CreateCharacterBody>;
+export type CreateCharacterMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a reusable character profile
+ */
+export const useCreateCharacter = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createCharacter>>,
+    TError,
+    { data: BodyType<CreateCharacterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createCharacter>>,
+  TError,
+  { data: BodyType<CreateCharacterBody> },
+  TContext
+> => {
+  return useMutation(getCreateCharacterMutationOptions(options));
+};
+
+export const getUpdateCharacterUrl = (id: number) => {
+  return `/api/characters/${id}`;
+};
+
+export const updateCharacter = async (
+  id: number,
+  updateCharacterBody: UpdateCharacterBody,
+  options?: RequestInit,
+): Promise<Character> => {
+  return customFetch<Character>(getUpdateCharacterUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateCharacterBody),
+  });
+};
+
+export const getUpdateCharacterMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCharacter>>,
+    TError,
+    { id: number; data: BodyType<UpdateCharacterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateCharacter>>,
+  TError,
+  { id: number; data: BodyType<UpdateCharacterBody> },
+  TContext
+> => {
+  const mutationKey = ["updateCharacter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateCharacter>>,
+    { id: number; data: BodyType<UpdateCharacterBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateCharacter(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateCharacterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateCharacter>>
+>;
+export type UpdateCharacterMutationBody = BodyType<UpdateCharacterBody>;
+export type UpdateCharacterMutationError = ErrorType<unknown>;
+
+export const useUpdateCharacter = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateCharacter>>,
+    TError,
+    { id: number; data: BodyType<UpdateCharacterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateCharacter>>,
+  TError,
+  { id: number; data: BodyType<UpdateCharacterBody> },
+  TContext
+> => {
+  return useMutation(getUpdateCharacterMutationOptions(options));
+};
+
+export const getDeleteCharacterUrl = (
+  id: number,
+  params: DeleteCharacterParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/characters/${id}?${stringifiedParams}`
+    : `/api/characters/${id}`;
+};
+
+export const deleteCharacter = async (
+  id: number,
+  params: DeleteCharacterParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteCharacterUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteCharacterMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCharacter>>,
+    TError,
+    { id: number; params: DeleteCharacterParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteCharacter>>,
+  TError,
+  { id: number; params: DeleteCharacterParams },
+  TContext
+> => {
+  const mutationKey = ["deleteCharacter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteCharacter>>,
+    { id: number; params: DeleteCharacterParams }
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return deleteCharacter(id, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteCharacterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteCharacter>>
+>;
+
+export type DeleteCharacterMutationError = ErrorType<unknown>;
+
+export const useDeleteCharacter = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteCharacter>>,
+    TError,
+    { id: number; params: DeleteCharacterParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteCharacter>>,
+  TError,
+  { id: number; params: DeleteCharacterParams },
+  TContext
+> => {
+  return useMutation(getDeleteCharacterMutationOptions(options));
+};
+
+/**
+ * @summary Upload a reference image for a character (base64 PNG/JPEG)
+ */
+export const getUploadCharacterReferenceUrl = (id: number) => {
+  return `/api/characters/${id}/reference`;
+};
+
+export const uploadCharacterReference = async (
+  id: number,
+  uploadCharacterReferenceBody: UploadCharacterReferenceBody,
+  options?: RequestInit,
+): Promise<Character> => {
+  return customFetch<Character>(getUploadCharacterReferenceUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(uploadCharacterReferenceBody),
+  });
+};
+
+export const getUploadCharacterReferenceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadCharacterReference>>,
+    TError,
+    { id: number; data: BodyType<UploadCharacterReferenceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadCharacterReference>>,
+  TError,
+  { id: number; data: BodyType<UploadCharacterReferenceBody> },
+  TContext
+> => {
+  const mutationKey = ["uploadCharacterReference"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadCharacterReference>>,
+    { id: number; data: BodyType<UploadCharacterReferenceBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return uploadCharacterReference(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadCharacterReferenceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadCharacterReference>>
+>;
+export type UploadCharacterReferenceMutationBody =
+  BodyType<UploadCharacterReferenceBody>;
+export type UploadCharacterReferenceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upload a reference image for a character (base64 PNG/JPEG)
+ */
+export const useUploadCharacterReference = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadCharacterReference>>,
+    TError,
+    { id: number; data: BodyType<UploadCharacterReferenceBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadCharacterReference>>,
+  TError,
+  { id: number; data: BodyType<UploadCharacterReferenceBody> },
+  TContext
+> => {
+  return useMutation(getUploadCharacterReferenceMutationOptions(options));
+};
+
+export const getListStoryCharactersUrl = (id: number) => {
+  return `/api/stories/${id}/characters`;
+};
+
+export const listStoryCharacters = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Character[]> => {
+  return customFetch<Character[]>(getListStoryCharactersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStoryCharactersQueryKey = (id: number) => {
+  return [`/api/stories/${id}/characters`] as const;
+};
+
+export const getListStoryCharactersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStoryCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListStoryCharactersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStoryCharacters>>
+  > = ({ signal }) => listStoryCharacters(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStoryCharacters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStoryCharactersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStoryCharacters>>
+>;
+export type ListStoryCharactersQueryError = ErrorType<unknown>;
+
+export function useListStoryCharacters<
+  TData = Awaited<ReturnType<typeof listStoryCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStoryCharactersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Replace the set of characters linked to this story
+ */
+export const getSetStoryCharactersUrl = (id: number) => {
+  return `/api/stories/${id}/characters`;
+};
+
+export const setStoryCharacters = async (
+  id: number,
+  setStoryCharactersBody: SetStoryCharactersBody,
+  options?: RequestInit,
+): Promise<Character[]> => {
+  return customFetch<Character[]>(getSetStoryCharactersUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setStoryCharactersBody),
+  });
+};
+
+export const getSetStoryCharactersMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setStoryCharacters>>,
+    TError,
+    { id: number; data: BodyType<SetStoryCharactersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setStoryCharacters>>,
+  TError,
+  { id: number; data: BodyType<SetStoryCharactersBody> },
+  TContext
+> => {
+  const mutationKey = ["setStoryCharacters"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setStoryCharacters>>,
+    { id: number; data: BodyType<SetStoryCharactersBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return setStoryCharacters(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetStoryCharactersMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setStoryCharacters>>
+>;
+export type SetStoryCharactersMutationBody = BodyType<SetStoryCharactersBody>;
+export type SetStoryCharactersMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace the set of characters linked to this story
+ */
+export const useSetStoryCharacters = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setStoryCharacters>>,
+    TError,
+    { id: number; data: BodyType<SetStoryCharactersBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setStoryCharacters>>,
+  TError,
+  { id: number; data: BodyType<SetStoryCharactersBody> },
+  TContext
+> => {
+  return useMutation(getSetStoryCharactersMutationOptions(options));
+};
+
+export const getListSeriesCharactersUrl = (id: number) => {
+  return `/api/series/${id}/characters`;
+};
+
+export const listSeriesCharacters = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Character[]> => {
+  return customFetch<Character[]>(getListSeriesCharactersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSeriesCharactersQueryKey = (id: number) => {
+  return [`/api/series/${id}/characters`] as const;
+};
+
+export const getListSeriesCharactersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSeriesCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSeriesCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListSeriesCharactersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listSeriesCharacters>>
+  > = ({ signal }) => listSeriesCharacters(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSeriesCharacters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSeriesCharactersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSeriesCharacters>>
+>;
+export type ListSeriesCharactersQueryError = ErrorType<unknown>;
+
+export function useListSeriesCharacters<
+  TData = Awaited<ReturnType<typeof listSeriesCharacters>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSeriesCharacters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSeriesCharactersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
