@@ -902,6 +902,10 @@ export const getAuthorProfileResponseStoriesItemCoAuthorsDefault = [];
 
 export const GetAuthorProfileResponse = zod.object({
   authorName: zod.string(),
+  displayName: zod.string().nullish(),
+  bio: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+  joinedAt: zod.string().nullish(),
   storyCount: zod.number(),
   publishedCount: zod.number(),
   followerCount: zod.number(),

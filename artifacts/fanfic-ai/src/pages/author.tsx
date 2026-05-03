@@ -16,6 +16,7 @@ import { FollowButton } from "@/components/follow-button";
 import { ReportButton } from "@/components/report-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BookOpen, Heart, Users, UserPlus } from "lucide-react";
 
 function StatCard({
@@ -94,18 +95,36 @@ export default function AuthorPage() {
         {data && (
           <>
             <div className="mb-10">
-              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
-                <div>
-                  <h1 className="font-serif text-4xl md:text-5xl font-bold glow-text">
-                    {data.authorName}
-                  </h1>
-                  {data.firstSeenAt && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {t("author.joined", {
-                        date: format(new Date(data.firstSeenAt), monthYearFmt, { locale: dateLocale }),
-                      })}
-                    </p>
-                  )}
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
+                <div className="flex items-start gap-4">
+                  <Avatar className="w-20 h-20 border border-border/40">
+                    {data.avatarUrl && <AvatarImage src={data.avatarUrl} alt={data.displayName ?? data.authorName} />}
+                    <AvatarFallback className="font-serif text-2xl">
+                      {(data.displayName ?? data.authorName).slice(0, 1).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h1 className="font-serif text-4xl md:text-5xl font-bold glow-text">
+                      {data.displayName ?? data.authorName}
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-1">@{data.authorName}</p>
+                    {data.bio && (
+                      <p className="text-sm text-foreground/80 mt-3 max-w-prose whitespace-pre-line">
+                        {data.bio}
+                      </p>
+                    )}
+                    {(data.joinedAt ?? data.firstSeenAt) && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {t("author.joined", {
+                          date: format(
+                            new Date(data.joinedAt ?? data.firstSeenAt!),
+                            monthYearFmt,
+                            { locale: dateLocale },
+                          ),
+                        })}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <FollowButton authorName={data.authorName} size="default" showCount />
               </div>

@@ -8,6 +8,7 @@ import {
   hiddenStoriesTable,
 } from "@workspace/db";
 import { notInArray } from "drizzle-orm";
+import { canEditSeries, canEditStory } from "../lib/storyAuthz";
 import {
   ListSeriesQueryParams,
   CreateSeriesBody,
@@ -216,7 +217,7 @@ router.patch("/series/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (series.authorName !== body.data.requesterAuthorName.trim()) {
+  if (!canEditSeries(series, req.user ?? null)) {
     res.status(403).json({ error: "Only the series author can update it" });
     return;
   }
@@ -248,7 +249,7 @@ router.delete("/series/:id", async (req, res): Promise<void> => {
     res.sendStatus(204);
     return;
   }
-  if (series.authorName !== query.data.requesterAuthorName.trim()) {
+  if (!canEditSeries(series, req.user ?? null)) {
     res.status(403).json({ error: "Only the series author can delete it" });
     return;
   }
@@ -272,8 +273,7 @@ router.post("/series/:id/stories", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Series not found" });
     return;
   }
-  const requester = body.data.requesterAuthorName.trim();
-  if (series.authorName !== requester) {
+  if (!canEditSeries(series, req.user ?? null)) {
     res.status(403).json({ error: "Only the series author can edit it" });
     return;
   }
@@ -281,7 +281,7 @@ router.post("/series/:id/stories", async (req, res): Promise<void> => {
   // requester could attach (and effectively reparent, via the storyId
   // conflict target) another author's story to their own series.
   const [story] = await db
-    .select({ id: storiesTable.id, authorName: storiesTable.authorName })
+    .select({ id: storiesTable.id, authorName: storiesTable.authorName, userId: storiesTable.userId, coAuthors: storiesTable.coAuthors })
     .from(storiesTable)
     .where(eq(storiesTable.id, body.data.storyId))
     .limit(1);
@@ -289,7 +289,7 @@ router.post("/series/:id/stories", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Story not found" });
     return;
   }
-  if (story.authorName !== requester) {
+  if (!canEditStory(story, req.user ?? null)) {
     res.status(403).json({ error: "You can only add your own stories" });
     return;
   }
@@ -339,17 +339,16 @@ router.delete(
       res.sendStatus(204);
       return;
     }
-    const requester = query.data.requesterAuthorName.trim();
-    if (series.authorName !== requester) {
+    if (!canEditSeries(series, req.user ?? null)) {
       res.status(403).json({ error: "Only the series author can edit it" });
       return;
     }
     const [story] = await db
-      .select({ id: storiesTable.id, authorName: storiesTable.authorName })
+      .select({ id: storiesTable.id, authorName: storiesTable.authorName, userId: storiesTable.userId, coAuthors: storiesTable.coAuthors })
       .from(storiesTable)
       .where(eq(storiesTable.id, params.data.storyId))
       .limit(1);
-    if (story && story.authorName !== requester) {
+    if (story && !canEditStory(story, req.user ?? null)) {
       res.status(403).json({ error: "You can only edit your own stories" });
       return;
     }

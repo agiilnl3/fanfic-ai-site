@@ -630,16 +630,25 @@ router.patch("/stories/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(existing, req.user ?? null)) {
+    res.status(403).json({ error: "Only the author or a co-author may edit" });
+    return;
+  }
+
   const [story] = await db
     .update(storiesTable)
     .set({ ...parsed.data, updatedAt: new Date() })
     .where(eq(storiesTable.id, params.data.id))
     .returning();
-
-  if (!story) {
-    res.status(404).json({ error: "Story not found" });
-    return;
-  }
 
   res.json(story);
 });
@@ -651,16 +660,28 @@ router.delete("/stories/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [story] = await db
-    .delete(storiesTable)
+  const [existing] = await db
+    .select()
+    .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
-    .returning();
-
-  if (!story) {
+    .limit(1);
+  if (!existing) {
     res.status(404).json({ error: "Story not found" });
     return;
   }
+  // Only the primary author (not co-authors) may delete.
+  if (
+    !req.user ||
+    (existing.userId != null
+      ? existing.userId !== req.user.id
+      : req.user.handle !== existing.authorName) &&
+      !req.user.isAdmin
+  ) {
+    res.status(403).json({ error: "Only the primary author may delete" });
+    return;
+  }
 
+  await db.delete(storiesTable).where(eq(storiesTable.id, params.data.id));
   res.sendStatus(204);
 });
 
@@ -671,16 +692,25 @@ router.post("/stories/:id/publish", async (req, res): Promise<void> => {
     return;
   }
 
+  const [existing] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(existing, req.user ?? null)) {
+    res.status(403).json({ error: "Only the author or a co-author may publish" });
+    return;
+  }
+
   const [story] = await db
     .update(storiesTable)
     .set({ status: "published", updatedAt: new Date() })
     .where(eq(storiesTable.id, params.data.id))
     .returning();
-
-  if (!story) {
-    res.status(404).json({ error: "Story not found" });
-    return;
-  }
 
   res.json(story);
 });
@@ -721,6 +751,10 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
 
   if (!story) {
     res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(story, req.user ?? null)) {
+    res.status(403).json({ error: "Only the author or a co-author may add illustrations" });
     return;
   }
 
@@ -832,6 +866,20 @@ router.delete(
       return;
     }
 
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+    if (!canEditStory(story, req.user ?? null)) {
+      res.status(403).json({ error: "Only the author or a co-author may delete illustrations" });
+      return;
+    }
+
     const [illustration] = await db
       .delete(illustrationsTable)
       .where(
@@ -885,6 +933,10 @@ router.post(
       res.status(404).json({ error: "Story not found" });
       return;
     }
+    if (!canEditStory(story, req.user ?? null)) {
+      res.status(403).json({ error: "Only the author or a co-author may regenerate illustrations" });
+      return;
+    }
 
     req.log.info({ illustrationId: existing.id }, "Regenerating illustration");
     const bodyParsed = RegenerateIllustrationBody.safeParse(req.body ?? {});
@@ -930,6 +982,10 @@ router.post("/stories/:id/regenerate", aiGenerationLimiter, async (req, res): Pr
 
   if (!story) {
     res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(story, req.user ?? null)) {
+    res.status(403).json({ error: "Only the author or a co-author may regenerate text" });
     return;
   }
 
@@ -981,6 +1037,10 @@ router.post(
 
     if (!story) {
       res.status(404).json({ error: "Story not found" });
+      return;
+    }
+    if (!canEditStory(story, req.user ?? null)) {
+      res.status(403).json({ error: "Only the author or a co-author may regenerate sections" });
       return;
     }
 

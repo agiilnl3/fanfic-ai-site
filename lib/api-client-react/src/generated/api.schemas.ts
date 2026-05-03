@@ -312,6 +312,14 @@ export interface AdminStats {
 
 export interface AuthorProfile {
   authorName: string;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  joinedAt?: string | null;
   storyCount: number;
   publishedCount: number;
   followerCount: number;

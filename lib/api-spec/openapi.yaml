@@ -2064,6 +2064,14 @@ components:
       properties:
         authorName:
           type: string
+        displayName:
+          type: ["string", "null"]
+        bio:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        joinedAt:
+          type: ["string", "null"]
         storyCount:
           type: integer
         publishedCount:
