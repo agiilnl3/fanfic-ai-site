@@ -1570,24 +1570,37 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
       const existingChapterCount = (baseText.match(/^## /gm) || []).length;
       const newChapterIndex = existingChapterCount + 1;
 
-      // Find the canonical leaf inside the lock so a racing /branch
-      // can't insert a new canonical sibling between our read and write.
+      // Find the canonical leaf by *walking the canonical path from the
+      // root*, not by scanning all chapters for "canonical with no
+      // canonical child" — a non-canonical alternate branch can have
+      // its own canonical descendants (its sub-branches), and those
+      // would otherwise be picked up as false leaves and corrupt the
+      // story's canonical chain. Walking from the root guarantees we
+      // append to the *currently rendered* path.
       const existingChapters = await tx
         .select()
         .from(chaptersTable)
         .where(eq(chaptersTable.storyId, story.id));
       let canonicalLeafId: number | null = null;
       if (existingChapters.length > 0) {
-        const childByParent = new Map<number, boolean>();
+        const childrenOf = new Map<number | null, typeof existingChapters>();
         for (const c of existingChapters) {
-          if (c.parentChapterId != null && c.isCanonical) {
-            childByParent.set(c.parentChapterId, true);
-          }
+          const arr = childrenOf.get(c.parentChapterId) ?? [];
+          arr.push(c);
+          childrenOf.set(c.parentChapterId, arr);
         }
-        const canonicalLeaf = existingChapters.find(
-          (c) => c.isCanonical && !childByParent.get(c.id),
-        );
-        canonicalLeafId = canonicalLeaf?.id ?? null;
+        // Canonical root: the chapter whose parent is null AND
+        // is_canonical = true. There should be exactly one.
+        const root = (childrenOf.get(null) ?? []).find((c) => c.isCanonical);
+        let cursor = root ?? null;
+        while (cursor) {
+          const next = (childrenOf.get(cursor.id) ?? []).find(
+            (c) => c.isCanonical,
+          );
+          if (!next) break;
+          cursor = next;
+        }
+        canonicalLeafId = cursor?.id ?? null;
       }
 
       const [row] = await tx

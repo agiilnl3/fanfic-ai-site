@@ -3,6 +3,7 @@ import {
   useGetChapterTree,
   useBranchChapter,
   useSetCanonicalChapter,
+  useSetReadingProgress,
   getGetChapterTreeQueryKey,
   getGetStoryQueryKey,
   type Chapter,
@@ -20,6 +21,12 @@ interface Props {
   authorName: string;
   canEdit: boolean;
 }
+
+// Number of opening characters we show inline for each chapter when a
+// reader expands an alternate path. Keeps the sidebar from ballooning
+// past the visible viewport while still letting them sample the
+// alternate storyline.
+const PER_CHAPTER_PREVIEW_CHARS = 1500;
 
 /**
  * Renders the canonical chapter chain plus, for each chapter that has
@@ -48,6 +55,24 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
       onError: () =>
         toast({
           title: t("branches.failed", "Could not generate branches"),
+          variant: "destructive",
+        }),
+    },
+  });
+
+  // Lets a reader (no edit rights required) save their reading-progress
+  // pointer onto a non-canonical chapter, so when they come back the
+  // app remembers which alternate they were following — true
+  // "reader-side branch switching" without rewriting the canon.
+  const setProgress = useSetReadingProgress({
+    mutation: {
+      onSuccess: () =>
+        toast({
+          title: t("branches.savedPath", "Saved your reading path"),
+        }),
+      onError: () =>
+        toast({
+          title: t("branches.savePathFailed", "Could not save your path"),
           variant: "destructive",
         }),
     },
@@ -115,6 +140,43 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
 
   const handleSwitch = (chapterId: number) => {
     setCanonical.mutate({ id: storyId, chapterId });
+  };
+
+  // Build the path leading up to a chapter (root → ... → chapter) so we
+  // can show the reader the full storyline for an alternate branch, not
+  // just the divergent fragment. The path follows parent pointers,
+  // independent of is_canonical flags.
+  const pathTo = (chapterId: number): Chapter[] => {
+    const byId = new Map(all.map((c) => [c.id, c] as const));
+    const out: Chapter[] = [];
+    let cur: Chapter | undefined = byId.get(chapterId);
+    while (cur) {
+      out.unshift(cur);
+      if (cur.parentChapterId == null) break;
+      cur = byId.get(cur.parentChapterId);
+    }
+    return out;
+  };
+  const handleReadHere = (chapterId: number) => {
+    if (!authorName?.trim()) {
+      toast({
+        title: t(
+          "branches.signInToSave",
+          "Pick a pen name to save your reading path",
+        ),
+        variant: "destructive",
+      });
+      return;
+    }
+    setProgress.mutate({
+      id: storyId,
+      data: {
+        authorName,
+        progress: 0,
+        paragraphIndex: 0,
+        chapterId,
+      },
+    });
   };
 
   return (
@@ -192,20 +254,57 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
                       </div>
                       {previewing === s.id && (
                         <div
-                          className="pl-5 space-y-2 max-h-96 overflow-y-auto rounded border border-dashed border-muted bg-background/40 p-2"
+                          className="pl-5 space-y-3 max-h-[28rem] overflow-y-auto rounded border border-dashed border-muted bg-background/40 p-2"
                           data-testid={`branch-fulltext-${s.id}`}
                         >
-                          {s.text
-                            .split(/\n\n+/)
-                            .filter((p) => p.trim().length > 0)
-                            .map((para, i) => (
-                              <p
-                                key={i}
-                                className="text-xs text-foreground/80 leading-relaxed font-serif"
-                              >
-                                {para}
-                              </p>
-                            ))}
+                          {pathTo(s.id).map((step, stepIdx) => (
+                            <div key={step.id} className="space-y-1">
+                              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                                {stepIdx + 1}.{" "}
+                                {step.title ||
+                                  t(
+                                    "branches.untitledChapter",
+                                    "Untitled chapter",
+                                  )}
+                                {step.branchLabel ? ` — ${step.branchLabel}` : ""}
+                              </div>
+                              {step.text
+                                .slice(0, PER_CHAPTER_PREVIEW_CHARS)
+                                .split(/\n\n+/)
+                                .filter((p) => p.trim().length > 0)
+                                .map((para, i) => (
+                                  <p
+                                    key={i}
+                                    className="text-xs text-foreground/80 leading-relaxed font-serif"
+                                  >
+                                    {para}
+                                  </p>
+                                ))}
+                              {step.text.length >
+                                PER_CHAPTER_PREVIEW_CHARS && (
+                                <p className="text-[10px] text-muted-foreground italic">
+                                  …{" "}
+                                  {t(
+                                    "branches.truncated",
+                                    "(truncated for sidebar preview)",
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 text-xs w-full"
+                            disabled={setProgress.isPending}
+                            onClick={() => handleReadHere(s.id)}
+                            data-testid={`branch-read-here-${s.id}`}
+                          >
+                            {t(
+                              "branches.readThisPath",
+                              "Save this branch as my reading path",
+                            )}
+                          </Button>
                         </div>
                       )}
                     </li>
