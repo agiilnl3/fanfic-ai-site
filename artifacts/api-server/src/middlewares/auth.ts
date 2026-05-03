@@ -3,12 +3,6 @@ import { getAuth, clerkClient } from "@clerk/express";
 import { eq, sql } from "drizzle-orm";
 import { db, usersTable, type User } from "@workspace/db";
 
-declare module "express-serve-static-core" {
-  interface Request {
-    user?: User;
-  }
-}
-
 const userCache = new Map<string, { user: User; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
 
