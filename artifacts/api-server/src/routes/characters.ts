@@ -49,6 +49,12 @@ router.get("/characters", async (req, res): Promise<void> => {
     return;
   }
   const { ownerHandle, seriesId } = parsed.data;
+  // Character profiles + reference images can be private likenesses,
+  // so the library is owner-only — never enumerable by handle.
+  if (!req.user || req.user.handle !== ownerHandle) {
+    res.status(403).json({ error: "Not authorized to view these characters" });
+    return;
+  }
   const conditions = [eq(charactersTable.ownerHandle, ownerHandle)];
   if (seriesId != null) {
     conditions.push(eq(charactersTable.seriesId, seriesId));
@@ -265,6 +271,20 @@ router.get("/stories/:id/characters", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  // Only the story author/co-author can see which characters
+  // (and their reference images) are linked to the story.
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id));
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(story, req.user ?? null)) {
+    res.status(403).json({ error: "Not authorized to view story characters" });
+    return;
+  }
   const links = await db
     .select({ characterId: storyCharactersTable.characterId })
     .from(storyCharactersTable)
@@ -351,6 +371,18 @@ router.get("/series/:id/characters", async (req, res): Promise<void> => {
   const params = ListSeriesCharactersParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [series] = await db
+    .select()
+    .from(seriesTable)
+    .where(eq(seriesTable.id, params.data.id));
+  if (!series) {
+    res.status(404).json({ error: "Series not found" });
+    return;
+  }
+  if (!canEditSeries(series, req.user ?? null)) {
+    res.status(403).json({ error: "Not authorized to view series characters" });
     return;
   }
   const rows = await db
