@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, count, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, count, and, sql, inArray, gte } from "drizzle-orm";
 import {
   db,
   storiesTable,
   illustrationsTable,
   storyLikesTable,
   storyCommentsTable,
+  storyRepostsTable,
+  storyViewsTable,
   authorFollowsTable,
   notificationsTable,
 } from "@workspace/db";
@@ -374,38 +376,104 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     conditions.push(sql`${storiesTable.id} NOT IN (${sql.join(hiddenIds.map((id) => sql`${id}`), sql`, `)})`);
   }
 
+  const sortMode = sort ?? "new";
+  const cap = limit ?? 20;
+
+  if (sortMode === "new") {
+    const stories = await db
+      .select()
+      .from(storiesTable)
+      .where(and(...conditions))
+      .orderBy(desc(storiesTable.createdAt))
+      .limit(cap);
+    res.json(await attachCounts(stories));
+    return;
+  }
+
+  // Trending: rank stories by engagement events that happened in the window,
+  // not by story creation time. We aggregate per-event-table by createdAt
+  // (the time the like/comment/repost/view actually occurred), join the
+  // weighted scores together, then return the top N stories matching the
+  // base filter conditions. Reposts and views are included.
+  const windowMs =
+    sortMode === "today"
+      ? 24 * 3600 * 1000
+      : sortMode === "week"
+        ? 7 * 24 * 3600 * 1000
+        : null;
+  const since = windowMs ? new Date(Date.now() - windowMs) : null;
+
+  const likeWhere = since ? gte(storyLikesTable.createdAt, since) : undefined;
+  const commentWhere = since
+    ? gte(storyCommentsTable.createdAt, since)
+    : undefined;
+  const repostWhere = since
+    ? gte(storyRepostsTable.createdAt, since)
+    : undefined;
+  const viewWhere = since ? gte(storyViewsTable.createdAt, since) : undefined;
+
+  const [likeRows, commentRows, repostRows, viewRows] = await Promise.all([
+    db
+      .select({
+        storyId: storyLikesTable.storyId,
+        c: count(),
+      })
+      .from(storyLikesTable)
+      .where(likeWhere)
+      .groupBy(storyLikesTable.storyId),
+    db
+      .select({
+        storyId: storyCommentsTable.storyId,
+        c: count(),
+      })
+      .from(storyCommentsTable)
+      .where(commentWhere)
+      .groupBy(storyCommentsTable.storyId),
+    db
+      .select({
+        storyId: storyRepostsTable.storyId,
+        c: count(),
+      })
+      .from(storyRepostsTable)
+      .where(repostWhere)
+      .groupBy(storyRepostsTable.storyId),
+    db
+      .select({
+        storyId: storyViewsTable.storyId,
+        c: count(),
+      })
+      .from(storyViewsTable)
+      .where(viewWhere)
+      .groupBy(storyViewsTable.storyId),
+  ]);
+
+  const score = new Map<number, number>();
+  const bump = (rows: { storyId: number; c: number }[], weight: number) => {
+    for (const r of rows) {
+      score.set(r.storyId, (score.get(r.storyId) ?? 0) + Number(r.c) * weight);
+    }
+  };
+  bump(likeRows, 3);
+  bump(commentRows, 2);
+  bump(repostRows, 4);
+  bump(viewRows, 1);
+
+  if (score.size === 0) {
+    res.json([]);
+    return;
+  }
+
+  const candidateIds = Array.from(score.keys());
   const stories = await db
     .select()
     .from(storiesTable)
-    .where(and(...conditions))
-    .orderBy(desc(storiesTable.createdAt))
-    .limit((limit ?? 20) * 4);
-
-  const decorated = await attachCounts(stories);
-
-  // For trending sorts, rank by engagement score within a recent window.
-  const sortMode = sort ?? "new";
-  let windowMs: number | null = null;
-  if (sortMode === "today") windowMs = 24 * 3600 * 1000;
-  else if (sortMode === "week") windowMs = 7 * 24 * 3600 * 1000;
-  else if (sortMode === "all") windowMs = null;
-  let result = decorated;
-  if (sortMode !== "new") {
-    const cutoff = windowMs ? Date.now() - windowMs : 0;
-    result = decorated
-      .filter((s) =>
-        cutoff ? new Date(s.createdAt).getTime() >= cutoff : true,
-      )
-      .map((s) => ({
-        ...s,
-        _score:
-          (Number(s.likeCount) || 0) * 3 +
-          (Number(s.commentCount) || 0) * 2,
-      }))
-      .sort((a, b) => b._score - a._score)
-      .map(({ _score: _drop, ...rest }) => rest);
-  }
-  res.json(result.slice(0, limit ?? 20));
+    .where(and(...conditions, inArray(storiesTable.id, candidateIds)));
+  const ranked = stories
+    .map((s) => ({ s, score: score.get(s.id) ?? 0 }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, cap)
+    .map((r) => r.s);
+  res.json(await attachCounts(ranked));
 });
 
 router.get("/stories/stats", async (_req, res): Promise<void> => {

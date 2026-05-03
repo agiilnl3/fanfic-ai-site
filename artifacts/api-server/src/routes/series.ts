@@ -195,8 +195,25 @@ router.post("/series/:id/stories", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Series not found" });
     return;
   }
-  if (series.authorName !== body.data.requesterAuthorName.trim()) {
+  const requester = body.data.requesterAuthorName.trim();
+  if (series.authorName !== requester) {
     res.status(403).json({ error: "Only the series author can edit it" });
+    return;
+  }
+  // The story must also belong to the same author. Without this check a
+  // requester could attach (and effectively reparent, via the storyId
+  // conflict target) another author's story to their own series.
+  const [story] = await db
+    .select({ id: storiesTable.id, authorName: storiesTable.authorName })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, body.data.storyId))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (story.authorName !== requester) {
+    res.status(403).json({ error: "You can only add your own stories" });
     return;
   }
   await db
@@ -259,8 +276,18 @@ router.delete(
       res.sendStatus(204);
       return;
     }
-    if (series.authorName !== query.data.requesterAuthorName.trim()) {
+    const requester = query.data.requesterAuthorName.trim();
+    if (series.authorName !== requester) {
       res.status(403).json({ error: "Only the series author can edit it" });
+      return;
+    }
+    const [story] = await db
+      .select({ id: storiesTable.id, authorName: storiesTable.authorName })
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.storyId))
+      .limit(1);
+    if (story && story.authorName !== requester) {
+      res.status(403).json({ error: "You can only edit your own stories" });
       return;
     }
     await db

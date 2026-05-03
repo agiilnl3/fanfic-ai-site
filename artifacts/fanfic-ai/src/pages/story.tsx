@@ -149,37 +149,59 @@ export default function StoryReading() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyId]);
 
-  // Throttle reading-progress writes while the user scrolls.
+  // Persist reading progress while the user scrolls. Writes are throttled
+  // to at most one per 3s to avoid hammering the API on long stories. The
+  // initial view is already recorded by the effect above; we do not record
+  // a second "completed" view here to keep the analytics row count to one
+  // per session — the reading-progress upsert already exposes completion
+  // via its monotonic progress value.
   const setProgress = useSetReadingProgress();
   useEffect(() => {
     if (!storyId || !authorName?.trim()) return;
-    let lastSent = 0;
-    let completedSent = false;
+    const MIN_INTERVAL_MS = 3000;
+    let lastSentAt = 0;
+    let lastSentPct = 0;
+    let pending: number | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const flush = () => {
+      timer = null;
+      if (pending == null) return;
+      const pct = pending;
+      pending = null;
+      lastSentAt = Date.now();
+      lastSentPct = pct;
+      setProgress.mutate({
+        id: storyId,
+        data: { authorName, progress: pct },
+      });
+    };
     const onScroll = () => {
       const doc = document.documentElement;
       const scrollTop = window.scrollY || doc.scrollTop;
       const max = doc.scrollHeight - window.innerHeight;
       if (max <= 0) return;
-      const pct = Math.max(0, Math.min(100, Math.round((scrollTop / max) * 100)));
-      const now = Date.now();
-      if (Math.abs(pct - lastSent) >= 10 || (pct >= 95 && !completedSent)) {
-        lastSent = pct;
-        setProgress.mutate({
-          id: storyId,
-          data: { authorName, progress: pct },
-        });
-        if (pct >= 95 && !completedSent) {
-          completedSent = true;
-          recordView.mutate({
-            id: storyId,
-            data: { viewerName: authorName, completed: true },
-          });
+      const pct = Math.max(
+        0,
+        Math.min(100, Math.round((scrollTop / max) * 100)),
+      );
+      if (Math.abs(pct - lastSentPct) < 5 && pct < 95) return;
+      pending = pct;
+      const elapsed = Date.now() - lastSentAt;
+      if (elapsed >= MIN_INTERVAL_MS) {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
         }
+        flush();
+      } else if (!timer) {
+        timer = setTimeout(flush, MIN_INTERVAL_MS - elapsed);
       }
-      void now;
     };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (timer) clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyId, authorName]);
 
