@@ -145,18 +145,20 @@ router.post(
           for (const id of frontier) allIds.add(id);
         }
         const ids = Array.from(allIds);
-        await db
-          .insert(hiddenCommentsTable)
-          .values(
-            ids.map((id) => ({
-              commentId: id,
-              reason: id === report.targetId ? report.reason : "cascade",
-            })),
-          )
-          .onConflictDoNothing();
-        await db
-          .delete(storyCommentsTable)
-          .where(inArray(storyCommentsTable.id, ids));
+        await db.transaction(async (tx) => {
+          await tx
+            .insert(hiddenCommentsTable)
+            .values(
+              ids.map((id) => ({
+                commentId: id,
+                reason: id === report.targetId ? report.reason : "cascade",
+              })),
+            )
+            .onConflictDoNothing();
+          await tx
+            .delete(storyCommentsTable)
+            .where(inArray(storyCommentsTable.id, ids));
+        });
       }
     }
     const [updated] = await db
