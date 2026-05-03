@@ -175,11 +175,6 @@ export default function StoryReading() {
       queryKey: getGetChapterTreeQueryKey(storyId),
     },
   });
-  // Hold the active chain so progress stamps line up with whatever the
-  // reader is actually reading (canonical OR a saved alternate path).
-  const [activeChain, setActiveChain] = useState<
-    Array<{ id: number; paraCount: number }>
-  >([]);
   const chapterIdForParagraph = (paraIdx: number): number | null => {
     let cum = 0;
     for (const c of activeChain) {
@@ -251,6 +246,57 @@ export default function StoryReading() {
           : `\n\n## ${c.title || `Chapter ${i + 1}`}\n\n${c.text}`,
       )
       .join("");
+  }, [chapterTree, savedProgress]);
+
+  // Active chain backing paragraph→chapterId mapping. Mirrors
+  // readerBranchText: when the reader is on a saved non-canonical
+  // branch we use that branch's chain so progress saves stamp
+  // chapterIds from the branch (preserving their selection across
+  // scroll updates) instead of the canonical chain.
+  const activeChain = React.useMemo<
+    Array<{ id: number; paraCount: number }>
+  >(() => {
+    if (!chapterTree) return [];
+    const all = chapterTree.chapters ?? [];
+    const byId = new Map(all.map((c) => [c.id, c] as const));
+    const savedChapterId = (savedProgress as { chapterId?: number | null } | undefined)
+      ?.chapterId;
+    const canonicalSet = new Set(chapterTree.canonicalPath ?? []);
+    let chainIds: number[];
+    if (savedChapterId != null && !canonicalSet.has(savedChapterId)) {
+      const prefix: number[] = [];
+      let cur = byId.get(savedChapterId);
+      while (cur) {
+        prefix.unshift(cur.id);
+        if (cur.parentChapterId == null) break;
+        cur = byId.get(cur.parentChapterId);
+      }
+      const childrenOf = new Map<number, Chapter[]>();
+      for (const c of all) {
+        if (c.parentChapterId == null) continue;
+        const arr = childrenOf.get(c.parentChapterId) ?? [];
+        arr.push(c);
+        childrenOf.set(c.parentChapterId, arr);
+      }
+      let tail = byId.get(savedChapterId);
+      const tailChain: number[] = [];
+      while (tail) {
+        const next = (childrenOf.get(tail.id) ?? []).find((c) => c.isCanonical);
+        if (!next) break;
+        tailChain.push(next.id);
+        tail = next;
+      }
+      chainIds = [...prefix, ...tailChain];
+    } else {
+      chainIds = chapterTree.canonicalPath ?? [];
+    }
+    return chainIds
+      .map((id) => byId.get(id))
+      .filter((c): c is Chapter => !!c)
+      .map((c) => ({
+        id: c.id,
+        paraCount: c.text.split(/\n\n+/).filter((p) => p.trim()).length,
+      }));
   }, [chapterTree, savedProgress]);
 
   // Resume scroll position once both the saved progress and the rendered
@@ -618,57 +664,6 @@ export default function StoryReading() {
   const renderedStoryText = readerBranchText ?? story.fullText ?? "";
   const paragraphs = renderedStoryText.split(/\n\n+/).filter((p) => p.trim());
 
-  // Recompute the chain that backs paragraph→chapterId mapping so a
-  // reader on a non-canonical branch doesn't have their saved chapterId
-  // overwritten with a canonical id by the next scroll-progress save.
-  React.useEffect(() => {
-    if (!chapterTree) {
-      setActiveChain([]);
-      return;
-    }
-    const all = chapterTree.chapters ?? [];
-    const byId = new Map(all.map((c) => [c.id, c] as const));
-    const savedChapterId = (savedProgress as { chapterId?: number | null } | undefined)
-      ?.chapterId;
-    const canonicalSet = new Set(chapterTree.canonicalPath ?? []);
-    let chainIds: number[];
-    if (savedChapterId != null && !canonicalSet.has(savedChapterId)) {
-      const prefix: number[] = [];
-      let cur = byId.get(savedChapterId);
-      while (cur) {
-        prefix.unshift(cur.id);
-        if (cur.parentChapterId == null) break;
-        cur = byId.get(cur.parentChapterId);
-      }
-      const childrenOf = new Map<number, Chapter[]>();
-      for (const c of all) {
-        if (c.parentChapterId == null) continue;
-        const arr = childrenOf.get(c.parentChapterId) ?? [];
-        arr.push(c);
-        childrenOf.set(c.parentChapterId, arr);
-      }
-      let tail = byId.get(savedChapterId);
-      const tailChain: number[] = [];
-      while (tail) {
-        const next = (childrenOf.get(tail.id) ?? []).find((c) => c.isCanonical);
-        if (!next) break;
-        tailChain.push(next.id);
-        tail = next;
-      }
-      chainIds = [...prefix, ...tailChain];
-    } else {
-      chainIds = chapterTree.canonicalPath ?? [];
-    }
-    setActiveChain(
-      chainIds
-        .map((id) => byId.get(id))
-        .filter((c): c is Chapter => !!c)
-        .map((c) => ({
-          id: c.id,
-          paraCount: c.text.split(/\n\n+/).filter((p) => p.trim()).length,
-        })),
-    );
-  }, [chapterTree, savedProgress]);
   const illustrations = [...(story.illustrations || [])].sort(
     (a, b) => a.sectionIndex - b.sectionIndex,
   );
