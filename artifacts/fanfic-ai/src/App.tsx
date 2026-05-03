@@ -13,6 +13,7 @@ const CreateStory = lazy(() => import("@/pages/create"));
 const StoryReading = lazy(() => import("@/pages/story"));
 const Feed = lazy(() => import("@/pages/feed"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
+const Admin = lazy(() => import("@/pages/admin"));
 
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ function Router() {
         <Route path="/story/:id" component={StoryReading} />
         <Route path="/feed" component={Feed} />
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/admin" component={Admin} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

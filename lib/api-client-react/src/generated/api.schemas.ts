@@ -41,6 +41,7 @@ export interface Story {
   characters?: string | null;
   status: StoryStatus;
   authorName: string;
+  coAuthors: string[];
   /** @nullable */
   coverImageUrl?: string | null;
   createdAt: string;
@@ -189,6 +190,83 @@ export interface RegenerateSectionResponse {
   sectionIndex: number;
   rewrittenText: string;
   illustration?: Illustration;
+}
+
+export interface CoAuthorList {
+  storyId: number;
+  primaryAuthor: string;
+  coAuthors: string[];
+}
+
+export interface CoAuthorMutationBody {
+  /**
+   * Pen name of the primary author making the change.
+   * @minLength 1
+   */
+  requesterAuthorName: string;
+  /**
+   * Pen name of the co-author to add.
+   * @minLength 1
+   */
+  coAuthorName: string;
+}
+
+export interface CoAuthorRemoveBody {
+  /** @minLength 1 */
+  requesterAuthorName: string;
+  /** @minLength 1 */
+  coAuthorName: string;
+}
+
+export interface AdminLoginBody {
+  /** @minLength 1 */
+  password: string;
+}
+
+export interface AdminLoginResponse {
+  token: string;
+}
+
+export type AdminStoryRowStatus =
+  (typeof AdminStoryRowStatus)[keyof typeof AdminStoryRowStatus];
+
+export const AdminStoryRowStatus = {
+  draft: "draft",
+  published: "published",
+} as const;
+
+export interface AdminStoryRow {
+  id: number;
+  title: string;
+  authorName: string;
+  status: AdminStoryRowStatus;
+  genre: string;
+  createdAt: string;
+  updatedAt: string;
+  likeCount: number;
+  illustrationCount: number;
+}
+
+export type AdminUpdateStoryBodyStatus =
+  (typeof AdminUpdateStoryBodyStatus)[keyof typeof AdminUpdateStoryBodyStatus];
+
+export const AdminUpdateStoryBodyStatus = {
+  draft: "draft",
+  published: "published",
+} as const;
+
+export interface AdminUpdateStoryBody {
+  status?: AdminUpdateStoryBodyStatus;
+  title?: string;
+}
+
+export interface AdminStats {
+  totalStories: number;
+  publishedStories: number;
+  draftStories: number;
+  totalIllustrations: number;
+  totalLikes: number;
+  totalAuthors: number;
 }
 
 export type ListStoriesParams = {

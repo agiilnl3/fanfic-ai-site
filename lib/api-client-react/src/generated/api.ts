@@ -17,6 +17,14 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminLoginBody,
+  AdminLoginResponse,
+  AdminStats,
+  AdminStoryRow,
+  AdminUpdateStoryBody,
+  CoAuthorList,
+  CoAuthorMutationBody,
+  CoAuthorRemoveBody,
   ContinueStoryBody,
   CreateStoryBody,
   GenerateIllustrationBody,
@@ -2030,3 +2038,671 @@ export const useRegenerateStorySection = <
 > => {
   return useMutation(getRegenerateStorySectionMutationOptions(options));
 };
+
+/**
+ * @summary List the co-authors of a story
+ */
+export const getListCoAuthorsUrl = (id: number) => {
+  return `/api/stories/${id}/co-authors`;
+};
+
+export const listCoAuthors = async (
+  id: number,
+  options?: RequestInit,
+): Promise<CoAuthorList> => {
+  return customFetch<CoAuthorList>(getListCoAuthorsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCoAuthorsQueryKey = (id: number) => {
+  return [`/api/stories/${id}/co-authors`] as const;
+};
+
+export const getListCoAuthorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCoAuthors>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCoAuthors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCoAuthorsQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listCoAuthors>>> = ({
+    signal,
+  }) => listCoAuthors(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCoAuthors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCoAuthorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCoAuthors>>
+>;
+export type ListCoAuthorsQueryError = ErrorType<void>;
+
+/**
+ * @summary List the co-authors of a story
+ */
+
+export function useListCoAuthors<
+  TData = Awaited<ReturnType<typeof listCoAuthors>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCoAuthors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCoAuthorsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a co-author to a story (primary author only)
+ */
+export const getAddCoAuthorUrl = (id: number) => {
+  return `/api/stories/${id}/co-authors`;
+};
+
+export const addCoAuthor = async (
+  id: number,
+  coAuthorMutationBody: CoAuthorMutationBody,
+  options?: RequestInit,
+): Promise<CoAuthorList> => {
+  return customFetch<CoAuthorList>(getAddCoAuthorUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(coAuthorMutationBody),
+  });
+};
+
+export const getAddCoAuthorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addCoAuthor>>,
+    TError,
+    { id: number; data: BodyType<CoAuthorMutationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addCoAuthor>>,
+  TError,
+  { id: number; data: BodyType<CoAuthorMutationBody> },
+  TContext
+> => {
+  const mutationKey = ["addCoAuthor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addCoAuthor>>,
+    { id: number; data: BodyType<CoAuthorMutationBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return addCoAuthor(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddCoAuthorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addCoAuthor>>
+>;
+export type AddCoAuthorMutationBody = BodyType<CoAuthorMutationBody>;
+export type AddCoAuthorMutationError = ErrorType<void>;
+
+/**
+ * @summary Add a co-author to a story (primary author only)
+ */
+export const useAddCoAuthor = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addCoAuthor>>,
+    TError,
+    { id: number; data: BodyType<CoAuthorMutationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addCoAuthor>>,
+  TError,
+  { id: number; data: BodyType<CoAuthorMutationBody> },
+  TContext
+> => {
+  return useMutation(getAddCoAuthorMutationOptions(options));
+};
+
+/**
+ * @summary Remove a co-author (primary author only)
+ */
+export const getRemoveCoAuthorUrl = (id: number) => {
+  return `/api/stories/${id}/co-authors/remove`;
+};
+
+export const removeCoAuthor = async (
+  id: number,
+  coAuthorRemoveBody: CoAuthorRemoveBody,
+  options?: RequestInit,
+): Promise<CoAuthorList> => {
+  return customFetch<CoAuthorList>(getRemoveCoAuthorUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(coAuthorRemoveBody),
+  });
+};
+
+export const getRemoveCoAuthorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeCoAuthor>>,
+    TError,
+    { id: number; data: BodyType<CoAuthorRemoveBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeCoAuthor>>,
+  TError,
+  { id: number; data: BodyType<CoAuthorRemoveBody> },
+  TContext
+> => {
+  const mutationKey = ["removeCoAuthor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeCoAuthor>>,
+    { id: number; data: BodyType<CoAuthorRemoveBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return removeCoAuthor(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveCoAuthorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeCoAuthor>>
+>;
+export type RemoveCoAuthorMutationBody = BodyType<CoAuthorRemoveBody>;
+export type RemoveCoAuthorMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a co-author (primary author only)
+ */
+export const useRemoveCoAuthor = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeCoAuthor>>,
+    TError,
+    { id: number; data: BodyType<CoAuthorRemoveBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeCoAuthor>>,
+  TError,
+  { id: number; data: BodyType<CoAuthorRemoveBody> },
+  TContext
+> => {
+  return useMutation(getRemoveCoAuthorMutationOptions(options));
+};
+
+/**
+ * @summary Verify admin password and return a session token (currently equal to the password)
+ */
+export const getAdminLoginUrl = () => {
+  return `/api/admin/login`;
+};
+
+export const adminLogin = async (
+  adminLoginBody: AdminLoginBody,
+  options?: RequestInit,
+): Promise<AdminLoginResponse> => {
+  return customFetch<AdminLoginResponse>(getAdminLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminLoginBody),
+  });
+};
+
+export const getAdminLoginMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminLogin>>,
+    TError,
+    { data: BodyType<AdminLoginBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminLogin>>,
+  TError,
+  { data: BodyType<AdminLoginBody> },
+  TContext
+> => {
+  const mutationKey = ["adminLogin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminLogin>>,
+    { data: BodyType<AdminLoginBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adminLogin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminLoginMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminLogin>>
+>;
+export type AdminLoginMutationBody = BodyType<AdminLoginBody>;
+export type AdminLoginMutationError = ErrorType<void>;
+
+/**
+ * @summary Verify admin password and return a session token (currently equal to the password)
+ */
+export const useAdminLogin = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminLogin>>,
+    TError,
+    { data: BodyType<AdminLoginBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminLogin>>,
+  TError,
+  { data: BodyType<AdminLoginBody> },
+  TContext
+> => {
+  return useMutation(getAdminLoginMutationOptions(options));
+};
+
+/**
+ * @summary List ALL stories (drafts + published) with metadata, requires admin token
+ */
+export const getAdminListStoriesUrl = () => {
+  return `/api/admin/stories`;
+};
+
+export const adminListStories = async (
+  options?: RequestInit,
+): Promise<AdminStoryRow[]> => {
+  return customFetch<AdminStoryRow[]>(getAdminListStoriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListStoriesQueryKey = () => {
+  return [`/api/admin/stories`] as const;
+};
+
+export const getAdminListStoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListStories>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListStories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminListStoriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListStories>>
+  > = ({ signal }) => adminListStories({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListStories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListStoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListStories>>
+>;
+export type AdminListStoriesQueryError = ErrorType<void>;
+
+/**
+ * @summary List ALL stories (drafts + published) with metadata, requires admin token
+ */
+
+export function useAdminListStories<
+  TData = Awaited<ReturnType<typeof adminListStories>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListStories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListStoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Permanently delete a story and all its data
+ */
+export const getAdminDeleteStoryUrl = (id: number) => {
+  return `/api/admin/stories/${id}`;
+};
+
+export const adminDeleteStory = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAdminDeleteStoryUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminDeleteStoryMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteStory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminDeleteStory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["adminDeleteStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminDeleteStory>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adminDeleteStory(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminDeleteStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminDeleteStory>>
+>;
+
+export type AdminDeleteStoryMutationError = ErrorType<void>;
+
+/**
+ * @summary Permanently delete a story and all its data
+ */
+export const useAdminDeleteStory = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteStory>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminDeleteStory>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getAdminDeleteStoryMutationOptions(options));
+};
+
+/**
+ * @summary Update a story's status (publish/unpublish) as admin
+ */
+export const getAdminUpdateStoryUrl = (id: number) => {
+  return `/api/admin/stories/${id}`;
+};
+
+export const adminUpdateStory = async (
+  id: number,
+  adminUpdateStoryBody: AdminUpdateStoryBody,
+  options?: RequestInit,
+): Promise<Story> => {
+  return customFetch<Story>(getAdminUpdateStoryUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminUpdateStoryBody),
+  });
+};
+
+export const getAdminUpdateStoryMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpdateStory>>,
+    TError,
+    { id: number; data: BodyType<AdminUpdateStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminUpdateStory>>,
+  TError,
+  { id: number; data: BodyType<AdminUpdateStoryBody> },
+  TContext
+> => {
+  const mutationKey = ["adminUpdateStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminUpdateStory>>,
+    { id: number; data: BodyType<AdminUpdateStoryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminUpdateStory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminUpdateStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminUpdateStory>>
+>;
+export type AdminUpdateStoryMutationBody = BodyType<AdminUpdateStoryBody>;
+export type AdminUpdateStoryMutationError = ErrorType<void>;
+
+/**
+ * @summary Update a story's status (publish/unpublish) as admin
+ */
+export const useAdminUpdateStory = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpdateStory>>,
+    TError,
+    { id: number; data: BodyType<AdminUpdateStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminUpdateStory>>,
+  TError,
+  { id: number; data: BodyType<AdminUpdateStoryBody> },
+  TContext
+> => {
+  return useMutation(getAdminUpdateStoryMutationOptions(options));
+};
+
+/**
+ * @summary Aggregate site statistics
+ */
+export const getAdminGetStatsUrl = () => {
+  return `/api/admin/stats`;
+};
+
+export const adminGetStats = async (
+  options?: RequestInit,
+): Promise<AdminStats> => {
+  return customFetch<AdminStats>(getAdminGetStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminGetStatsQueryKey = () => {
+  return [`/api/admin/stats`] as const;
+};
+
+export const getAdminGetStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminGetStats>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminGetStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof adminGetStats>>> = ({
+    signal,
+  }) => adminGetStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminGetStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminGetStats>>
+>;
+export type AdminGetStatsQueryError = ErrorType<void>;
+
+/**
+ * @summary Aggregate site statistics
+ */
+
+export function useAdminGetStats<
+  TData = Awaited<ReturnType<typeof adminGetStats>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminGetStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

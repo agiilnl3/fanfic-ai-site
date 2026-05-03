@@ -17,6 +17,11 @@ import {
   DeleteIllustrationParams,
   RegenerateIllustrationParams,
   RegenerateIllustrationBody,
+  ListCoAuthorsParams,
+  AddCoAuthorParams,
+  AddCoAuthorBody,
+  RemoveCoAuthorParams,
+  RemoveCoAuthorBody,
   RegenerateStoryTextParams,
   RegenerateStorySectionParams,
   RegenerateStorySectionBody,
@@ -35,6 +40,7 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { uploadIllustrationBuffer } from "../lib/uploadIllustration";
+import { canEditStory } from "../lib/storyAuthz";
 import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
 import { buildIllustrationPrompt } from "../lib/prompt";
@@ -729,9 +735,8 @@ router.post(
       return;
     }
 
-    const requester = body.data.authorName.trim();
-    if (!requester || requester !== story.authorName) {
-      res.status(403).json({ error: "Only the story's author may add chapters" });
+    if (!canEditStory(story, body.data.authorName)) {
+      res.status(403).json({ error: "Only the author or a co-author may add chapters" });
       return;
     }
 
@@ -1055,6 +1060,104 @@ router.delete("/stories/:id/like", writeLimiter, async (req, res): Promise<void>
     );
   const info = await getLikeInfo(params.data.id, authorName);
   res.json(info);
+});
+
+// ---------- Co-authors ----------
+
+router.get("/stories/:id/co-authors", async (req, res): Promise<void> => {
+  const params = ListCoAuthorsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.json({
+    storyId: story.id,
+    primaryAuthor: story.authorName,
+    coAuthors: story.coAuthors ?? [],
+  });
+});
+
+router.post("/stories/:id/co-authors", writeLimiter, async (req, res): Promise<void> => {
+  const params = AddCoAuthorParams.safeParse(req.params);
+  const body = AddCoAuthorBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const requester = body.data.requesterAuthorName.trim();
+  if (requester !== story.authorName) {
+    res.status(403).json({ error: "Only the primary author can manage co-authors" });
+    return;
+  }
+  const newName = body.data.coAuthorName.trim();
+  if (!newName || newName === story.authorName) {
+    res.status(400).json({ error: "Invalid co-author name" });
+    return;
+  }
+  const current = story.coAuthors ?? [];
+  const next = current.includes(newName) ? current : [...current, newName];
+  const [updated] = await db
+    .update(storiesTable)
+    .set({ coAuthors: next, updatedAt: new Date() })
+    .where(eq(storiesTable.id, story.id))
+    .returning();
+  res.json({
+    storyId: updated.id,
+    primaryAuthor: updated.authorName,
+    coAuthors: updated.coAuthors ?? [],
+  });
+});
+
+router.post("/stories/:id/co-authors/remove", writeLimiter, async (req, res): Promise<void> => {
+  const params = RemoveCoAuthorParams.safeParse(req.params);
+  const body = RemoveCoAuthorBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (body.data.requesterAuthorName.trim() !== story.authorName) {
+    res.status(403).json({ error: "Only the primary author can manage co-authors" });
+    return;
+  }
+  const target = body.data.coAuthorName.trim();
+  const next = (story.coAuthors ?? []).filter((n) => n !== target);
+  const [updated] = await db
+    .update(storiesTable)
+    .set({ coAuthors: next, updatedAt: new Date() })
+    .where(eq(storiesTable.id, story.id))
+    .returning();
+  res.json({
+    storyId: updated.id,
+    primaryAuthor: updated.authorName,
+    coAuthors: updated.coAuthors ?? [],
+  });
 });
 
 export default router;

@@ -12,8 +12,12 @@ import {
   useRegenerateStoryText,
   useRegenerateStorySection,
   useContinueStory,
+  useListCoAuthors,
+  useAddCoAuthor,
+  useRemoveCoAuthor,
   getGetStoryQueryKey,
   getGetIllustrationsQueryKey,
+  getListCoAuthorsQueryKey,
   getGetStoryAudioUrl,
   getExportStoryPdfUrl,
 } from "@workspace/api-client-react";
@@ -71,7 +75,33 @@ export default function StoryReading() {
   const audioUrl = getGetStoryAudioUrl(storyId);
   const pdfUrl = getExportStoryPdfUrl(storyId);
 
-  const isAuthor = story?.authorName === authorName;
+  const { data: coAuthorData } = useListCoAuthors(storyId, {
+    query: { enabled: !!storyId, queryKey: getListCoAuthorsQueryKey(storyId) },
+  });
+  const coAuthors = coAuthorData?.coAuthors ?? story?.coAuthors ?? [];
+  const isPrimaryAuthor = !!authorName && story?.authorName === authorName;
+  const isCoAuthor = !!authorName && coAuthors.includes(authorName);
+  const isAuthor = isPrimaryAuthor || isCoAuthor;
+  const [coAuthorDraft, setCoAuthorDraft] = useState("");
+  const addCoAuthorMutation = useAddCoAuthor({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
+        setCoAuthorDraft("");
+        toast({ title: "Co-author added" });
+      },
+      onError: () => toast({ title: "Could not add co-author", variant: "destructive" }),
+    },
+  });
+  const removeCoAuthorMutation = useRemoveCoAuthor({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
+        toast({ title: "Co-author removed" });
+      },
+      onError: () => toast({ title: "Could not remove co-author", variant: "destructive" }),
+    },
+  });
 
   useEffect(() => {
     if (editMode && story?.fullText) {
@@ -499,7 +529,12 @@ export default function StoryReading() {
             <h1 className="font-serif text-5xl md:text-7xl font-bold tracking-tight mb-6 glow-text text-white drop-shadow-lg">
               {story.title}
             </h1>
-            <p className="text-xl text-white/80 italic font-serif">By {story.authorName}</p>
+            <p className="text-xl text-white/80 italic font-serif">
+              By {story.authorName}
+              {coAuthors.length > 0 && (
+                <span className="text-white/60"> &amp; {coAuthors.join(", ")}</span>
+              )}
+            </p>
             <p className="text-sm text-white/50 mt-4 uppercase tracking-widest">
               {format(new Date(story.createdAt), "MMMM do, yyyy")}
             </p>
@@ -509,8 +544,81 @@ export default function StoryReading() {
           </div>
         </header>
 
+        {isPrimaryAuthor && (
+          <div className="container mx-auto px-4 max-w-4xl mt-6 relative z-20">
+            <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground">
+                  Co-authors
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  Co-authors can add new chapters.
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {coAuthors.length === 0 && (
+                  <span className="text-sm text-muted-foreground italic">No co-authors yet.</span>
+                )}
+                {coAuthors.map((name) => (
+                  <Badge key={name} variant="secondary" className="gap-2">
+                    {name}
+                    <button
+                      type="button"
+                      className="hover:text-destructive"
+                      disabled={removeCoAuthorMutation.isPending}
+                      onClick={() =>
+                        removeCoAuthorMutation.mutate({
+                          id: story.id,
+                          data: {
+                            requesterAuthorName: authorName,
+                            coAuthorName: name,
+                          },
+                        })
+                      }
+                      aria-label={`Remove ${name}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const name = coAuthorDraft.trim();
+                  if (!name) return;
+                  addCoAuthorMutation.mutate({
+                    id: story.id,
+                    data: { requesterAuthorName: authorName, coAuthorName: name },
+                  });
+                }}
+              >
+                <input
+                  type="text"
+                  value={coAuthorDraft}
+                  onChange={(e) => setCoAuthorDraft(e.target.value)}
+                  placeholder="Add co-author by pen name"
+                  className="flex-1 h-9 px-3 rounded-md border border-border bg-background text-sm"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={addCoAuthorMutation.isPending || !coAuthorDraft.trim()}
+                >
+                  {addCoAuthorMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Add"
+                  )}
+                </Button>
+              </form>
+            </div>
+          </div>
+        )}
+
         {isAuthor && (
-          <div className="container mx-auto px-4 max-w-4xl -mt-4 relative z-20 flex justify-end gap-2 flex-wrap">
+          <div className="container mx-auto px-4 max-w-4xl mt-4 relative z-20 flex justify-end gap-2 flex-wrap">
             {editMode ? (
               <>
                 <Button

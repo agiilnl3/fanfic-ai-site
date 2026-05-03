@@ -25,6 +25,8 @@ export const ListStoriesQueryParams = zod.object({
   authorName: zod.coerce.string().optional(),
 });
 
+export const listStoriesResponseCoAuthorsDefault = [];
+
 export const ListStoriesResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -37,6 +39,9 @@ export const ListStoriesResponseItem = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(listStoriesResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -90,6 +95,8 @@ export const GetPublicFeedQueryParams = zod.object({
   limit: zod.coerce.number().default(getPublicFeedQueryLimitDefault),
 });
 
+export const getPublicFeedResponseCoAuthorsDefault = [];
+
 export const GetPublicFeedResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -102,6 +109,9 @@ export const GetPublicFeedResponseItem = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(getPublicFeedResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -131,6 +141,8 @@ export const GetStoryParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const getStoryResponseOneCoAuthorsDefault = [];
+
 export const GetStoryResponse = zod
   .object({
     id: zod.number(),
@@ -144,6 +156,9 @@ export const GetStoryResponse = zod
     characters: zod.string().nullish(),
     status: zod.enum(["draft", "published"]),
     authorName: zod.string(),
+    coAuthors: zod
+      .array(zod.string())
+      .default(getStoryResponseOneCoAuthorsDefault),
     coverImageUrl: zod.string().nullish(),
     createdAt: zod.string(),
     updatedAt: zod.string(),
@@ -182,6 +197,8 @@ export const UpdateStoryBody = zod.object({
   coverImageUrl: zod.string().optional(),
 });
 
+export const updateStoryResponseCoAuthorsDefault = [];
+
 export const UpdateStoryResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -194,6 +211,9 @@ export const UpdateStoryResponse = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(updateStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -213,6 +233,8 @@ export const PublishStoryParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const publishStoryResponseCoAuthorsDefault = [];
+
 export const PublishStoryResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -225,6 +247,9 @@ export const PublishStoryResponse = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(publishStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -370,6 +395,8 @@ export const ContinueStoryBody = zod.object({
     .default(continueStoryBodyGenerateIllustrationDefault),
 });
 
+export const continueStoryResponseCoAuthorsDefault = [];
+
 export const ContinueStoryResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -382,6 +409,9 @@ export const ContinueStoryResponse = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(continueStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -416,6 +446,8 @@ export const RegenerateStoryTextParams = zod.object({
   id: zod.coerce.number(),
 });
 
+export const regenerateStoryTextResponseCoAuthorsDefault = [];
+
 export const RegenerateStoryTextResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -428,6 +460,9 @@ export const RegenerateStoryTextResponse = zod.object({
   characters: zod.string().nullish(),
   status: zod.enum(["draft", "published"]),
   authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(regenerateStoryTextResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
@@ -461,4 +496,156 @@ export const RegenerateStorySectionResponse = zod.object({
       createdAt: zod.string(),
     })
     .optional(),
+});
+
+/**
+ * @summary List the co-authors of a story
+ */
+export const ListCoAuthorsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCoAuthorsResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  coAuthors: zod.array(zod.string()),
+});
+
+/**
+ * @summary Add a co-author to a story (primary author only)
+ */
+export const AddCoAuthorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AddCoAuthorBody = zod.object({
+  requesterAuthorName: zod
+    .string()
+    .min(1)
+    .describe("Pen name of the primary author making the change."),
+  coAuthorName: zod
+    .string()
+    .min(1)
+    .describe("Pen name of the co-author to add."),
+});
+
+export const AddCoAuthorResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  coAuthors: zod.array(zod.string()),
+});
+
+/**
+ * @summary Remove a co-author (primary author only)
+ */
+export const RemoveCoAuthorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RemoveCoAuthorBody = zod.object({
+  requesterAuthorName: zod.string().min(1),
+  coAuthorName: zod.string().min(1),
+});
+
+export const RemoveCoAuthorResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  coAuthors: zod.array(zod.string()),
+});
+
+/**
+ * @summary Verify admin password and return a session token (currently equal to the password)
+ */
+
+export const AdminLoginBody = zod.object({
+  password: zod.string().min(1),
+});
+
+export const AdminLoginResponse = zod.object({
+  token: zod.string(),
+});
+
+/**
+ * @summary List ALL stories (drafts + published) with metadata, requires admin token
+ */
+export const AdminListStoriesHeader = zod.object({
+  "x-admin-token": zod.string(),
+});
+
+export const AdminListStoriesResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  authorName: zod.string(),
+  status: zod.enum(["draft", "published"]),
+  genre: zod.string(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  likeCount: zod.number(),
+  illustrationCount: zod.number(),
+});
+export const AdminListStoriesResponse = zod.array(AdminListStoriesResponseItem);
+
+/**
+ * @summary Permanently delete a story and all its data
+ */
+export const AdminDeleteStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminDeleteStoryHeader = zod.object({
+  "x-admin-token": zod.string(),
+});
+
+/**
+ * @summary Update a story's status (publish/unpublish) as admin
+ */
+export const AdminUpdateStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminUpdateStoryHeader = zod.object({
+  "x-admin-token": zod.string(),
+});
+
+export const AdminUpdateStoryBody = zod.object({
+  status: zod.enum(["draft", "published"]).optional(),
+  title: zod.string().optional(),
+});
+
+export const adminUpdateStoryResponseCoAuthorsDefault = [];
+
+export const AdminUpdateStoryResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod.enum(["draft", "published"]),
+  authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(adminUpdateStoryResponseCoAuthorsDefault),
+  coverImageUrl: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Aggregate site statistics
+ */
+export const AdminGetStatsHeader = zod.object({
+  "x-admin-token": zod.string(),
+});
+
+export const AdminGetStatsResponse = zod.object({
+  totalStories: zod.number(),
+  publishedStories: zod.number(),
+  draftStories: zod.number(),
+  totalIllustrations: zod.number(),
+  totalLikes: zod.number(),
+  totalAuthors: zod.number(),
 });

@@ -14,6 +14,10 @@ tags:
     description: Story CRUD and generation
   - name: illustrations
     description: Illustration generation per story
+  - name: collab
+    description: Co-author management for collaborative editing
+  - name: admin
+    description: Site administration (password-protected)
 paths:
   /healthz:
     get:
@@ -526,6 +530,204 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/co-authors:
+    get:
+      operationId: listCoAuthors
+      tags: [collab]
+      summary: List the co-authors of a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of co-author pen names plus the primary author
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoAuthorList"
+        "404":
+          description: Not found
+    post:
+      operationId: addCoAuthor
+      tags: [collab]
+      summary: Add a co-author to a story (primary author only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoAuthorMutationBody"
+      responses:
+        "200":
+          description: Updated co-author list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoAuthorList"
+        "403":
+          description: Only the primary author can change co-authors
+        "404":
+          description: Not found
+
+  /stories/{id}/co-authors/remove:
+    post:
+      operationId: removeCoAuthor
+      tags: [collab]
+      summary: Remove a co-author (primary author only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoAuthorRemoveBody"
+      responses:
+        "200":
+          description: Updated co-author list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoAuthorList"
+        "403":
+          description: Only the primary author can change co-authors
+        "404":
+          description: Not found
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Verify admin password and return a session token (currently equal to the password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginBody"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResponse"
+        "401":
+          description: Invalid password
+
+  /admin/stories:
+    get:
+      operationId: adminListStories
+      tags: [admin]
+      summary: List ALL stories (drafts + published) with metadata, requires admin token
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: All stories with stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminStoryRow"
+        "401":
+          description: Missing or invalid admin token
+
+  /admin/stories/{id}:
+    delete:
+      operationId: adminDeleteStory
+      tags: [admin]
+      summary: Permanently delete a story and all its data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: x-admin-token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Missing or invalid admin token
+        "404":
+          description: Not found
+    patch:
+      operationId: adminUpdateStory
+      tags: [admin]
+      summary: Update a story's status (publish/unpublish) as admin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: x-admin-token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateStoryBody"
+      responses:
+        "200":
+          description: Updated story
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "401":
+          description: Missing or invalid admin token
+        "404":
+          description: Not found
+
+  /admin/stats:
+    get:
+      operationId: adminGetStats
+      tags: [admin]
+      summary: Aggregate site statistics
+      parameters:
+        - name: x-admin-token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stats payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+        "401":
+          description: Missing or invalid admin token
+
 components:
   schemas:
     HealthStatus:
@@ -563,6 +765,11 @@ components:
           enum: [draft, published]
         authorName:
           type: string
+        coAuthors:
+          type: array
+          items:
+            type: string
+          default: []
         coverImageUrl:
           type: ["string", "null"]
         createdAt:
@@ -576,6 +783,7 @@ components:
         - artStyle
         - lengthSetting
         - status
+        - coAuthors
         - authorName
         - createdAt
         - updatedAt
@@ -792,3 +1000,106 @@ components:
       required:
         - sectionIndex
         - rewrittenText
+
+    CoAuthorList:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        primaryAuthor:
+          type: string
+        coAuthors:
+          type: array
+          items:
+            type: string
+      required: [storyId, primaryAuthor, coAuthors]
+
+    CoAuthorMutationBody:
+      type: object
+      properties:
+        requesterAuthorName:
+          type: string
+          minLength: 1
+          description: Pen name of the primary author making the change.
+        coAuthorName:
+          type: string
+          minLength: 1
+          description: Pen name of the co-author to add.
+      required: [requesterAuthorName, coAuthorName]
+
+    CoAuthorRemoveBody:
+      type: object
+      properties:
+        requesterAuthorName:
+          type: string
+          minLength: 1
+        coAuthorName:
+          type: string
+          minLength: 1
+      required: [requesterAuthorName, coAuthorName]
+
+    AdminLoginBody:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 1
+      required: [password]
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [token]
+
+    AdminStoryRow:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        authorName:
+          type: string
+        status:
+          type: string
+          enum: [draft, published]
+        genre:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        likeCount:
+          type: integer
+        illustrationCount:
+          type: integer
+      required: [id, title, authorName, status, genre, createdAt, updatedAt, likeCount, illustrationCount]
+
+    AdminUpdateStoryBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [draft, published]
+        title:
+          type: string
+      additionalProperties: false
+
+    AdminStats:
+      type: object
+      properties:
+        totalStories:
+          type: integer
+        publishedStories:
+          type: integer
+        draftStories:
+          type: integer
+        totalIllustrations:
+          type: integer
+        totalLikes:
+          type: integer
+        totalAuthors:
+          type: integer
+      required: [totalStories, publishedStories, draftStories, totalIllustrations, totalLikes, totalAuthors]

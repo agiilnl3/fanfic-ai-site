@@ -1,4 +1,5 @@
 import { pgTable, serial, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +15,10 @@ export const storiesTable = pgTable("stories", {
   characters: text("characters"),
   status: text("status").notNull().default("draft"),
   authorName: text("author_name").notNull(),
+  coAuthors: text("co_authors")
+    .array()
+    .notNull()
+    .default(sql`ARRAY[]::text[]`),
   coverImageUrl: text("cover_image_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
