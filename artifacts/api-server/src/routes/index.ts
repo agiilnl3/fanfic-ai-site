@@ -15,6 +15,7 @@ import tagsRouter from "./tags";
 import settingsRouter from "./settings";
 import analyticsRouter from "./analytics";
 import moderationRouter from "./moderation";
+import meRouter from "./me";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(tagsRouter);
 router.use(settingsRouter);
 router.use(analyticsRouter);
 router.use(moderationRouter);
+router.use(meRouter);
 
 export default router;

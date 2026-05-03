@@ -277,7 +277,15 @@
     "follow": "New followers",
     "like": "Likes on my stories",
     "repost": "Reposts of my stories",
-    "coAuthorChapter": "Co-author added a chapter"
+    "coAuthorChapter": "Co-author added a chapter",
+    "profile": "Author profile",
+    "handle": "Handle",
+    "handleHelp": "Lowercase letters, digits, and underscores. Used in your /author/:handle URL.",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Your pen name",
+    "bio": "Bio",
+    "bioPlaceholder": "Tell readers about yourself",
+    "saveProfile": "Save profile"
   },
   "author": {
     "seoTitleSuffix": "FanFic AI",
@@ -485,5 +493,13 @@
     "Expressionist": "Raw emotional color",
     "Cinematic": "Filmic lighting & framing",
     "Photography": "Photorealistic detail"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign out",
+    "myProfile": "My profile",
+    "settings": "Settings",
+    "signInToManage": "Sign in to manage your profile and notifications."
   }
 }

@@ -12,6 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@clerk/express": "^2.1.12",
+    "@clerk/shared": "^4.9.0",
     "@google-cloud/storage": "^7.19.0",
     "@types/pdfkit": "^0.17.6",
     "@workspace/api-zod": "workspace:*",
@@ -23,9 +25,11 @@
     "express": "^5",
     "express-rate-limit": "^8.4.1",
     "google-auth-library": "^10.6.2",
+    "http-proxy-middleware": "^3.0.5",
     "pdfkit": "^0.18.0",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

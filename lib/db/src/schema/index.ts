@@ -13,3 +13,4 @@ export * from "./library";
 export * from "./views";
 export * from "./notification-prefs";
 export * from "./reports";
+export * from "./users";

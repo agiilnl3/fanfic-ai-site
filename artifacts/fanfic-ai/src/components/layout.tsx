@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { InstallPrompt } from "@/components/install-prompt";
+import { AuthMenu } from "@/components/auth-menu";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -60,11 +61,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="hidden md:flex items-center gap-2">
             <NotificationsBell />
             <LanguageSwitcher />
+            <AuthMenu />
           </div>
 
           <div className="md:hidden flex items-center gap-2">
             <NotificationsBell />
             <LanguageSwitcher />
+            <AuthMenu compact />
             <Link href="/create" className="text-primary flex items-center justify-center p-2">
               <Sparkles className="w-5 h-5" />
             </Link>

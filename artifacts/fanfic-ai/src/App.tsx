@@ -1,7 +1,10 @@
-import { lazy, Suspense } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { lazy, Suspense, useEffect, useRef } from "react";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
+import { ClerkProvider, useClerk } from "@clerk/react";
+import { publishableKeyFromHost } from "@clerk/react/internal";
+import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Loader2 } from "lucide-react";
@@ -19,8 +22,100 @@ const Library = lazy(() => import("@/pages/library"));
 const Series = lazy(() => import("@/pages/series"));
 const SeriesDetail = lazy(() => import("@/pages/series-detail"));
 const Settings = lazy(() => import("@/pages/settings"));
+const SignInPage = lazy(() => import("@/pages/sign-in"));
+const SignUpPage = lazy(() => import("@/pages/sign-up"));
 
 const queryClient = new QueryClient();
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+const clerkPubKey = publishableKeyFromHost(
+  typeof window !== "undefined" ? window.location.hostname : "",
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL || undefined;
+
+if (!clerkPubKey) {
+  throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
+}
+
+function stripBase(path: string): string {
+  return basePath && path.startsWith(basePath)
+    ? path.slice(basePath.length) || "/"
+    : path;
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: "clerk",
+  options: {
+    logoPlacement: "inside" as const,
+    logoLinkUrl: basePath || "/",
+    logoImageUrl:
+      typeof window !== "undefined"
+        ? `${window.location.origin}${basePath}/logo.svg`
+        : "/logo.svg",
+  },
+  variables: {
+    colorPrimary: "#a78bfa",
+    colorForeground: "#f5f3ff",
+    colorMutedForeground: "#a1a1aa",
+    colorDanger: "#ef4444",
+    colorBackground: "#0b0b14",
+    colorInput: "#1c1b2e",
+    colorInputForeground: "#f5f3ff",
+    colorNeutral: "#3f3f46",
+    fontFamily: "Inter, system-ui, sans-serif",
+    borderRadius: "12px",
+  },
+  elements: {
+    rootBox: "w-full flex justify-center",
+    cardBox:
+      "bg-[#13121f] border border-white/10 rounded-2xl w-[440px] max-w-full overflow-hidden shadow-2xl",
+    card: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
+    headerTitle: "text-white font-serif text-2xl",
+    headerSubtitle: "text-zinc-300",
+    socialButtonsBlockButtonText: "text-white",
+    formFieldLabel: "text-zinc-200",
+    footerActionLink: "text-violet-300 hover:text-violet-200",
+    footerActionText: "text-zinc-400",
+    dividerText: "text-zinc-500",
+    identityPreviewEditButton: "text-violet-300",
+    formFieldSuccessText: "text-emerald-400",
+    alertText: "text-red-300",
+    socialButtonsBlockButton: "border border-white/10 hover:bg-white/5",
+    formButtonPrimary:
+      "bg-violet-500 hover:bg-violet-400 text-white font-medium",
+    formFieldInput: "bg-[#1c1b2e] border border-white/10 text-white",
+    footerAction: "bg-transparent",
+    dividerLine: "bg-white/10",
+    alert: "border border-red-500/30 bg-red-500/10",
+    otpCodeFieldInput: "bg-[#1c1b2e] border border-white/10 text-white",
+  },
+};
+
+function ClerkQueryClientCacheInvalidator() {
+  const { addListener } = useClerk();
+  const queryClient = useQueryClient();
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    const unsubscribe = addListener(({ user }) => {
+      const userId = user?.id ?? null;
+      if (
+        prevUserIdRef.current !== undefined &&
+        prevUserIdRef.current !== userId
+      ) {
+        queryClient.clear();
+      }
+      prevUserIdRef.current = userId;
+    });
+    return unsubscribe;
+  }, [addListener, queryClient]);
+  return null;
+}
 
 function PageFallback() {
   return (
@@ -35,6 +130,8 @@ function Router() {
     <Suspense fallback={<PageFallback />}>
       <Switch>
         <Route path="/" component={Home} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
         <Route path="/create" component={CreateStory} />
         <Route path="/story/:id" component={StoryReading} />
         <Route path="/feed" component={Feed} />
@@ -51,17 +148,37 @@ function Router() {
   );
 }
 
+function ClerkProviderWithRouting({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        {children}
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
 function App() {
   return (
     <HelmetProvider>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+      <WouterRouter base={basePath}>
+        <ClerkProviderWithRouting>
+          <TooltipProvider>
             <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
-      </QueryClientProvider>
+            <Toaster />
+          </TooltipProvider>
+        </ClerkProviderWithRouting>
+      </WouterRouter>
     </HelmetProvider>
   );
 }
