@@ -38,6 +38,7 @@ jobs:
       SENTRY_RELEASE: ${{ github.sha }}
       VITE_SENTRY_RELEASE: ${{ github.sha }}
       E2E_API_TARGET: http://localhost:3000
+      E2E_ALLOW_ANON_STORY_WRITES: "1"
 
     steps:
       - uses: actions/checkout@v4

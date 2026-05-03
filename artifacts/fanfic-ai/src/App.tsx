@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useRef } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
-import { ClerkProvider, useClerk } from "@clerk/react";
+import { ClerkProvider, useClerk, useUser } from "@clerk/react";
+import { setSentryUser } from "@/lib/sentry";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
@@ -150,6 +151,24 @@ function Router() {
   );
 }
 
+// Bridges Clerk's user lifecycle into Sentry so browser errors include
+// the authenticated user id/email. Lives inside ClerkProvider so the
+// useUser() hook is available; renders nothing.
+function SentryUserBridge() {
+  const { isSignedIn, user } = useUser();
+  useEffect(() => {
+    if (isSignedIn && user) {
+      setSentryUser({
+        id: user.id,
+        email: user.primaryEmailAddress?.emailAddress,
+      });
+    } else {
+      setSentryUser(null);
+    }
+  }, [isSignedIn, user]);
+  return null;
+}
+
 function ClerkProviderWithRouting({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
   return (
@@ -164,6 +183,7 @@ function ClerkProviderWithRouting({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <ClerkQueryClientCacheInvalidator />
+        <SentryUserBridge />
         {children}
       </QueryClientProvider>
     </ClerkProvider>

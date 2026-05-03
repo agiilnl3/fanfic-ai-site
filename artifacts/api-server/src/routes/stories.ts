@@ -514,17 +514,19 @@ router.post(
         ? `Write a ${genre} fanfiction story (~${wordTarget} words). Seed idea: "${seedPrompt}".`
         : `Write an original ${genre} fiction story (~${wordTarget} words) with memorable characters and a satisfying arc.`;
 
-      const stream = await openai.chat.completions.create(
-        {
-          model: effectiveModel,
-          max_completion_tokens: maxTokens,
-          stream: true,
-          messages: [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        },
-        { signal: abort.signal },
+      const stream = await traceOpenAI("stories.generate.stream", () =>
+        openai.chat.completions.create(
+          {
+            model: effectiveModel,
+            max_completion_tokens: maxTokens,
+            stream: true,
+            messages: [
+              { role: "system", content: sysPrompt },
+              { role: "user", content: userPrompt },
+            ],
+          },
+          { signal: abort.signal },
+        ),
       );
 
       let lastPersistedLen = 0;
@@ -567,7 +569,8 @@ router.post(
       send("section", { phase: "metadata" });
 
       // Second small JSON call for title/summary/characters/section prompts.
-      const metaResp = await openai.chat.completions.create(
+      const metaResp = await traceOpenAI("stories.generate.meta", () =>
+        openai.chat.completions.create(
         {
           model: "gpt-5-mini",
           max_completion_tokens: 2000,
@@ -584,6 +587,7 @@ router.post(
           response_format: { type: "json_object" },
         },
         { signal: abort.signal },
+      ),
       );
 
       const metaRaw = metaResp.choices[0]?.message?.content ?? "{}";

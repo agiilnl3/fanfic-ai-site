@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { traceOpenAI } from "../lib/sentry";
 import { and, eq } from "drizzle-orm";
 import {
   db,
@@ -179,15 +180,17 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
     let parsed: { branches?: Array<{ branchLabel?: string; title?: string; text?: string }> };
     try {
       const branchPlan = req.user ? await getUserPlan(req.user.id) : "free";
-      const response = await openai.chat.completions.create({
-        model: gateModelForPlan("gpt-5.1", branchPlan),
-        max_completion_tokens: 16000,
-        messages: [
-          { role: "system", content: `You are continuing an ongoing ${story.genre} story with creative alternate paths. Always respond in valid JSON.` },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-      });
+      const response = await traceOpenAI("chapters.branch", () =>
+        openai.chat.completions.create({
+          model: gateModelForPlan("gpt-5.1", branchPlan),
+          max_completion_tokens: 16000,
+          messages: [
+            { role: "system", content: `You are continuing an ongoing ${story.genre} story with creative alternate paths. Always respond in valid JSON.` },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+        }),
+      );
       const raw = response.choices[0]?.message?.content ?? "{}";
       parsed = JSON.parse(raw);
     } catch (err) {

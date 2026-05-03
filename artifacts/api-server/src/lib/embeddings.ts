@@ -2,6 +2,7 @@ import { db, pool, storiesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
+import { traceOpenAI } from "./sentry";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const MAX_INPUT_CHARS = 8000;
@@ -54,10 +55,12 @@ export async function embedStoryById(storyId: number): Promise<boolean> {
   const text = buildStoryText(row);
   if (!text.trim()) return false;
   try {
-    const resp = await openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: text,
-    });
+    const resp = await traceOpenAI("embeddings.create", () =>
+      openai.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: text,
+      }),
+    );
     const vec = resp.data?.[0]?.embedding;
     if (!Array.isArray(vec) || vec.length === 0) return false;
     const lit = toVectorLiteral(vec);

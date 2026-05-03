@@ -150,6 +150,17 @@ const PUBLIC_WRITE_PATTERNS: RegExp[] = [
   /^\/stories\/\d+\/view\b/, // anonymous view counter
 ];
 
+// CI/e2e-only bypass. The reading-progress-resume Playwright spec
+// seeds a story + progress with an anonymous pwRequest context. To
+// avoid having to bring up Clerk in CI we widen the public allowlist
+// to /stories(/:id/progress) ONLY when E2E_ALLOW_ANON_STORY_WRITES=1.
+// This must NEVER be set in production. Defense-in-depth: we also
+// require NODE_ENV !== 'production' before honoring the env var.
+const E2E_PUBLIC_WRITE_PATTERNS: RegExp[] = [
+  /^\/stories\/?$/, // POST /api/stories (seed)
+  /^\/stories\/\d+\/progress\b/, // POST /api/stories/:id/progress
+];
+
 const IDENTITY_BODY_KEYS = [
   "authorName",
   "followerName",
@@ -173,7 +184,15 @@ const IDENTITY_QUERY_KEYS = [
 ] as const;
 
 function isPublicWritePath(path: string): boolean {
-  return PUBLIC_WRITE_PATTERNS.some((re) => re.test(path));
+  if (PUBLIC_WRITE_PATTERNS.some((re) => re.test(path))) return true;
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.E2E_ALLOW_ANON_STORY_WRITES === "1" &&
+    E2E_PUBLIC_WRITE_PATTERNS.some((re) => re.test(path))
+  ) {
+    return true;
+  }
+  return false;
 }
 
 /**
