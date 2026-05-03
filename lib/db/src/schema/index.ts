@@ -20,3 +20,4 @@ export * from "./admins";
 export * from "./characters";
 export * from "./chapters";
 export * from "./subscriptions";
+export * from "./feature-flags";

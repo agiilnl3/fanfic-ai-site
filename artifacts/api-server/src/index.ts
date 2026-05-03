@@ -1,3 +1,6 @@
+import { initSentry } from "./lib/sentry";
+void initSentry();
+
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapBranchingSchema } from "./lib/bootstrapSchema";

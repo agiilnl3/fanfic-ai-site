@@ -19,6 +19,7 @@ import meRouter from "./me";
 import charactersRouter from "./characters";
 import chaptersRouter from "./chapters";
 import billingRouter from "./billing";
+import flagsRouter from "./flags";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(meRouter);
 router.use(charactersRouter);
 router.use(chaptersRouter);
 router.use(billingRouter);
+router.use(flagsRouter);
 
 export default router;
