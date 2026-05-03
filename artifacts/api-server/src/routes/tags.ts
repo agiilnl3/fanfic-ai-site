@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, inArray, count, asc, sql } from "drizzle-orm";
-import { canEditStory } from "../lib/storyAuthz";
+import { canEditStory, canReadStory } from "../lib/storyAuthz";
 import {
   db,
   tagsTable,
@@ -26,15 +26,18 @@ function slugify(input: string): string {
 }
 
 router.get("/tags", async (_req, res): Promise<void> => {
+  // Public tag counts must only reflect publicly visible stories — do not
+  // count private (Conjurer-only) stories or unpublished drafts.
   const rows = await db
     .select({
       id: tagsTable.id,
       slug: tagsTable.slug,
       label: tagsTable.label,
-      storyCount: sql<number>`coalesce(count(${storyTagsTable.storyId}), 0)::int`,
+      storyCount: sql<number>`coalesce(count(${storiesTable.id}) filter (where ${storiesTable.status} = 'published' and ${storiesTable.isPrivate} = false), 0)::int`,
     })
     .from(tagsTable)
     .leftJoin(storyTagsTable, eq(storyTagsTable.tagId, tagsTable.id))
+    .leftJoin(storiesTable, eq(storiesTable.id, storyTagsTable.storyId))
     .groupBy(tagsTable.id)
     .orderBy(asc(tagsTable.label));
   res.json(rows);
@@ -44,6 +47,21 @@ router.get("/stories/:id/tags", async (req, res): Promise<void> => {
   const params = GetStoryTagsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  // Don't expose tags for private stories to non-readers — that leaks
+  // story metadata that the privacy gate everywhere else hides.
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!(await canReadStory(story, req.user ?? null))) {
+    res.status(404).json({ error: "Story not found" });
     return;
   }
   const rows = await db

@@ -337,7 +337,7 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
   const effectiveModel = gateModelForPlan(model ?? "gpt-5.1", plan);
   const isPrivate = plan === "conjurer" ? parsed.data.isPrivate ?? false : false;
 
-  const quota = await checkAndBumpStory(authorName);
+  const quota = await checkAndBumpStory(authorName, req.user?.id ?? null);
   if (!quota.ok) {
     res.status(429).json({
       error: "Daily story quota reached",
@@ -470,7 +470,7 @@ router.post(
     const effectiveModel = gateModelForPlan(model ?? "gpt-5.1", plan);
     const isPrivate = plan === "conjurer" ? parsed.data.isPrivate ?? false : false;
 
-    const quota = await checkAndBumpStory(authorName);
+    const quota = await checkAndBumpStory(authorName, req.user?.id ?? null);
     if (!quota.ok) {
       res.status(429).json({
         error: "Daily story quota reached",
@@ -1478,7 +1478,7 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
     return;
   }
 
-  const quota = await checkAndBumpIllustration(story.authorName);
+  const quota = await checkAndBumpIllustration(story.authorName, req.user?.id ?? null);
   if (!quota.ok) {
     res.status(429).json({
       error: "Daily illustration quota reached",
@@ -1911,7 +1911,7 @@ router.post(
       return;
     }
 
-    const quota = await checkAndBumpStory(body.data.authorName);
+    const quota = await checkAndBumpStory(body.data.authorName, req.user?.id ?? null);
     if (!quota.ok) {
       res.status(429).json({
         error: "Daily story quota reached",

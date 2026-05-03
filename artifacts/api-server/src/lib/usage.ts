@@ -1,6 +1,18 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, dailyUsageTable, tariffsTable } from "@workspace/db";
-import { getPlanByHandle, type Plan } from "./subscriptions";
+import { getPlanByHandle, getUserPlan, type Plan } from "./subscriptions";
+
+// Resolve the plan that governs quota. We always prefer the authenticated
+// user id when present so a caller cannot pass another author's handle in
+// the request body to inherit their Conjurer limits. The handle-based
+// fallback exists only for legacy/anonymous flows that have no `req.user`.
+async function resolvePlanForQuota(
+  authorName: string,
+  userId?: number | null,
+): Promise<Plan> {
+  if (typeof userId === "number") return getUserPlan(userId);
+  return getPlanByHandle(authorName);
+}
 
 const FALLBACK_STORY_LIMIT = Number(process.env.FREE_DAILY_STORY_LIMIT ?? 5);
 const FALLBACK_ILLUSTRATION_LIMIT = Number(
@@ -89,9 +101,9 @@ function today(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-export async function getUsage(authorName: string) {
+export async function getUsage(authorName: string, userId?: number | null) {
   const day = today();
-  const plan = await getPlanByHandle(authorName);
+  const plan = await resolvePlanForQuota(authorName, userId);
   const tariff = await getTariffForPlan(plan);
   const [row] = await db
     .select()
@@ -141,8 +153,8 @@ async function bump(authorName: string, column: "story_count" | "illustration_co
     });
 }
 
-export async function checkAndBumpStory(authorName: string): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
-  const usage = await getUsage(authorName);
+export async function checkAndBumpStory(authorName: string, userId?: number | null): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
+  const usage = await getUsage(authorName, userId);
   if (usage.storiesRemaining <= 0) {
     return { ok: false, remaining: 0, limit: usage.storyLimit };
   }
@@ -150,8 +162,8 @@ export async function checkAndBumpStory(authorName: string): Promise<{ ok: true 
   return { ok: true };
 }
 
-export async function checkAndBumpIllustration(authorName: string): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
-  const usage = await getUsage(authorName);
+export async function checkAndBumpIllustration(authorName: string, userId?: number | null): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
+  const usage = await getUsage(authorName, userId);
   if (usage.illustrationsRemaining <= 0) {
     return { ok: false, remaining: 0, limit: usage.illustrationLimit };
   }

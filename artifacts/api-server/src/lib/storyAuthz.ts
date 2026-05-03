@@ -40,3 +40,17 @@ export function canEditStory(
   if (user.handle === story.authorName) return true;
   return (story.coAuthors ?? []).includes(user.handle);
 }
+
+/**
+ * Read authorization. Public (non-private) stories are visible to everyone;
+ * private stories are restricted to the author and listed co-authors.
+ */
+export function canReadStory(
+  story: Pick<Story, "authorName" | "coAuthors" | "userId"> & {
+    isPrivate?: boolean | null;
+  },
+  user: Pick<User, "id" | "handle"> | null | undefined,
+): boolean {
+  if (!story.isPrivate) return true;
+  return canEditStory(story, user);
+}
