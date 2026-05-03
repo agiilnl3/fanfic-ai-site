@@ -5,7 +5,9 @@ import {
   seriesTable,
   seriesStoriesTable,
   storiesTable,
+  hiddenStoriesTable,
 } from "@workspace/db";
+import { notInArray } from "drizzle-orm";
 import {
   ListSeriesQueryParams,
   CreateSeriesBody,
@@ -31,6 +33,43 @@ async function withCounts(rows: { id: number }[]) {
     .where(inArray(seriesStoriesTable.seriesId, ids))
     .groupBy(seriesStoriesTable.seriesId);
   return new Map(counts.map((r) => [r.seriesId, Number(r.c)]));
+}
+
+// Hide moderator-removed and unpublished (draft/archived) stories from
+// the public series response. The series author still sees the link in
+// their authoring UI via /series listings, but visitors hitting
+// /series/:id should never see content the moderation team has pulled.
+async function visibleStoriesForLinks(
+  links: { storyId: number; position: number }[],
+): Promise<(typeof storiesTable.$inferSelect & { position: number })[]> {
+  if (links.length === 0) return [];
+  const ids = links.map((l) => l.storyId);
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable)
+    .where(inArray(hiddenStoriesTable.storyId, ids));
+  const hiddenIds = hiddenRows.map((r) => r.id);
+  const sRows = await db
+    .select()
+    .from(storiesTable)
+    .where(
+      and(
+        inArray(storiesTable.id, ids),
+        eq(storiesTable.status, "published"),
+        hiddenIds.length > 0
+          ? notInArray(storiesTable.id, hiddenIds)
+          : undefined,
+      ),
+    );
+  const sMap = new Map(sRows.map((s) => [s.id, s]));
+  return links
+    .map((l) => {
+      const s = sMap.get(l.storyId);
+      return s ? { ...s, position: l.position } : null;
+    })
+    .filter(
+      (x): x is typeof storiesTable.$inferSelect & { position: number } => !!x,
+    );
 }
 
 function shapeSeries(s: typeof seriesTable.$inferSelect, storyCount: number) {
@@ -98,21 +137,7 @@ router.get("/series/:id", async (req, res): Promise<void> => {
     .from(seriesStoriesTable)
     .where(eq(seriesStoriesTable.seriesId, params.data.id))
     .orderBy(asc(seriesStoriesTable.position));
-  let stories: (typeof storiesTable.$inferSelect & { position: number })[] = [];
-  if (links.length > 0) {
-    const ids = links.map((l) => l.storyId);
-    const sRows = await db
-      .select()
-      .from(storiesTable)
-      .where(inArray(storiesTable.id, ids));
-    const sMap = new Map(sRows.map((s) => [s.id, s]));
-    stories = links
-      .map((l) => {
-        const s = sMap.get(l.storyId);
-        return s ? { ...s, position: l.position } : null;
-      })
-      .filter((x): x is typeof storiesTable.$inferSelect & { position: number } => !!x);
-  }
+  const stories = await visibleStoriesForLinks(links);
   res.json({
     ...shapeSeries(series, stories.length),
     stories: stories.map((s) => ({
@@ -284,21 +309,7 @@ router.post("/series/:id/stories", async (req, res): Promise<void> => {
     .from(seriesStoriesTable)
     .where(eq(seriesStoriesTable.seriesId, params.data.id))
     .orderBy(asc(seriesStoriesTable.position));
-  let stories: (typeof storiesTable.$inferSelect & { position: number })[] = [];
-  if (links.length > 0) {
-    const ids = links.map((l) => l.storyId);
-    const sRows = await db
-      .select()
-      .from(storiesTable)
-      .where(inArray(storiesTable.id, ids));
-    const sMap = new Map(sRows.map((s) => [s.id, s]));
-    stories = links
-      .map((l) => {
-        const s = sMap.get(l.storyId);
-        return s ? { ...s, position: l.position } : null;
-      })
-      .filter((x): x is typeof storiesTable.$inferSelect & { position: number } => !!x);
-  }
+  const stories = await visibleStoriesForLinks(links);
   res.json({
     ...shapeSeries(series, stories.length),
     stories: stories.map((s) => ({

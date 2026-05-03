@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, count, desc, countDistinct, inArray, gte, sql } from "drizzle-orm";
+import { and, eq, count, countDistinct, desc, inArray, gte, sql } from "drizzle-orm";
 import {
   db,
   storiesTable,
@@ -320,6 +320,10 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
   // a fixed "newest 50" sample. We aggregate per-storyId scores in SQL
   // (likes*3 + reposts*5 + comments*2), keep only the published top 10,
   // then hydrate titles/authors.
+  // Filter to status='published' INSIDE the CTE so the top-N is computed
+  // over published stories only — otherwise hidden/draft stories with
+  // high engagement could push genuinely top published stories out of
+  // the LIMIT window.
   const scored = await db.execute<{
     storyId: number;
     likes: number;
@@ -328,10 +332,10 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
     score: number;
   }>(sql`
     WITH agg AS (
-      SELECT story_id,
-             COUNT(*) FILTER (WHERE src = 'l') AS likes,
-             COUNT(*) FILTER (WHERE src = 'r') AS reposts,
-             COUNT(*) FILTER (WHERE src = 'c') AS comments
+      SELECT ev.story_id,
+             COUNT(*) FILTER (WHERE ev.src = 'l') AS likes,
+             COUNT(*) FILTER (WHERE ev.src = 'r') AS reposts,
+             COUNT(*) FILTER (WHERE ev.src = 'c') AS comments
         FROM (
           SELECT story_id, 'l' AS src FROM story_likes
           UNION ALL
@@ -339,7 +343,9 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
           UNION ALL
           SELECT story_id, 'c' FROM story_comments
         ) ev
-       GROUP BY story_id
+        JOIN stories s ON s.id = ev.story_id
+       WHERE s.status = 'published'
+       GROUP BY ev.story_id
     )
     SELECT story_id      AS "storyId",
            likes::int    AS likes,
@@ -348,7 +354,7 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
            (likes * 3 + reposts * 5 + comments * 2)::int AS score
       FROM agg
      ORDER BY score DESC
-     LIMIT 200
+     LIMIT 50
   `);
   const scoredRows = (
     scored as unknown as {

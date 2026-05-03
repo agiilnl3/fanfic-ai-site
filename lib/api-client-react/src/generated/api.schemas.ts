@@ -510,6 +510,7 @@ export interface ReadingProgressInfo {
   storyId: number;
   authorName: string;
   progress: number;
+  paragraphIndex: number;
   /** @nullable */
   updatedAt?: string | null;
 }
@@ -522,6 +523,8 @@ export interface UpdateReadingProgressBody {
    * @maximum 100
    */
   progress: number;
+  /** @minimum 0 */
+  paragraphIndex?: number;
 }
 
 export interface HistoryEntry {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
+import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
 import {
   generateStory,
@@ -365,6 +366,10 @@ export default function CreateStory() {
 
   return (
     <Layout>
+      <Seo
+        title="Create a New Story"
+        description="Conjure a fully illustrated AI fanfiction in minutes. Pick a genre, an art style, and a model — your manuscript is one prompt away."
+      />
       <div className="container mx-auto px-4 py-12 max-w-3xl">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="text-center mb-10">

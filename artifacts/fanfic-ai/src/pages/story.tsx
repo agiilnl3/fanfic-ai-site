@@ -26,6 +26,8 @@ import {
   getExportStoryPdfUrl,
   useRecordStoryView,
   useSetReadingProgress,
+  useGetReadingProgress,
+  getGetReadingProgressQueryKey,
   useGetStoryAnalytics,
   useGetStoryTags,
   useGetStorySeriesContext,
@@ -151,31 +153,103 @@ export default function StoryReading() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storyId]);
 
-  // Persist reading progress while the user scrolls. Writes are throttled
-  // to at most one per 3s to avoid hammering the API on long stories. The
-  // initial view is already recorded by the effect above; we do not record
-  // a second "completed" view here to keep the analytics row count to one
-  // per session — the reading-progress upsert already exposes completion
-  // via its monotonic progress value.
+  // Persist reading progress while the user scrolls. We track both an
+  // overall percentage *and* the index of the topmost visible paragraph
+  // so the reader can resume at the exact spot they left off — the
+  // percentage alone is too coarse on long stories (a 5% delta can be
+  // ~30 paragraphs into a novella).
   const setProgress = useSetReadingProgress();
+  const { data: savedProgress } = useGetReadingProgress(
+    storyId,
+    { authorName: authorName || "" },
+    {
+      query: {
+        enabled: !!storyId && !!authorName?.trim(),
+        queryKey: getGetReadingProgressQueryKey(storyId, {
+          authorName: authorName || "",
+        }),
+        staleTime: Infinity,
+      },
+    },
+  );
+
+  // Resume scroll position once both the saved progress and the rendered
+  // paragraphs exist. We only fire once per (storyId, authorName) so a
+  // late save doesn't yank the reader back up the page.
+  const [resumed, setResumed] = useState<string | null>(null);
+  useEffect(() => {
+    // Wait until *all four* prerequisites exist before deciding what to
+    // do: storyId, pen-name, the rendered fullText, AND a resolved
+    // saved-progress object. Earlier we short-circuited when
+    // savedProgress was still undefined and marked the page "resumed",
+    // which meant the late-arriving cursor never got a chance to scroll.
+    if (
+      !storyId ||
+      !authorName?.trim() ||
+      !story?.fullText ||
+      savedProgress === undefined
+    )
+      return;
+    const key = `${storyId}:${authorName}`;
+    if (resumed === key) return;
+    const idx = savedProgress?.paragraphIndex ?? 0;
+    if (!idx || idx <= 0) {
+      setResumed(key);
+      return;
+    }
+    // Defer one frame so the paragraph DOM nodes are mounted.
+    const t = window.setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-paragraph-index="${idx}"]`,
+      );
+      if (el) {
+        const top = el.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top, behavior: "auto" });
+      }
+      setResumed(key);
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [storyId, authorName, story?.fullText, savedProgress, resumed]);
+
   useEffect(() => {
     if (!storyId || !authorName?.trim()) return;
     const MIN_INTERVAL_MS = 3000;
     let lastSentAt = 0;
     let lastSentPct = 0;
-    let pending: number | null = null;
+    let lastSentPara = -1;
+    let pending: { pct: number; paraIdx: number } | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const flush = () => {
       timer = null;
       if (pending == null) return;
-      const pct = pending;
+      const { pct, paraIdx } = pending;
       pending = null;
       lastSentAt = Date.now();
       lastSentPct = pct;
+      lastSentPara = paraIdx;
       setProgress.mutate({
         id: storyId,
-        data: { authorName, progress: pct },
+        data: { authorName, progress: pct, paragraphIndex: paraIdx },
       });
+    };
+    const computeTopParagraphIndex = (): number => {
+      const nodes = document.querySelectorAll<HTMLElement>(
+        "[data-paragraph-index]",
+      );
+      // Find the last paragraph whose top has scrolled above the
+      // viewport's upper third — that is the "anchor" the reader is on.
+      const anchor = window.innerHeight / 3;
+      let best = 0;
+      for (const n of Array.from(nodes)) {
+        const top = n.getBoundingClientRect().top;
+        if (top <= anchor) {
+          const i = Number(n.dataset.paragraphIndex);
+          if (Number.isFinite(i) && i > best) best = i;
+        } else {
+          break;
+        }
+      }
+      return best;
     };
     const onScroll = () => {
       const doc = document.documentElement;
@@ -186,8 +260,11 @@ export default function StoryReading() {
         0,
         Math.min(100, Math.round((scrollTop / max) * 100)),
       );
-      if (Math.abs(pct - lastSentPct) < 5 && pct < 95) return;
-      pending = pct;
+      const paraIdx = computeTopParagraphIndex();
+      const pctDelta = Math.abs(pct - lastSentPct);
+      const paraDelta = Math.abs(paraIdx - lastSentPara);
+      if (pctDelta < 5 && paraDelta < 3 && pct < 95) return;
+      pending = { pct, paraIdx };
       const elapsed = Date.now() - lastSentAt;
       if (elapsed >= MIN_INTERVAL_MS) {
         if (timer) {
@@ -503,6 +580,7 @@ export default function StoryReading() {
     elements.push(
       <div
         key={`p-wrap-${i}`}
+        data-paragraph-index={i}
         className={`relative group/para ${isRegenSection ? "opacity-40 pointer-events-none" : ""}`}
       >
         {isAuthor && !editMode && (

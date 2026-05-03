@@ -39,5 +39,12 @@
     "seedPrompt": "Seed Prompt (Optional)",
     "withIllustrations": "Generate Illustrations",
     "generate": "Conjure Story"
+  },
+  "install": {
+    "title": "Install FanFic AI",
+    "body": "Add the app to your home screen for offline reading and a faster launch.",
+    "cta": "Install",
+    "later": "Not now",
+    "dismiss": "Dismiss"
   }
 }

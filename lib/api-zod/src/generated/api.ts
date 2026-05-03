@@ -1603,6 +1603,7 @@ export const GetReadingProgressResponse = zod.object({
   storyId: zod.number(),
   authorName: zod.string(),
   progress: zod.number(),
+  paragraphIndex: zod.number(),
   updatedAt: zod.string().nullish(),
 });
 
@@ -1616,18 +1617,25 @@ export const SetReadingProgressParams = zod.object({
 export const setReadingProgressBodyProgressMin = 0;
 export const setReadingProgressBodyProgressMax = 100;
 
+export const setReadingProgressBodyParagraphIndexMin = 0;
+
 export const SetReadingProgressBody = zod.object({
   authorName: zod.string().min(1),
   progress: zod
     .number()
     .min(setReadingProgressBodyProgressMin)
     .max(setReadingProgressBodyProgressMax),
+  paragraphIndex: zod
+    .number()
+    .min(setReadingProgressBodyParagraphIndexMin)
+    .optional(),
 });
 
 export const SetReadingProgressResponse = zod.object({
   storyId: zod.number(),
   authorName: zod.string(),
   progress: zod.number(),
+  paragraphIndex: zod.number(),
   updatedAt: zod.string().nullish(),
 });
 

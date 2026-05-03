@@ -12,6 +12,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationsBell } from "@/components/notifications-bell";
+import { InstallPrompt } from "@/components/install-prompt";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -97,6 +98,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 w-full pb-20 md:pb-0">
         {children}
       </main>
+
+      <InstallPrompt />
     </div>
   );
 }
