@@ -43,8 +43,12 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 // Stripe webhook also needs the raw body for signature verification, so it
 // must be mounted BEFORE express.json(). The handler uses Buffer parsing.
+// Both the legacy /api/stripe/webhook path (used by the Replit-managed
+// Stripe webhook) and /api/billing/webhook (per task spec) route to the
+// same handler so Stripe deliveries land regardless of how the endpoint
+// was registered.
 app.post(
-  "/api/stripe/webhook",
+  ["/api/stripe/webhook", "/api/billing/webhook"],
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const sig = req.headers["stripe-signature"];

@@ -168,6 +168,24 @@ router.post(
       }
       const customerId = await ensureStripeCustomer(user);
       const stripe = await getUncachableStripeClient();
+
+      // Refuse a duplicate checkout when the user already has an
+      // active/trialing/past_due subscription — without this guard a fast
+      // double-click or direct API call could create a second active sub.
+      const existingSubs = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "all",
+        limit: 5,
+      });
+      const ACTIVE = new Set(["active", "trialing", "past_due", "unpaid"]);
+      if (existingSubs.data.some((s) => ACTIVE.has(s.status))) {
+        res.status(409).json({
+          error: "You already have an active subscription. Manage it from the customer portal.",
+          code: "subscription_active",
+        });
+        return;
+      }
+
       const safeOrigin = resolveAppOrigin(req);
       const successUrl = `${safeOrigin}/settings?billing=success`;
       const cancelUrl = `${safeOrigin}/pricing?checkout=cancelled`;
