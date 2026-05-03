@@ -118,11 +118,21 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
     .where(eq(usersTable.handle, name))
     .limit(1);
 
-  const stories = await db
+  // Hide private stories from anyone who isn't the author/co-author.
+  const callerHandle = req.user?.handle;
+  const isOwnerCaller = !!callerHandle && callerHandle === name;
+  const allRows = await db
     .select()
     .from(storiesTable)
     .where(eq(storiesTable.authorName, name))
     .orderBy(desc(storiesTable.createdAt));
+  const stories = isOwnerCaller
+    ? allRows
+    : allRows.filter((s) => {
+        if (!s.isPrivate) return true;
+        const co = (s.coAuthors ?? []) as string[];
+        return !!callerHandle && co.includes(callerHandle);
+      });
 
   if (stories.length === 0) {
     // still respond — author may have a follow row but no stories

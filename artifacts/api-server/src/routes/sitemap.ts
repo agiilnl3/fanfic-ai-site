@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, or, isNull } from "drizzle-orm";
 import { db, storiesTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -24,7 +24,13 @@ router.get("/sitemap.xml", async (req, res): Promise<void> => {
       updatedAt: storiesTable.updatedAt,
     })
     .from(storiesTable)
-    .where(eq(storiesTable.status, "published"))
+    // Never sitemap private stories (Conjurer-only).
+    .where(
+      and(
+        eq(storiesTable.status, "published"),
+        or(eq(storiesTable.isPrivate, false), isNull(storiesTable.isPrivate)),
+      ),
+    )
     .orderBy(desc(storiesTable.updatedAt))
     .limit(5000);
 

@@ -57,6 +57,8 @@ async function visibleStoriesForLinks(
       and(
         inArray(storiesTable.id, ids),
         eq(storiesTable.status, "published"),
+        // Never expose private stories in a public series listing.
+        eq(storiesTable.isPrivate, false),
         hiddenIds.length > 0
           ? notInArray(storiesTable.id, hiddenIds)
           : undefined,

@@ -106,10 +106,21 @@ router.get("/authors/:name/bookmarks", async (req, res): Promise<void> => {
     return;
   }
   const storyIds = rows.map((r) => r.storyId);
-  const stories = await db
-    .select()
-    .from(storiesTable)
-    .where(inArray(storiesTable.id, storyIds));
+  // Hide bookmarked private stories from non-owners (the bookmarker may
+  // have lost access, or the story was never readable). Owners/co-authors
+  // still see them.
+  const callerHandle = req.user?.handle;
+  const stories = (
+    await db
+      .select()
+      .from(storiesTable)
+      .where(inArray(storiesTable.id, storyIds))
+  ).filter((s) => {
+    if (!s.isPrivate) return true;
+    if (!callerHandle) return false;
+    if (s.authorName === callerHandle) return true;
+    return ((s.coAuthors ?? []) as string[]).includes(callerHandle);
+  });
   const sMap = new Map(stories.map((s) => [s.id, s]));
   res.json(
     rows
@@ -149,10 +160,18 @@ router.get("/authors/:name/history", async (req, res): Promise<void> => {
     return;
   }
   const storyIds = rows.map((r) => r.storyId);
-  const stories = await db
-    .select()
-    .from(storiesTable)
-    .where(inArray(storiesTable.id, storyIds));
+  const callerHandle = req.user?.handle;
+  const stories = (
+    await db
+      .select()
+      .from(storiesTable)
+      .where(inArray(storiesTable.id, storyIds))
+  ).filter((s) => {
+    if (!s.isPrivate) return true;
+    if (!callerHandle) return false;
+    if (s.authorName === callerHandle) return true;
+    return ((s.coAuthors ?? []) as string[]).includes(callerHandle);
+  });
   const sMap = new Map(stories.map((s) => [s.id, s]));
   res.json(
     rows

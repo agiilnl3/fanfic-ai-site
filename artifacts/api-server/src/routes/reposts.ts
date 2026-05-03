@@ -151,7 +151,14 @@ router.get("/authors/:name/reposts", async (req, res): Promise<void> => {
   const stories = await db
     .select()
     .from(storiesTable)
-    .where(and(inArray(storiesTable.id, ids), eq(storiesTable.status, "published")));
+    .where(
+      and(
+        inArray(storiesTable.id, ids),
+        eq(storiesTable.status, "published"),
+        // Don't surface a private story even if someone reposted it.
+        eq(storiesTable.isPrivate, false),
+      ),
+    );
   const likeRows = await db
     .select({ storyId: storyLikesTable.storyId, value: count() })
     .from(storyLikesTable)

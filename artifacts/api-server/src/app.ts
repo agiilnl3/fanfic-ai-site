@@ -9,6 +9,7 @@ import {
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import { attachUser, overrideClientIdentity } from "./middlewares/auth";
+import { attachUserPlan } from "./middlewares/rate-limit";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { processStripeWebhook } from "./lib/stripeWebhookHandlers";
@@ -82,6 +83,9 @@ app.use(
 // for write endpoints.
 app.use("/api", attachUser);
 app.use("/api", overrideClientIdentity);
+// Warm the per-user plan cache so tier-aware rate limiters can read it
+// synchronously when they fire downstream.
+app.use("/api", attachUserPlan);
 
 app.use("/api", router);
 

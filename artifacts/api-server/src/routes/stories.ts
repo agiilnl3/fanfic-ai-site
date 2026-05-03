@@ -782,7 +782,7 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
     const ids = Array.from(score.keys());
     if (ids.length === 0) {
       // Cold start: surface newest published stories.
-      const newestConds = [eq(storiesTable.status, "published")];
+      const newestConds = [and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false))];
       if (hiddenIds.size > 0) {
         newestConds.push(notInArray(storiesTable.id, Array.from(hiddenIds)));
       }
@@ -800,7 +800,7 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
       .from(storiesTable)
       .where(
         and(
-          eq(storiesTable.status, "published"),
+          and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false)),
           inArray(storiesTable.id, ids),
         ),
       );
@@ -921,7 +921,7 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
 // Faceted counts (genre / artStyle / tag) for the current text query.
 router.get("/stories/feed/facets", async (req, res): Promise<void> => {
   const q = (req.query.q as string | undefined)?.trim();
-  const baseConds = [eq(storiesTable.status, "published")];
+  const baseConds = [and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false))];
   if (q) {
     baseConds.push(
       sql`(stories.tsv @@ websearch_to_tsquery('english', ${q})
@@ -993,7 +993,7 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
   const { genre, limit, q, followerName, sort, tag, viewerAuthorName } =
     parsed.data;
   const style = (req.query.style as string | undefined)?.trim();
-  const conditions = [eq(storiesTable.status, "published")];
+  const conditions = [and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false))];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
   if (style) conditions.push(eq(storiesTable.artStyle, style));
   const trimmedQ = q?.trim();
@@ -1221,7 +1221,7 @@ router.get("/stories/stats", async (_req, res): Promise<void> => {
   const [published] = await db
     .select({ count: count() })
     .from(storiesTable)
-    .where(eq(storiesTable.status, "published"));
+    .where(and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false)));
 
   const [drafts] = await db
     .select({ count: count() })

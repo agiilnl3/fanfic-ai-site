@@ -37,6 +37,18 @@ export async function getUserPlan(userId: number): Promise<Plan> {
   return plan;
 }
 
+/**
+ * Synchronous read of the in-memory plan cache. Returns null when the user's
+ * plan hasn't been resolved yet (call getUserPlan first to warm the cache).
+ * Used by per-request middleware (e.g. tier-aware rate limiting) that needs
+ * a cheap, non-blocking lookup.
+ */
+export function getCachedUserPlan(userId: number): Plan | null {
+  const cached = planCache.get(userId);
+  if (!cached || cached.expiresAt <= Date.now()) return null;
+  return cached.plan;
+}
+
 export function invalidatePlanCache(userId?: number): void {
   if (userId == null) planCache.clear();
   else planCache.delete(userId);

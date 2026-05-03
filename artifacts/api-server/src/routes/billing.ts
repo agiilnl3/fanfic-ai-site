@@ -16,6 +16,65 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
+/**
+ * Build the allowlist of host[:port] values we'll accept as Stripe redirect
+ * targets. The user must NOT be able to influence this — otherwise an
+ * authenticated attacker could craft Stripe Checkout/Portal links that
+ * redirect back to a phishing site.
+ */
+function getAllowedAppHosts(): Set<string> {
+  const hosts = new Set<string>();
+  const fromEnv = process.env.REPLIT_DOMAINS ?? "";
+  for (const h of fromEnv.split(",")) {
+    const t = h.trim().toLowerCase();
+    if (t) hosts.add(t);
+  }
+  const dev = (process.env.REPLIT_DEV_DOMAIN ?? "").trim().toLowerCase();
+  if (dev) hosts.add(dev);
+  // Localhost is fine in non-deployment dev for testing.
+  if (process.env.REPLIT_DEPLOYMENT !== "1") {
+    hosts.add("localhost:8080");
+    hosts.add("localhost:5173");
+  }
+  return hosts;
+}
+
+/**
+ * Resolve the app origin we'll send Stripe back to. We prefer the request's
+ * Origin header / forwarded host when it matches the allowlist; otherwise we
+ * fall back to the first configured Replit domain. We never honor a
+ * client-supplied body field for this — it would be an open redirect.
+ */
+function resolveAppOrigin(req: import("express").Request): string {
+  const allowed = getAllowedAppHosts();
+  const candidates: { host: string; proto: string }[] = [];
+  const originHdr = req.get("origin");
+  if (originHdr) {
+    try {
+      const u = new URL(originHdr);
+      candidates.push({ host: u.host.toLowerCase(), proto: u.protocol.replace(":", "") });
+    } catch {
+      /* ignore */
+    }
+  }
+  const fwdHost = (req.headers["x-forwarded-host"] as string | undefined)?.split(",")[0]?.trim();
+  const fwdProto = (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim();
+  if (fwdHost) candidates.push({ host: fwdHost.toLowerCase(), proto: fwdProto || "https" });
+  const hostHdr = req.headers.host;
+  if (typeof hostHdr === "string" && hostHdr) {
+    candidates.push({ host: hostHdr.toLowerCase(), proto: req.protocol || "https" });
+  }
+  for (const c of candidates) {
+    if (allowed.has(c.host)) {
+      const proto = c.host.startsWith("localhost") ? c.proto || "http" : "https";
+      return `${proto}://${c.host}`;
+    }
+  }
+  // Fall back to the first configured Replit domain.
+  const fallback = [...allowed].find((h) => !h.startsWith("localhost"));
+  return fallback ? `https://${fallback}` : "https://localhost:8080";
+}
+
 interface ConjurerPriceRow {
   product_id: string;
   product_name: string;
@@ -109,11 +168,7 @@ router.post(
       }
       const customerId = await ensureStripeCustomer(user);
       const stripe = await getUncachableStripeClient();
-      const origin = (req.body as { origin?: string } | undefined)?.origin?.trim();
-      const safeOrigin =
-        origin && /^https?:\/\//.test(origin)
-          ? origin.replace(/\/$/, "")
-          : `https://${(process.env.REPLIT_DOMAINS ?? "").split(",")[0] ?? ""}`;
+      const safeOrigin = resolveAppOrigin(req);
       const successUrl = `${safeOrigin}/settings?billing=success`;
       const cancelUrl = `${safeOrigin}/pricing?billing=cancelled`;
 
@@ -146,11 +201,7 @@ router.post(
     try {
       const customerId = await ensureStripeCustomer(user);
       const stripe = await getUncachableStripeClient();
-      const origin = (req.body as { origin?: string } | undefined)?.origin?.trim();
-      const safeOrigin =
-        origin && /^https?:\/\//.test(origin)
-          ? origin.replace(/\/$/, "")
-          : `https://${(process.env.REPLIT_DOMAINS ?? "").split(",")[0] ?? ""}`;
+      const safeOrigin = resolveAppOrigin(req);
       const portal = await stripe.billingPortal.sessions.create({
         customer: customerId,
         return_url: `${safeOrigin}/settings`,
