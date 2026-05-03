@@ -128,8 +128,12 @@ export function CommentsSection({ storyId }: { storyId: number }) {
     });
   };
 
-  const tree = comments ? buildTree(comments) : [];
-  const total = comments?.length ?? 0;
+  // Whole-story comments only — paragraph-anchored ones live in the
+  // inline popover next to their paragraph and would duplicate the
+  // discussion if shown here too.
+  const wholeStoryComments = comments?.filter((c) => c.paragraphIndex == null) ?? [];
+  const tree = buildTree(wholeStoryComments);
+  const total = wholeStoryComments.length;
 
   const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
   const dateLocale = isRu ? ruLocale : undefined;

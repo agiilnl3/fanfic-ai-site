@@ -826,6 +826,13 @@ router.get("/stories/feed/facets", async (req, res): Promise<void> => {
            OR ${storiesTable.title} ILIKE ${`%${q}%`})`,
     );
   }
+  // Match the public feed: counts must not include moderated stories.
+  const hidden = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable);
+  if (hidden.length > 0) {
+    baseConds.push(notInArray(storiesTable.id, hidden.map((h) => h.id)));
+  }
   const [genreRows, artStyleRows, tagRows] = await Promise.all([
     db
       .select({ value: storiesTable.genre, c: count() })
