@@ -513,6 +513,14 @@ export interface AdminStats {
   totalAuthors: number;
 }
 
+export type AuthorProfileTier =
+  (typeof AuthorProfileTier)[keyof typeof AuthorProfileTier];
+
+export const AuthorProfileTier = {
+  free: "free",
+  conjurer: "conjurer",
+} as const;
+
 export interface AuthorProfile {
   authorName: string;
   /** @nullable */
@@ -530,6 +538,7 @@ export interface AuthorProfile {
   totalLikes: number;
   /** @nullable */
   firstSeenAt?: string | null;
+  tier: AuthorProfileTier;
   stories: Story[];
 }
 

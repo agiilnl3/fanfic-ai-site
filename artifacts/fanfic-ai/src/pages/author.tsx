@@ -17,7 +17,7 @@ import { ReportButton } from "@/components/report-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BookOpen, Heart, Users, UserPlus } from "lucide-react";
+import { BookOpen, Heart, Users, UserPlus, Sparkles } from "lucide-react";
 
 function StatCard({
   icon: Icon,
@@ -107,7 +107,18 @@ export default function AuthorPage() {
                     <h1 className="font-serif text-4xl md:text-5xl font-bold glow-text">
                       {data.displayName ?? data.authorName}
                     </h1>
-                    <p className="text-sm text-muted-foreground mt-1">@{data.authorName}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <p className="text-sm text-muted-foreground">@{data.authorName}</p>
+                      {data.tier === "conjurer" && (
+                        <span
+                          title={t("author.conjurerBadge", { defaultValue: "Conjurer subscriber" })}
+                          className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-primary"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          Conjurer
+                        </span>
+                      )}
+                    </div>
                     {data.bio && (
                       <p className="text-sm text-foreground/80 mt-3 max-w-prose whitespace-pre-line">
                         {data.bio}

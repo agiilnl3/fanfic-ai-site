@@ -2999,11 +2999,14 @@ components:
           type: integer
         firstSeenAt:
           type: ["string", "null"]
+        tier:
+          type: string
+          enum: [free, conjurer]
         stories:
           type: array
           items:
             $ref: "#/components/schemas/Story"
-      required: [authorName, storyCount, publishedCount, followerCount, followingCount, totalLikes, stories]
+      required: [authorName, storyCount, publishedCount, followerCount, followingCount, totalLikes, stories, tier]
 
     FollowInfo:
       type: object

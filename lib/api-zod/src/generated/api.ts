@@ -1716,6 +1716,7 @@ export const GetAuthorProfileResponse = zod.object({
   followingCount: zod.number(),
   totalLikes: zod.number(),
   firstSeenAt: zod.string().nullish(),
+  tier: zod.enum(["free", "conjurer"]),
   stories: zod.array(
     zod.object({
       id: zod.number(),

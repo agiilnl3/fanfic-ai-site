@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-zod";
 import { ilike } from "drizzle-orm";
 import { writeLimiter } from "../middlewares/rate-limit";
+import { getUserPlan, getPlanByHandle } from "../lib/subscriptions";
 import { logger } from "../lib/logger";
 import { notifyRecipient } from "../lib/notification-bus";
 
@@ -148,6 +149,9 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
       res.status(404).json({ error: "Author not found" });
       return;
     }
+    const tier = profile
+      ? await getUserPlan(profile.id)
+      : await getPlanByHandle(name);
     res.json({
       authorName: name,
       handle: profile?.handle ?? name,
@@ -161,6 +165,7 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
       followingCount: followingRow?.value ?? 0,
       totalLikes: 0,
       firstSeenAt: null,
+      tier,
       stories: [],
     });
     return;
@@ -216,6 +221,7 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
     followingCount: followingRow?.value ?? 0,
     totalLikes,
     firstSeenAt: firstSeenAt ? firstSeenAt.toISOString() : null,
+    tier: profile ? await getUserPlan(profile.id) : await getPlanByHandle(name),
     stories: published.map((s) => ({
       ...s,
       likeCount: likeMap.get(s.id) ?? 0,

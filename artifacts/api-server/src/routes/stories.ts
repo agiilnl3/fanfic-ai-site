@@ -76,7 +76,7 @@ import { notifyRecipient } from "../lib/notification-bus";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { uploadIllustrationBuffer } from "../lib/uploadIllustration";
-import { canEditStory } from "../lib/storyAuthz";
+import { canEditStory, canReadStory } from "../lib/storyAuthz";
 import { backfillStoryToChapters, lockStoryChapters } from "../lib/chapters";
 import { chaptersTable } from "@workspace/db";
 import PDFDocument from "pdfkit";
@@ -123,26 +123,8 @@ function gateModelForPlan(
   return PREMIUM_MODELS.has(model) ? "gpt-5-mini" : model;
 }
 
-/**
- * Returns true when the requester may read this story. Public (non-private)
- * rows are always readable; private rows only by the author / co-author.
- * Use from any /stories/:id/* read endpoint.
- */
-function canReadStory(
-  story: {
-    isPrivate?: boolean | null;
-    userId: number | null;
-    authorName: string;
-    coAuthors?: string[] | null;
-  },
-  user: { id: number; handle: string } | null | undefined,
-): boolean {
-  if (!story.isPrivate) return true;
-  return canEditStory(
-    { authorName: story.authorName, coAuthors: story.coAuthors ?? [], userId: story.userId },
-    user ?? null,
-  );
-}
+// canReadStory lives in lib/storyAuthz so the privacy gate (plan check
+// included) stays in one place across routes.
 
 /**
  * Filter a story list down to rows the requester is allowed to see. Public
@@ -1437,7 +1419,7 @@ router.get("/stories/:id/illustrations", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2119,7 +2101,7 @@ router.get("/stories/:id/audio", aiGenerationLimiter, async (req, res): Promise<
     res.status(404).json({ error: "Story has no text" });
     return;
   }
-  if (!canReadStory(story, req.user ?? null)) {
+  if (!(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2149,7 +2131,7 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2298,7 +2280,7 @@ router.get("/stories/:id/like", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2404,7 +2386,7 @@ router.get("/stories/:id/co-authors", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2571,7 +2553,7 @@ router.get("/stories/:id/collaborators", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2846,7 +2828,7 @@ router.get("/stories/:id/chapters", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2885,7 +2867,7 @@ router.get("/stories/:id/comments", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story || !canReadStory(story, req.user ?? null)) {
+  if (!story || !(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Story not found" });
     return;
   }
@@ -3137,7 +3119,7 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
   }
   // Private stories — even when "published" — never expose a trailer to
   // non-owners.
-  if (!canReadStory(story, req.user ?? null)) {
+  if (!(await canReadStory(story, req.user ?? null))) {
     res.status(404).json({ error: "Not found" });
     return;
   }

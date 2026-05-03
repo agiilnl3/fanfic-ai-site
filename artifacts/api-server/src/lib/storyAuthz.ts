@@ -1,4 +1,5 @@
 import type { Story, User, Series } from "@workspace/db";
+import { getUserPlan, getPlanByHandle } from "./subscriptions";
 
 /**
  * Generic ownership check for any row that has a stable `userId` plus a
@@ -43,14 +44,22 @@ export function canEditStory(
 
 /**
  * Read authorization. Public (non-private) stories are visible to everyone;
- * private stories are restricted to the author and listed co-authors.
+ * private stories require both (a) the requester is the author/co-author
+ * AND (b) the story author is currently on the Conjurer plan. The plan
+ * check makes the gate authoritative at read time so a missed downgrade
+ * webhook can't leave a free author's stories permanently hidden.
  */
-export function canReadStory(
+export async function canReadStory(
   story: Pick<Story, "authorName" | "coAuthors" | "userId"> & {
     isPrivate?: boolean | null;
   },
   user: Pick<User, "id" | "handle"> | null | undefined,
-): boolean {
+): Promise<boolean> {
   if (!story.isPrivate) return true;
+  const authorPlan =
+    story.userId != null
+      ? await getUserPlan(story.userId)
+      : await getPlanByHandle(story.authorName);
+  if (authorPlan !== "conjurer") return true;
   return canEditStory(story, user);
 }

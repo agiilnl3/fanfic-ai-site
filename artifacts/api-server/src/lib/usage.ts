@@ -1,17 +1,15 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, dailyUsageTable, tariffsTable } from "@workspace/db";
-import { getPlanByHandle, getUserPlan, type Plan } from "./subscriptions";
+import { getUserPlan, type Plan } from "./subscriptions";
 
-// Resolve the plan that governs quota. We always prefer the authenticated
-// user id when present so a caller cannot pass another author's handle in
-// the request body to inherit their Conjurer limits. The handle-based
-// fallback exists only for legacy/anonymous flows that have no `req.user`.
+// Plan resolution for quota is strictly tied to the authenticated user.
+// Anonymous callers always fall back to free — they cannot pass an author
+// handle and inherit a Conjurer user's higher limits.
 async function resolvePlanForQuota(
-  authorName: string,
   userId?: number | null,
 ): Promise<Plan> {
   if (typeof userId === "number") return getUserPlan(userId);
-  return getPlanByHandle(authorName);
+  return "free";
 }
 
 const FALLBACK_STORY_LIMIT = Number(process.env.FREE_DAILY_STORY_LIMIT ?? 5);
@@ -103,7 +101,7 @@ function today(): string {
 
 export async function getUsage(authorName: string, userId?: number | null) {
   const day = today();
-  const plan = await resolvePlanForQuota(authorName, userId);
+  const plan = await resolvePlanForQuota(userId);
   const tariff = await getTariffForPlan(plan);
   const [row] = await db
     .select()
