@@ -842,7 +842,11 @@ router.get("/stories/feed/facets", async (req, res): Promise<void> => {
       .orderBy(desc(count()))
       .limit(20),
     db
-      .select({ value: tagsTable.label, c: count() })
+      .select({
+        value: tagsTable.slug,
+        label: tagsTable.label,
+        c: count(),
+      })
       .from(storyTagsTable)
       .innerJoin(tagsTable, eq(tagsTable.id, storyTagsTable.tagId))
       .innerJoin(
@@ -850,7 +854,7 @@ router.get("/stories/feed/facets", async (req, res): Promise<void> => {
         eq(storiesTable.id, storyTagsTable.storyId),
       )
       .where(and(...baseConds))
-      .groupBy(tagsTable.label)
+      .groupBy(tagsTable.slug, tagsTable.label)
       .orderBy(desc(count()))
       .limit(20),
   ]);
@@ -860,7 +864,13 @@ router.get("/stories/feed/facets", async (req, res): Promise<void> => {
       value: r.value,
       count: Number(r.c),
     })),
-    tags: tagRows.map((r) => ({ value: r.value, count: Number(r.c) })),
+    // `value` is the tag slug (matches the /stories/feed `tag` filter);
+    // `label` is the human-readable name for display.
+    tags: tagRows.map((r) => ({
+      value: r.value,
+      label: r.label,
+      count: Number(r.c),
+    })),
   });
 });
 

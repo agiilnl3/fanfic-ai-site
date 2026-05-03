@@ -117,6 +117,8 @@ export interface ParagraphCommentCount {
 
 export interface FacetBucket {
   value: string;
+  /** Optional human-readable label (used for tag facets where `value` is the slug). */
+  label?: string;
   count: number;
 }
 
@@ -979,6 +981,10 @@ export type GetPublicFeedParams = {
    * Filter by a single tag slug.
    */
   tag?: string;
+  /**
+   * Filter by exact art style (matches Story.artStyle).
+   */
+  style?: string;
   /**
    * When set, the response decorates each story with the viewer's reading progress and the story's tags.
    */

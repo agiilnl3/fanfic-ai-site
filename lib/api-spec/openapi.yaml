@@ -2302,6 +2302,9 @@ components:
       properties:
         value:
           type: string
+        label:
+          type: string
+          description: Optional human-readable label (used for tag facets where `value` is the slug).
         count:
           type: integer
       required: [value, count]

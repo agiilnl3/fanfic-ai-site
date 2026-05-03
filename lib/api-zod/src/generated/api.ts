@@ -210,18 +210,36 @@ export const GetFeedFacetsResponse = zod.object({
   genres: zod.array(
     zod.object({
       value: zod.string(),
+      label: zod
+        .string()
+        .optional()
+        .describe(
+          "Optional human-readable label (used for tag facets where `value` is the slug).",
+        ),
       count: zod.number(),
     }),
   ),
   artStyles: zod.array(
     zod.object({
       value: zod.string(),
+      label: zod
+        .string()
+        .optional()
+        .describe(
+          "Optional human-readable label (used for tag facets where `value` is the slug).",
+        ),
       count: zod.number(),
     }),
   ),
   tags: zod.array(
     zod.object({
       value: zod.string(),
+      label: zod
+        .string()
+        .optional()
+        .describe(
+          "Optional human-readable label (used for tag facets where `value` is the slug).",
+        ),
       count: zod.number(),
     }),
   ),
@@ -268,6 +286,10 @@ export const GetPublicFeedQueryParams = zod.object({
       'Sort order. \"new\" = newest first, \"today\"\/\"week\"\/\"all\" rank by likes+reposts+comments inside the window.',
     ),
   tag: zod.coerce.string().optional().describe("Filter by a single tag slug."),
+  style: zod.coerce
+    .string()
+    .optional()
+    .describe("Filter by exact art style (matches Story.artStyle)."),
   viewerAuthorName: zod.coerce
     .string()
     .optional()

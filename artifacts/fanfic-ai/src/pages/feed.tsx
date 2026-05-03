@@ -153,7 +153,7 @@ export default function Feed() {
     query: { queryKey: getListTagsQueryKey(), staleTime: 60_000 },
   });
 
-  const publicFeedParams: GetPublicFeedParams & { style?: string } = {
+  const publicFeedParams: GetPublicFeedParams = {
     genre: genre === "All Genres" ? undefined : genre,
     q: debouncedSearch.trim() || undefined,
     followerName: followingEnabled ? authorName : undefined,
@@ -162,10 +162,10 @@ export default function Feed() {
     style: style ?? undefined,
     viewerAuthorName: authorName?.trim() || undefined,
   };
-  const publicFeedQuery = useGetPublicFeed(publicFeedParams as GetPublicFeedParams, {
+  const publicFeedQuery = useGetPublicFeed(publicFeedParams, {
     query: {
       enabled: tab !== "forYou",
-      queryKey: getGetPublicFeedQueryKey(publicFeedParams as GetPublicFeedParams),
+      queryKey: getGetPublicFeedQueryKey(publicFeedParams),
     },
   });
 
@@ -352,6 +352,7 @@ export default function Feed() {
                 </span>
                 {facets.tags.slice(0, 12).map((f) => {
                   const active = tag === f.value;
+                  const display = f.label ?? f.value;
                   return (
                     <Badge
                       key={`t-${f.value}`}
@@ -369,7 +370,7 @@ export default function Feed() {
                       }}
                       data-testid={`facet-tag-${f.value}`}
                     >
-                      #{f.value} <span className="opacity-60 ml-1">({f.count})</span>
+                      #{display} <span className="opacity-60 ml-1">({f.count})</span>
                     </Badge>
                   );
                 })}
