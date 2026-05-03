@@ -70,6 +70,11 @@ export interface StoryComment {
   authorName: string;
   body: string;
   createdAt: string;
+  /**
+   * ID of the parent comment when this is a one-level reply, otherwise null.
+   * @nullable
+   */
+  parentId: number | null;
 }
 
 export interface AddCommentBody {

@@ -44,7 +44,6 @@ const TIERS = ["free", "premium"] as const;
 
 export default function AdminPage() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [token, setToken] = useState<string>(() => localStorage.getItem(TOKEN_KEY) || "");
   const [password, setPassword] = useState("");
 
@@ -163,7 +162,6 @@ export default function AdminPage() {
             <ReportsTab requestOptions={requestOptions} />
           </TabsContent>
         </Tabs>
-        {void queryClient}
       </div>
     </Layout>
   );

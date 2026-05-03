@@ -7,6 +7,7 @@ import {
   generateIllustration,
   useListSeries,
   useAddStoryToSeries,
+  useSetStoryTags,
   getListSeriesQueryKey,
 } from "@workspace/api-client-react";
 import { UsageMeter } from "@/components/usage-meter";
@@ -98,6 +99,8 @@ export default function CreateStory() {
   const [withIllustrations, setWithIllustrations] = useState<boolean>(true);
   const [model, setModel] = useState<"gpt-5.1" | "gpt-5-mini">("gpt-5.1");
   const [seriesId, setSeriesId] = useState<string>("none");
+  const [tagDraft, setTagDraft] = useState<string>("");
+  const setTagsMutation = useSetStoryTags();
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [generatedStory, setGeneratedStory] = useState<Story | null>(null);
@@ -130,6 +133,27 @@ export default function CreateStory() {
         model,
       });
       setGeneratedStory(story);
+
+      const tagSlugs = tagDraft
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length > 0)
+        .slice(0, 8);
+      if (tagSlugs.length > 0) {
+        try {
+          await setTagsMutation.mutateAsync({
+            id: story.id,
+            data: { slugs: tagSlugs, requesterAuthorName: authorName.trim() },
+          });
+        } catch {
+          toast({
+            title: "Couldn't save tags",
+            description:
+              "The story was created but we couldn't attach those tags. You can add them on the story page.",
+            variant: "destructive",
+          });
+        }
+      }
 
       if (seriesId !== "none") {
         const sid = Number(seriesId);
@@ -469,6 +493,22 @@ export default function CreateStory() {
                 <p className="text-xs text-muted-foreground">
                   Attach this story to one of your series. Manage series on the
                   Series page.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-4">
+                <Label htmlFor="tags">Tags (Optional)</Label>
+                <Input
+                  id="tags"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  placeholder="Comma-separated, max 8: e.g. magic, slow-burn, found-family"
+                  data-testid="input-create-tags"
+                  className="bg-background/50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Help readers discover your story on the feed. You can edit tags
+                  later from the story page.
                 </p>
               </div>
 

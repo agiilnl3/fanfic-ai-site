@@ -32,8 +32,7 @@ function buildTree(rows: StoryComment[]): CommentNode[] {
   }
   const roots: CommentNode[] = [];
   for (const node of byId.values()) {
-    const parentId = (node as StoryComment & { parentId?: number | null })
-      .parentId;
+    const parentId = node.parentId;
     if (parentId && byId.has(parentId)) {
       byId.get(parentId)!.children.push(node);
     } else {

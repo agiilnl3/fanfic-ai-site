@@ -514,6 +514,12 @@ export const GetStoryCommentsResponseItem = zod.object({
   authorName: zod.string(),
   body: zod.string(),
   createdAt: zod.string(),
+  parentId: zod
+    .number()
+    .nullable()
+    .describe(
+      "ID of the parent comment when this is a one-level reply, otherwise null.",
+    ),
 });
 export const GetStoryCommentsResponse = zod.array(GetStoryCommentsResponseItem);
 

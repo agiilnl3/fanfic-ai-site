@@ -1700,12 +1700,16 @@ components:
           type: string
         createdAt:
           type: string
+        parentId:
+          type: ["integer", "null"]
+          description: ID of the parent comment when this is a one-level reply, otherwise null.
       required:
         - id
         - storyId
         - authorName
         - body
         - createdAt
+        - parentId
 
     AddCommentBody:
       type: object

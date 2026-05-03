@@ -487,9 +487,9 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
 async function decorateForViewer<
   T extends { id: number },
 >(rows: T[], viewerAuthorName: string | undefined): Promise<T[]> {
-  if (rows.length === 0 || !viewerAuthorName?.trim()) return rows;
-  const viewer = viewerAuthorName.trim();
+  if (rows.length === 0) return rows;
   const ids = rows.map((r) => r.id);
+  const viewer = viewerAuthorName?.trim();
   const [tagLinks, progressRows] = await Promise.all([
     db
       .select({
@@ -501,18 +501,22 @@ async function decorateForViewer<
       .from(storyTagsTable)
       .innerJoin(tagsTable, eq(tagsTable.id, storyTagsTable.tagId))
       .where(inArray(storyTagsTable.storyId, ids)),
-    db
-      .select({
-        storyId: readingProgressTable.storyId,
-        progress: readingProgressTable.progress,
-      })
-      .from(readingProgressTable)
-      .where(
-        and(
-          eq(readingProgressTable.authorName, viewer),
-          inArray(readingProgressTable.storyId, ids),
+    viewer
+      ? db
+          .select({
+            storyId: readingProgressTable.storyId,
+            progress: readingProgressTable.progress,
+          })
+          .from(readingProgressTable)
+          .where(
+            and(
+              eq(readingProgressTable.authorName, viewer),
+              inArray(readingProgressTable.storyId, ids),
+            ),
+          )
+      : Promise.resolve(
+          [] as { storyId: number; progress: number }[],
         ),
-      ),
   ]);
   const tagsByStory = new Map<
     number,
@@ -529,7 +533,7 @@ async function decorateForViewer<
   return rows.map((r) => ({
     ...r,
     tags: tagsByStory.get(r.id) ?? [],
-    readingProgress: progressByStory.get(r.id) ?? null,
+    readingProgress: viewer ? progressByStory.get(r.id) ?? null : null,
   }));
 }
 
