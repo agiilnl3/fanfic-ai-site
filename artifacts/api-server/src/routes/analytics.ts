@@ -6,6 +6,7 @@ import {
   storiesTable,
   storyLikesTable,
   storyCommentsTable,
+  readingProgressTable,
 } from "@workspace/db";
 import {
   RecordStoryViewParams,
@@ -57,18 +58,28 @@ router.get("/stories/:id/analytics", async (req, res): Promise<void> => {
   }
 
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  // totalCompleted is derived from reading_progress (>= 95% read), not from
+  // story_views.completed: the reader UI only inserts a single view per
+  // session and tracks completion via reading_progress upserts.
   const totalRow = await db
     .select({
       total: count(),
-      completed: sql<number>`coalesce(sum(${storyViewsTable.completed}), 0)::int`,
     })
     .from(storyViewsTable)
     .where(eq(storyViewsTable.storyId, params.data.id));
+  const [completedRow] = await db
+    .select({ c: count() })
+    .from(readingProgressTable)
+    .where(
+      and(
+        eq(readingProgressTable.storyId, params.data.id),
+        gte(readingProgressTable.progress, 95),
+      ),
+    );
   const dailyRows = await db
     .select({
       day: sql<string>`to_char(${storyViewsTable.createdAt}, 'YYYY-MM-DD')`,
       views: count(),
-      completed: sql<number>`coalesce(sum(${storyViewsTable.completed}), 0)::int`,
     })
     .from(storyViewsTable)
     .where(
@@ -79,6 +90,23 @@ router.get("/stories/:id/analytics", async (req, res): Promise<void> => {
     )
     .groupBy(sql`to_char(${storyViewsTable.createdAt}, 'YYYY-MM-DD')`)
     .orderBy(desc(sql`to_char(${storyViewsTable.createdAt}, 'YYYY-MM-DD')`));
+  const completedDailyRows = await db
+    .select({
+      day: sql<string>`to_char(${readingProgressTable.updatedAt}, 'YYYY-MM-DD')`,
+      completed: count(),
+    })
+    .from(readingProgressTable)
+    .where(
+      and(
+        eq(readingProgressTable.storyId, params.data.id),
+        gte(readingProgressTable.progress, 95),
+        gte(readingProgressTable.updatedAt, since),
+      ),
+    )
+    .groupBy(sql`to_char(${readingProgressTable.updatedAt}, 'YYYY-MM-DD')`);
+  const completedByDay = new Map(
+    completedDailyRows.map((r) => [r.day, Number(r.completed)]),
+  );
   const [likeAgg] = await db
     .select({ c: count() })
     .from(storyLikesTable)
@@ -91,13 +119,13 @@ router.get("/stories/:id/analytics", async (req, res): Promise<void> => {
   res.json({
     storyId: params.data.id,
     totalViews: Number(totalRow[0]?.total ?? 0),
-    totalCompleted: Number(totalRow[0]?.completed ?? 0),
+    totalCompleted: Number(completedRow?.c ?? 0),
     totalLikes: Number(likeAgg?.c ?? 0),
     totalComments: Number(commentAgg?.c ?? 0),
     daily: dailyRows.map((r) => ({
       day: r.day,
       views: Number(r.views),
-      completed: Number(r.completed),
+      completed: completedByDay.get(r.day) ?? 0,
     })),
   });
 });

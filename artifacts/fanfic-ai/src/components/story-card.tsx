@@ -9,6 +9,8 @@ import { LikeButton } from "@/components/like-button";
 import { BookmarkButton } from "@/components/bookmark-button";
 
 export function StoryCard({ story }: { story: Story }) {
+  const tags = (story as Story & { tags?: { id: number; slug: string; label: string }[] }).tags;
+  const progress = (story as Story & { readingProgress?: number | null }).readingProgress;
   const queryClient = useQueryClient();
 
   const handlePrefetch = () => {
@@ -80,6 +82,31 @@ export function StoryCard({ story }: { story: Story }) {
             <p className="text-sm text-foreground/70 mt-3 line-clamp-3 leading-relaxed">
               {story.summary}
             </p>
+          )}
+          {tags && tags.length > 0 && (
+            <div
+              className="flex flex-wrap gap-1 mt-3"
+              data-testid={`tags-${story.id}`}
+            >
+              {tags.slice(0, 4).map((t) => (
+                <Badge
+                  key={t.id}
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 font-normal"
+                >
+                  #{t.label}
+                </Badge>
+              ))}
+            </div>
+          )}
+          {typeof progress === "number" && progress > 0 && progress < 100 && (
+            <div
+              className="mt-3 text-xs text-primary/80 inline-flex items-center gap-1"
+              data-testid={`progress-${story.id}`}
+            >
+              <BookOpen className="w-3 h-3" />
+              Continue from {progress}%
+            </div>
           )}
         </CardContent>
         <CardFooter className="p-4 pt-0 text-xs text-muted-foreground flex justify-between items-center border-t border-border/10">

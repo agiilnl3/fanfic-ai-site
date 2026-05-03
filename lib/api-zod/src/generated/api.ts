@@ -47,6 +47,25 @@ export const ListStoriesResponseItem = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 export const ListStoriesResponse = zod.array(ListStoriesResponseItem);
 
@@ -113,6 +132,12 @@ export const GetPublicFeedQueryParams = zod.object({
       'Sort order. \"new\" = newest first, \"today\"\/\"week\"\/\"all\" rank by likes+reposts+comments inside the window.',
     ),
   tag: zod.coerce.string().optional().describe("Filter by a single tag slug."),
+  viewerAuthorName: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "When set, the response decorates each story with the viewer's reading progress and the story's tags.",
+    ),
 });
 
 export const getPublicFeedResponseCoAuthorsDefault = [];
@@ -137,6 +162,25 @@ export const GetPublicFeedResponseItem = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 export const GetPublicFeedResponse = zod.array(GetPublicFeedResponseItem);
 
@@ -186,6 +230,25 @@ export const GetStoryResponse = zod
     updatedAt: zod.string(),
     likeCount: zod.number(),
     commentCount: zod.number(),
+    tags: zod
+      .array(
+        zod.object({
+          id: zod.number(),
+          slug: zod.string(),
+          label: zod.string(),
+          storyCount: zod.number(),
+        }),
+      )
+      .optional()
+      .describe(
+        "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+      ),
+    readingProgress: zod
+      .number()
+      .nullish()
+      .describe(
+        "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+      ),
   })
   .and(
     zod.object({
@@ -243,6 +306,25 @@ export const UpdateStoryResponse = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 
 /**
@@ -281,6 +363,25 @@ export const PublishStoryResponse = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 
 /**
@@ -488,6 +589,25 @@ export const ContinueStoryResponse = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 
 /**
@@ -541,6 +661,25 @@ export const RegenerateStoryTextResponse = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 
 /**
@@ -709,6 +848,25 @@ export const AdminUpdateStoryResponse = zod.object({
   updatedAt: zod.string(),
   likeCount: zod.number(),
   commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
 });
 
 /**
@@ -765,6 +923,25 @@ export const GetAuthorProfileResponse = zod.object({
       updatedAt: zod.string(),
       likeCount: zod.number(),
       commentCount: zod.number(),
+      tags: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            slug: zod.string(),
+            label: zod.string(),
+            storyCount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+        ),
+      readingProgress: zod
+        .number()
+        .nullish()
+        .describe(
+          "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+        ),
     }),
   ),
 });
@@ -972,6 +1149,25 @@ export const ListAuthorRepostsResponseItem = zod.object({
     updatedAt: zod.string(),
     likeCount: zod.number(),
     commentCount: zod.number(),
+    tags: zod
+      .array(
+        zod.object({
+          id: zod.number(),
+          slug: zod.string(),
+          label: zod.string(),
+          storyCount: zod.number(),
+        }),
+      )
+      .optional()
+      .describe(
+        "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+      ),
+    readingProgress: zod
+      .number()
+      .nullish()
+      .describe(
+        "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+      ),
   }),
 });
 export const ListAuthorRepostsResponse = zod.array(
@@ -1288,6 +1484,25 @@ export const ListBookmarksResponseItem = zod.object({
       updatedAt: zod.string(),
       likeCount: zod.number(),
       commentCount: zod.number(),
+      tags: zod
+        .array(
+          zod.object({
+            id: zod.number(),
+            slug: zod.string(),
+            label: zod.string(),
+            storyCount: zod.number(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+        ),
+      readingProgress: zod
+        .number()
+        .nullish()
+        .describe(
+          "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+        ),
     })
     .optional(),
 });
@@ -1326,6 +1541,25 @@ export const ListReadingHistoryResponseItem = zod.object({
     updatedAt: zod.string(),
     likeCount: zod.number(),
     commentCount: zod.number(),
+    tags: zod
+      .array(
+        zod.object({
+          id: zod.number(),
+          slug: zod.string(),
+          label: zod.string(),
+          storyCount: zod.number(),
+        }),
+      )
+      .optional()
+      .describe(
+        "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+      ),
+    readingProgress: zod
+      .number()
+      .nullish()
+      .describe(
+        "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+      ),
   }),
 });
 export const ListReadingHistoryResponse = zod.array(
@@ -1485,6 +1719,25 @@ export const GetSeriesResponse = zod
             updatedAt: zod.string(),
             likeCount: zod.number(),
             commentCount: zod.number(),
+            tags: zod
+              .array(
+                zod.object({
+                  id: zod.number(),
+                  slug: zod.string(),
+                  label: zod.string(),
+                  storyCount: zod.number(),
+                }),
+              )
+              .optional()
+              .describe(
+                "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+              ),
+            readingProgress: zod
+              .number()
+              .nullish()
+              .describe(
+                "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+              ),
           })
           .and(
             zod.object({
@@ -1584,6 +1837,25 @@ export const AddStoryToSeriesResponse = zod
             updatedAt: zod.string(),
             likeCount: zod.number(),
             commentCount: zod.number(),
+            tags: zod
+              .array(
+                zod.object({
+                  id: zod.number(),
+                  slug: zod.string(),
+                  label: zod.string(),
+                  storyCount: zod.number(),
+                }),
+              )
+              .optional()
+              .describe(
+                "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+              ),
+            readingProgress: zod
+              .number()
+              .nullish()
+              .describe(
+                "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+              ),
           })
           .and(
             zod.object({

@@ -12,7 +12,12 @@ import {
   notificationsTable,
 } from "@workspace/db";
 import { ilike, or } from "drizzle-orm";
-import { hiddenStoriesTable, storyTagsTable, tagsTable } from "@workspace/db";
+import {
+  hiddenStoriesTable,
+  storyTagsTable,
+  tagsTable,
+  readingProgressTable,
+} from "@workspace/db";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -329,7 +334,8 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     return;
   }
 
-  const { genre, limit, q, followerName, sort, tag } = parsed.data;
+  const { genre, limit, q, followerName, sort, tag, viewerAuthorName } =
+    parsed.data;
   const conditions = [eq(storiesTable.status, "published")];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
   if (q && q.trim()) {
@@ -386,7 +392,8 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
       .where(and(...conditions))
       .orderBy(desc(storiesTable.createdAt))
       .limit(cap);
-    res.json(await attachCounts(stories));
+    const counted = await attachCounts(stories);
+    res.json(await decorateForViewer(counted, viewerAuthorName));
     return;
   }
 
@@ -473,8 +480,58 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     .sort((a, b) => b.score - a.score)
     .slice(0, cap)
     .map((r) => r.s);
-  res.json(await attachCounts(ranked));
+  const countedRanked = await attachCounts(ranked);
+  res.json(await decorateForViewer(countedRanked, viewerAuthorName));
 });
+
+async function decorateForViewer<
+  T extends { id: number },
+>(rows: T[], viewerAuthorName: string | undefined): Promise<T[]> {
+  if (rows.length === 0 || !viewerAuthorName?.trim()) return rows;
+  const viewer = viewerAuthorName.trim();
+  const ids = rows.map((r) => r.id);
+  const [tagLinks, progressRows] = await Promise.all([
+    db
+      .select({
+        storyId: storyTagsTable.storyId,
+        id: tagsTable.id,
+        slug: tagsTable.slug,
+        label: tagsTable.label,
+      })
+      .from(storyTagsTable)
+      .innerJoin(tagsTable, eq(tagsTable.id, storyTagsTable.tagId))
+      .where(inArray(storyTagsTable.storyId, ids)),
+    db
+      .select({
+        storyId: readingProgressTable.storyId,
+        progress: readingProgressTable.progress,
+      })
+      .from(readingProgressTable)
+      .where(
+        and(
+          eq(readingProgressTable.authorName, viewer),
+          inArray(readingProgressTable.storyId, ids),
+        ),
+      ),
+  ]);
+  const tagsByStory = new Map<
+    number,
+    { id: number; slug: string; label: string; storyCount: number }[]
+  >();
+  for (const t of tagLinks) {
+    const list = tagsByStory.get(t.storyId) ?? [];
+    list.push({ id: t.id, slug: t.slug, label: t.label, storyCount: 0 });
+    tagsByStory.set(t.storyId, list);
+  }
+  const progressByStory = new Map(
+    progressRows.map((p) => [p.storyId, p.progress]),
+  );
+  return rows.map((r) => ({
+    ...r,
+    tags: tagsByStory.get(r.id) ?? [],
+    readingProgress: progressByStory.get(r.id) ?? null,
+  }));
+}
 
 router.get("/stories/stats", async (_req, res): Promise<void> => {
   const [total] = await db

@@ -158,6 +158,12 @@ paths:
           description: Filter by a single tag slug.
           schema:
             type: string
+        - name: viewerAuthorName
+          in: query
+          required: false
+          description: When set, the response decorates each story with the viewer's reading progress and the story's tags.
+          schema:
+            type: string
       responses:
         "200":
           description: Published stories feed
@@ -1659,6 +1665,14 @@ components:
           type: integer
         commentCount:
           type: integer
+        tags:
+          type: array
+          description: Tags attached to this story. Populated by /stories/feed when viewerAuthorName is supplied.
+          items:
+            $ref: "#/components/schemas/Tag"
+        readingProgress:
+          type: ["integer", "null"]
+          description: Viewer-specific reading progress percentage (0-100). Only set by /stories/feed when viewerAuthorName matches the requester.
       required:
         - id
         - title

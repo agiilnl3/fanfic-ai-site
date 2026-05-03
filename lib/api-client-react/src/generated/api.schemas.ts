@@ -25,6 +25,13 @@ export const StoryStatus = {
   published: "published",
 } as const;
 
+export interface Tag {
+  id: number;
+  slug: string;
+  label: string;
+  storyCount: number;
+}
+
 export interface Story {
   id: number;
   title: string;
@@ -48,6 +55,13 @@ export interface Story {
   updatedAt: string;
   likeCount: number;
   commentCount: number;
+  /** Tags attached to this story. Populated by /stories/feed when viewerAuthorName is supplied. */
+  tags?: Tag[];
+  /**
+   * Viewer-specific reading progress percentage (0-100). Only set by /stories/feed when viewerAuthorName matches the requester.
+   * @nullable
+   */
+  readingProgress?: number | null;
 }
 
 export interface StoryComment {
@@ -448,13 +462,6 @@ export interface AdminMetrics {
   topStories: AdminMetricsTopStoriesItem[];
 }
 
-export interface Tag {
-  id: number;
-  slug: string;
-  label: string;
-  storyCount: number;
-}
-
 export interface UpdateStoryTagsBody {
   slugs: string[];
   /** @minLength 1 */
@@ -684,6 +691,10 @@ export type GetPublicFeedParams = {
    * Filter by a single tag slug.
    */
   tag?: string;
+  /**
+   * When set, the response decorates each story with the viewer's reading progress and the story's tags.
+   */
+  viewerAuthorName?: string;
 };
 
 export type GetPublicFeedSort =

@@ -142,6 +142,7 @@ export default function Feed() {
     followerName: followingEnabled ? authorName : undefined,
     sort,
     tag: tag ?? undefined,
+    viewerAuthorName: authorName?.trim() || undefined,
   });
 
   const filteredFeed = feed;
