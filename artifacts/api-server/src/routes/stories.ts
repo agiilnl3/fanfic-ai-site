@@ -637,28 +637,21 @@ router.post(
 
 // ---------- Personalized "For you" feed (pgvector centroid ranking) ----------
 //
-// Builds a unit vector by averaging the embeddings of stories the
-// viewer has recently liked or read past 50 %, then orders published
-// stories by cosine distance (`<=>`) to that centroid. Falls back to
-// the trending list (last 7 days, weighted engagement) when the
-// viewer has no signal — newcomers and signed-out visitors still get
-// a useful list.
+// Personalized feed: averages the embeddings of recently liked /
+// read-past-50% stories into a centroid, then ranks published stories
+// by cosine distance. Falls back to engagement-trending (and finally
+// newest) when the viewer has no signal or embeddings are unavailable.
 router.get("/feed/for-you", async (req, res): Promise<void> => {
-  // Personalization is bound to the *signed-in* user's handle when
-  // available, never to whatever the client sends in the query
-  // string — otherwise any caller could request someone else's
-  // recommendations (and by extension, derive their like / read
-  // history). For anonymous callers we accept the query-string
-  // viewer hint solely to enable guest pen-name continuity.
-  const queryViewer = (req.query.viewerAuthorName as string | undefined)?.trim();
-  const viewer = req.user?.handle?.trim() || queryViewer || undefined;
+  // Personalization is bound to the signed-in handle only — we
+  // ignore any client-supplied viewer hint so anonymous callers
+  // can't probe another user's like / read history.
+  const viewer = req.user?.handle?.trim() || undefined;
   const limit = Math.max(
     1,
     Math.min(50, Number(req.query.limit) || 20),
   );
 
-  // Pre-load hidden stories once so every fallback / nearest-neighbour
-  // path applies the same moderation rules as /stories/feed.
+  // Apply the same moderation list as /stories/feed.
   const hiddenRows = await db
     .select({ id: hiddenStoriesTable.storyId })
     .from(hiddenStoriesTable);
@@ -683,13 +676,10 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
       score.set(r.storyId, (score.get(r.storyId) ?? 0) + Number(r.c) * 3);
     for (const r of viewRows)
       score.set(r.storyId, (score.get(r.storyId) ?? 0) + Number(r.c));
-    // Strip moderated stories *before* ranking so the limit isn't
-    // padded out by stories that will then be filtered.
     for (const id of hiddenIds) score.delete(id);
     const ids = Array.from(score.keys());
     if (ids.length === 0) {
-      // Truly empty platform — surface the newest stories so the page
-      // doesn't render as an empty state on day one.
+      // Cold start: surface newest published stories.
       const newestConds = [eq(storiesTable.status, "published")];
       if (hiddenIds.size > 0) {
         newestConds.push(notInArray(storiesTable.id, Array.from(hiddenIds)));
@@ -784,10 +774,7 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
     return;
   }
 
-  // Hide stories the viewer already engaged with (read past 50 % or
-  // liked) — recommendations should surface *new* material, not
-  // re-rank what they already consumed. Moderated stories are
-  // already in `hiddenIds` from the top of the handler.
+  // Skip already-engaged + moderated stories.
   const exclude = new Set<number>(seedIds);
   for (const id of hiddenIds) exclude.add(id);
 
@@ -829,12 +816,7 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
   res.json(await decorateForViewer(counted, viewer));
 });
 
-// ---------- Search facets ----------
-//
-// Counts of genre / artStyle / tag values across the published stories
-// matching the current text query. Used by the feed UI to render
-// faceted filter chips alongside the search box. Always runs against
-// `published` stories so drafts never leak into facet counts.
+// Faceted counts (genre / artStyle / tag) for the current text query.
 router.get("/stories/feed/facets", async (req, res): Promise<void> => {
   const q = (req.query.q as string | undefined)?.trim();
   const baseConds = [eq(storiesTable.status, "published")];
@@ -891,12 +873,10 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
 
   const { genre, limit, q, followerName, sort, tag, viewerAuthorName } =
     parsed.data;
+  const style = (req.query.style as string | undefined)?.trim();
   const conditions = [eq(storiesTable.status, "published")];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
-  // Real full-text search via the generated `tsv` column (see
-  // ensureDbExtensions). websearch_to_tsquery accepts Google-style
-  // input ("phrase", AND, OR, -exclude). Falls back to ILIKE when
-  // the parsed query is empty (e.g. user typed only stop words).
+  if (style) conditions.push(eq(storiesTable.artStyle, style));
   const trimmedQ = q?.trim();
   if (trimmedQ) {
     conditions.push(
@@ -1301,10 +1281,7 @@ router.post("/stories/:id/publish", async (req, res): Promise<void> => {
     .where(eq(storiesTable.id, params.data.id))
     .returning();
 
-  // Generate / refresh the recommendation embedding off the request
-  // path so /publish stays snappy. Must run *after* the status flip
-  // — embedStoryById is a no-op for non-published stories, so
-  // firing earlier would skip the work entirely.
+  // Refresh embedding after the status flip (embedStoryById no-ops on drafts).
   embedStoryInBackground(params.data.id);
 
   res.json(story);
@@ -2831,10 +2808,7 @@ router.post(
         parentId = parent.parentId ?? parent.id;
       }
     }
-    // paragraphIndex anchors the comment to a specific paragraph
-    // (matches `data-paragraph-index` on the rendered story). Replies
-    // inherit the parent's anchor so a thread stays attached to one
-    // paragraph even when the user clicks "reply" without re-anchoring.
+    // Replies inherit the parent's paragraph anchor.
     let paragraphIndex: number | null =
       typeof body.data.paragraphIndex === "number" &&
       body.data.paragraphIndex >= 0

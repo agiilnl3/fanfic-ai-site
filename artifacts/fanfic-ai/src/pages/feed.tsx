@@ -5,10 +5,12 @@ import { Seo } from "@/components/seo";
 import {
   useGetPublicFeed,
   useGetForYouFeed,
+  useGetFeedFacets,
   useListTags,
   getListTagsQueryKey,
   getGetPublicFeedQueryKey,
   getGetForYouFeedQueryKey,
+  getGetFeedFacetsQueryKey,
   type Story,
   type GetPublicFeedParams,
 } from "@workspace/api-client-react";
@@ -129,11 +131,21 @@ export default function Feed() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All Genres");
+  const [style, setStyle] = useState<string | null>(null);
   const [tab, setTab] = useState<"all" | "following" | "forYou">("all");
   const [sort, setSort] = useState<SortMode>("new");
   const [tag, setTag] = useState<string | null>(() => readQueryParam("tag"));
   const debouncedSearch = useDebounced(search, 300);
   const { authorName } = useAuthor();
+
+  const facetsParams = { q: debouncedSearch.trim() || undefined };
+  const { data: facets } = useGetFeedFacets(facetsParams, {
+    query: {
+      enabled: tab !== "forYou",
+      queryKey: getGetFeedFacetsQueryKey(facetsParams),
+      staleTime: 30_000,
+    },
+  });
 
   const followingEnabled = tab === "following" && !!authorName?.trim();
 
@@ -141,28 +153,23 @@ export default function Feed() {
     query: { queryKey: getListTagsQueryKey(), staleTime: 60_000 },
   });
 
-  const publicFeedParams: GetPublicFeedParams = {
+  const publicFeedParams: GetPublicFeedParams & { style?: string } = {
     genre: genre === "All Genres" ? undefined : genre,
     q: debouncedSearch.trim() || undefined,
     followerName: followingEnabled ? authorName : undefined,
     sort,
     tag: tag ?? undefined,
+    style: style ?? undefined,
     viewerAuthorName: authorName?.trim() || undefined,
   };
-  const publicFeedQuery = useGetPublicFeed(publicFeedParams, {
-    // For-you tab uses the personalized endpoint instead, so we
-    // skip this fetch to avoid spurious network traffic / loading
-    // skeletons while the user browses recommendations.
+  const publicFeedQuery = useGetPublicFeed(publicFeedParams as GetPublicFeedParams, {
     query: {
       enabled: tab !== "forYou",
-      queryKey: getGetPublicFeedQueryKey(publicFeedParams),
+      queryKey: getGetPublicFeedQueryKey(publicFeedParams as GetPublicFeedParams),
     },
   });
 
-  const forYouParams = {
-    viewerAuthorName: authorName?.trim() || undefined,
-    limit: 40,
-  };
+  const forYouParams = { limit: 40 };
   const forYouQuery = useGetForYouFeed(forYouParams, {
     query: {
       enabled: tab === "forYou",
@@ -272,7 +279,106 @@ export default function Feed() {
           )}
         </div>
 
-        {(tagsData ?? []).length > 0 && (
+        {tab !== "forYou" &&
+          (facets?.genres?.length || facets?.artStyles?.length || facets?.tags?.length) ? (
+          <div
+            className="max-w-3xl mx-auto mb-6 space-y-2"
+            data-testid="feed-facets"
+          >
+            {facets?.genres && facets.genres.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">
+                  {t("feed.facetGenre", "Genre")}
+                </span>
+                {facets.genres.slice(0, 8).map((f) => {
+                  const active = genre === f.value;
+                  return (
+                    <Badge
+                      key={`g-${f.value}`}
+                      variant={active ? "default" : "secondary"}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={active}
+                      className="cursor-pointer hover:bg-primary/30"
+                      onClick={() => setGenre(active ? "All Genres" : f.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setGenre(active ? "All Genres" : f.value);
+                        }
+                      }}
+                      data-testid={`facet-genre-${f.value}`}
+                    >
+                      {f.value} <span className="opacity-60 ml-1">({f.count})</span>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+            {facets?.artStyles && facets.artStyles.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">
+                  {t("feed.facetStyle", "Art style")}
+                </span>
+                {facets.artStyles.slice(0, 8).map((f) => {
+                  const active = style === f.value;
+                  return (
+                    <Badge
+                      key={`s-${f.value}`}
+                      variant={active ? "default" : "secondary"}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={active}
+                      className="cursor-pointer hover:bg-primary/30"
+                      onClick={() => setStyle(active ? null : f.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setStyle(active ? null : f.value);
+                        }
+                      }}
+                      data-testid={`facet-style-${f.value}`}
+                    >
+                      {f.value} <span className="opacity-60 ml-1">({f.count})</span>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+            {facets?.tags && facets.tags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground mr-1">
+                  {t("feed.facetTag", "Tag")}
+                </span>
+                {facets.tags.slice(0, 12).map((f) => {
+                  const active = tag === f.value;
+                  return (
+                    <Badge
+                      key={`t-${f.value}`}
+                      variant={active ? "default" : "outline"}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={active}
+                      className="cursor-pointer hover:bg-primary/30"
+                      onClick={() => setTag(active ? null : f.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setTag(active ? null : f.value);
+                        }
+                      }}
+                      data-testid={`facet-tag-${f.value}`}
+                    >
+                      #{f.value} <span className="opacity-60 ml-1">({f.count})</span>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {tab !== "forYou" && (tagsData ?? []).length > 0 && (
           <div className="max-w-3xl mx-auto mb-8 flex flex-wrap gap-2">
             {(tagsData ?? []).slice(0, 24).map((tg) => {
               const active = tag === tg.slug;

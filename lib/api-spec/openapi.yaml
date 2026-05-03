@@ -254,6 +254,12 @@ paths:
           description: Filter by a single tag slug.
           schema:
             type: string
+        - name: style
+          in: query
+          required: false
+          description: Filter by exact art style (matches Story.artStyle).
+          schema:
+            type: string
         - name: viewerAuthorName
           in: query
           required: false

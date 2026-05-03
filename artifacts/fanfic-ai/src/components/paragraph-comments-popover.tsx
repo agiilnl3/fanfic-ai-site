@@ -40,9 +40,7 @@ export function ParagraphCommentsPopover({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
 
-  // Defer the comments fetch until the popover actually opens —
-  // a story can have hundreds of paragraphs and we don't want to
-  // hammer the API on every page load.
+  // Defer fetch until the popover opens.
   const commentsKey = getGetStoryCommentsQueryKey(storyId);
   const { data: allComments, isLoading } = useGetStoryComments(storyId, {
     query: { queryKey: commentsKey, staleTime: 30_000, enabled: open },
@@ -98,9 +96,6 @@ export function ParagraphCommentsPopover({
           size="icon"
           variant="ghost"
           className={
-            // Visible by default when this paragraph already has
-            // comments (so readers can find existing threads),
-            // hover-revealed otherwise to keep the page calm.
             "h-6 w-6 relative " +
             (count > 0
               ? "opacity-100"
