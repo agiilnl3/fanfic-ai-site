@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, count, and, sql, inArray, gte } from "drizzle-orm";
+import { eq, desc, count, and, sql, inArray, notInArray, gte } from "drizzle-orm";
 import {
   db,
   storiesTable,
@@ -93,6 +93,8 @@ import {
   illustrationLimiter,
   writeLimiter,
 } from "../middlewares/rate-limit";
+import { embedStoryInBackground, toVectorLiteral } from "../lib/embeddings";
+import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -633,6 +635,253 @@ router.post(
   },
 );
 
+// ---------- Personalized "For you" feed (pgvector centroid ranking) ----------
+//
+// Builds a unit vector by averaging the embeddings of stories the
+// viewer has recently liked or read past 50 %, then orders published
+// stories by cosine distance (`<=>`) to that centroid. Falls back to
+// the trending list (last 7 days, weighted engagement) when the
+// viewer has no signal — newcomers and signed-out visitors still get
+// a useful list.
+router.get("/feed/for-you", async (req, res): Promise<void> => {
+  // Personalization is bound to the *signed-in* user's handle when
+  // available, never to whatever the client sends in the query
+  // string — otherwise any caller could request someone else's
+  // recommendations (and by extension, derive their like / read
+  // history). For anonymous callers we accept the query-string
+  // viewer hint solely to enable guest pen-name continuity.
+  const queryViewer = (req.query.viewerAuthorName as string | undefined)?.trim();
+  const viewer = req.user?.handle?.trim() || queryViewer || undefined;
+  const limit = Math.max(
+    1,
+    Math.min(50, Number(req.query.limit) || 20),
+  );
+
+  // Pre-load hidden stories once so every fallback / nearest-neighbour
+  // path applies the same moderation rules as /stories/feed.
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable);
+  const hiddenIds = new Set<number>(hiddenRows.map((h) => h.id));
+
+  const fallback = async (): Promise<void> => {
+    const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+    const [likeRows, viewRows] = await Promise.all([
+      db
+        .select({ storyId: storyLikesTable.storyId, c: count() })
+        .from(storyLikesTable)
+        .where(gte(storyLikesTable.createdAt, since))
+        .groupBy(storyLikesTable.storyId),
+      db
+        .select({ storyId: storyViewsTable.storyId, c: count() })
+        .from(storyViewsTable)
+        .where(gte(storyViewsTable.createdAt, since))
+        .groupBy(storyViewsTable.storyId),
+    ]);
+    const score = new Map<number, number>();
+    for (const r of likeRows)
+      score.set(r.storyId, (score.get(r.storyId) ?? 0) + Number(r.c) * 3);
+    for (const r of viewRows)
+      score.set(r.storyId, (score.get(r.storyId) ?? 0) + Number(r.c));
+    // Strip moderated stories *before* ranking so the limit isn't
+    // padded out by stories that will then be filtered.
+    for (const id of hiddenIds) score.delete(id);
+    const ids = Array.from(score.keys());
+    if (ids.length === 0) {
+      // Truly empty platform — surface the newest stories so the page
+      // doesn't render as an empty state on day one.
+      const newestConds = [eq(storiesTable.status, "published")];
+      if (hiddenIds.size > 0) {
+        newestConds.push(notInArray(storiesTable.id, Array.from(hiddenIds)));
+      }
+      const newest = await db
+        .select()
+        .from(storiesTable)
+        .where(and(...newestConds))
+        .orderBy(desc(storiesTable.createdAt))
+        .limit(limit);
+      res.json(await decorateForViewer(await attachCounts(newest), viewer));
+      return;
+    }
+    const stories = await db
+      .select()
+      .from(storiesTable)
+      .where(
+        and(
+          eq(storiesTable.status, "published"),
+          inArray(storiesTable.id, ids),
+        ),
+      );
+    const ranked = stories
+      .map((s) => ({ s, score: score.get(s.id) ?? 0 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map((r) => r.s);
+    res.json(
+      await decorateForViewer(await attachCounts(ranked), viewer),
+    );
+  };
+
+  if (!viewer) {
+    await fallback();
+    return;
+  }
+
+  // Pull the viewer's recent positive signals: up to 30 most recent
+  // likes plus stories they read past 50 %. We dedupe in SQL via
+  // UNION before joining to story_embeddings so we never average the
+  // same story twice (which would over-weight the genre).
+  const seedIds: number[] = [];
+  const liked = await db
+    .select({ storyId: storyLikesTable.storyId })
+    .from(storyLikesTable)
+    .where(eq(storyLikesTable.authorName, viewer))
+    .orderBy(desc(storyLikesTable.createdAt))
+    .limit(30);
+  for (const l of liked) seedIds.push(l.storyId);
+  const read = await db
+    .select({ storyId: readingProgressTable.storyId })
+    .from(readingProgressTable)
+    .where(
+      and(
+        eq(readingProgressTable.authorName, viewer),
+        gte(readingProgressTable.progress, 50),
+      ),
+    )
+    .orderBy(desc(readingProgressTable.updatedAt))
+    .limit(30);
+  for (const r of read) {
+    if (!seedIds.includes(r.storyId)) seedIds.push(r.storyId);
+  }
+
+  if (seedIds.length === 0) {
+    await fallback();
+    return;
+  }
+
+  // Compute the centroid in-database so we don't pay for hauling
+  // 1536-float vectors over the wire just to average them. The CTE
+  // returns a single vector. AVG() over pgvector returns a vector.
+  let centroidLit: string;
+  try {
+    const { rows } = await pool.query<{ centroid: string }>(
+      `SELECT AVG(embedding)::text AS centroid
+         FROM story_embeddings
+        WHERE story_id = ANY($1::int[])`,
+      [seedIds],
+    );
+    if (!rows[0]?.centroid) {
+      // No embeddings yet for any of the viewer's seeds (likely a
+      // brand-new install before backfill ran). Trending is a sane
+      // stand-in.
+      await fallback();
+      return;
+    }
+    centroidLit = rows[0].centroid;
+  } catch (err) {
+    req.log.warn({ err }, "for-you centroid failed; using fallback");
+    await fallback();
+    return;
+  }
+
+  // Hide stories the viewer already engaged with (read past 50 % or
+  // liked) — recommendations should surface *new* material, not
+  // re-rank what they already consumed. Moderated stories are
+  // already in `hiddenIds` from the top of the handler.
+  const exclude = new Set<number>(seedIds);
+  for (const id of hiddenIds) exclude.add(id);
+
+  let nearest: { id: number }[];
+  try {
+    const excludeArr = Array.from(exclude);
+    const result = await pool.query<{ id: number }>(
+      `SELECT s.id
+         FROM stories s
+         JOIN story_embeddings e ON e.story_id = s.id
+        WHERE s.status = 'published'
+          AND ($2::int[] = '{}'::int[] OR NOT (s.id = ANY($2::int[])))
+        ORDER BY e.embedding <=> $1::vector
+        LIMIT $3`,
+      [centroidLit, excludeArr, limit],
+    );
+    nearest = result.rows;
+  } catch (err) {
+    req.log.warn({ err }, "for-you nearest-neighbour failed");
+    await fallback();
+    return;
+  }
+
+  if (nearest.length === 0) {
+    await fallback();
+    return;
+  }
+
+  const nearestIds = nearest.map((r) => r.id);
+  const stories = await db
+    .select()
+    .from(storiesTable)
+    .where(inArray(storiesTable.id, nearestIds));
+  // Preserve nearest-neighbour ordering — Postgres returned them in
+  // similarity order; the WHERE-IN reshuffles them, so we re-sort.
+  const order = new Map(nearestIds.map((id, i) => [id, i]));
+  stories.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  const counted = await attachCounts(stories);
+  res.json(await decorateForViewer(counted, viewer));
+});
+
+// ---------- Search facets ----------
+//
+// Counts of genre / artStyle / tag values across the published stories
+// matching the current text query. Used by the feed UI to render
+// faceted filter chips alongside the search box. Always runs against
+// `published` stories so drafts never leak into facet counts.
+router.get("/stories/feed/facets", async (req, res): Promise<void> => {
+  const q = (req.query.q as string | undefined)?.trim();
+  const baseConds = [eq(storiesTable.status, "published")];
+  if (q) {
+    baseConds.push(
+      sql`(stories.tsv @@ websearch_to_tsquery('english', ${q})
+           OR ${storiesTable.title} ILIKE ${`%${q}%`})`,
+    );
+  }
+  const [genreRows, artStyleRows, tagRows] = await Promise.all([
+    db
+      .select({ value: storiesTable.genre, c: count() })
+      .from(storiesTable)
+      .where(and(...baseConds))
+      .groupBy(storiesTable.genre)
+      .orderBy(desc(count()))
+      .limit(20),
+    db
+      .select({ value: storiesTable.artStyle, c: count() })
+      .from(storiesTable)
+      .where(and(...baseConds))
+      .groupBy(storiesTable.artStyle)
+      .orderBy(desc(count()))
+      .limit(20),
+    db
+      .select({ value: tagsTable.label, c: count() })
+      .from(storyTagsTable)
+      .innerJoin(tagsTable, eq(tagsTable.id, storyTagsTable.tagId))
+      .innerJoin(
+        storiesTable,
+        eq(storiesTable.id, storyTagsTable.storyId),
+      )
+      .where(and(...baseConds))
+      .groupBy(tagsTable.label)
+      .orderBy(desc(count()))
+      .limit(20),
+  ]);
+  res.json({
+    genres: genreRows.map((r) => ({ value: r.value, count: Number(r.c) })),
+    artStyles: artStyleRows.map((r) => ({
+      value: r.value,
+      count: Number(r.c),
+    })),
+    tags: tagRows.map((r) => ({ value: r.value, count: Number(r.c) })),
+  });
+});
+
 router.get("/stories/feed", async (req, res): Promise<void> => {
   const parsed = GetPublicFeedQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -644,14 +893,16 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     parsed.data;
   const conditions = [eq(storiesTable.status, "published")];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
-  if (q && q.trim()) {
-    const needle = `%${q.trim()}%`;
-    const search = or(
-      ilike(storiesTable.title, needle),
-      ilike(storiesTable.summary, needle),
-      ilike(storiesTable.seedPrompt, needle),
+  // Real full-text search via the generated `tsv` column (see
+  // ensureDbExtensions). websearch_to_tsquery accepts Google-style
+  // input ("phrase", AND, OR, -exclude). Falls back to ILIKE when
+  // the parsed query is empty (e.g. user typed only stop words).
+  const trimmedQ = q?.trim();
+  if (trimmedQ) {
+    conditions.push(
+      sql`(stories.tsv @@ websearch_to_tsquery('english', ${trimmedQ})
+           OR ${storiesTable.title} ILIKE ${`%${trimmedQ}%`})`,
     );
-    if (search) conditions.push(search);
   }
 
   if (followerName && followerName.trim()) {
@@ -692,12 +943,27 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
   const cap = limit ?? 20;
 
   if (sortMode === "new") {
-    const stories = await db
-      .select()
-      .from(storiesTable)
-      .where(and(...conditions))
-      .orderBy(desc(storiesTable.createdAt))
-      .limit(cap);
+    // When the reader supplied a search query, rank by ts_rank_cd
+    // (relevance) instead of recency so the most-relevant match floats
+    // to the top regardless of when it was published.
+    const stories = trimmedQ
+      ? await db
+          .select()
+          .from(storiesTable)
+          .where(and(...conditions))
+          .orderBy(
+            desc(
+              sql`ts_rank_cd(stories.tsv, websearch_to_tsquery('english', ${trimmedQ}))`,
+            ),
+            desc(storiesTable.createdAt),
+          )
+          .limit(cap)
+      : await db
+          .select()
+          .from(storiesTable)
+          .where(and(...conditions))
+          .orderBy(desc(storiesTable.createdAt))
+          .limit(cap);
     const counted = await attachCounts(stories);
     res.json(await decorateForViewer(counted, viewerAuthorName));
     return;
@@ -960,6 +1226,19 @@ router.patch("/stories/:id", async (req, res): Promise<void> => {
     .where(eq(storiesTable.id, params.data.id))
     .returning();
 
+  // Refresh the embedding when content changed or when a draft
+  // transitions to published. Cheap to over-trigger since it's
+  // background and idempotent.
+  if (
+    story.status === "published" &&
+    ("fullText" in parsed.data ||
+      "summary" in parsed.data ||
+      "title" in parsed.data ||
+      ("status" in parsed.data && existing.status !== "published"))
+  ) {
+    embedStoryInBackground(story.id);
+  }
+
   res.json(story);
 });
 
@@ -1021,6 +1300,12 @@ router.post("/stories/:id/publish", async (req, res): Promise<void> => {
     .set({ status: "published", updatedAt: new Date() })
     .where(eq(storiesTable.id, params.data.id))
     .returning();
+
+  // Generate / refresh the recommendation embedding off the request
+  // path so /publish stays snappy. Must run *after* the status flip
+  // — embedStoryById is a no-op for non-published stories, so
+  // firing earlier would skip the work entirely.
+  embedStoryInBackground(params.data.id);
 
   res.json(story);
 });
@@ -2466,6 +2751,40 @@ router.get("/stories/:id/comments", async (req, res): Promise<void> => {
   res.json(comments);
 });
 
+// Per-paragraph comment counts powering the inline "+N" badges.
+// Returns one row per paragraph that has at least one comment.
+router.get(
+  "/stories/:id/comments/paragraph-counts",
+  async (req, res): Promise<void> => {
+    const params = GetStoryCommentsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const rows = await db
+      .select({
+        paragraphIndex: storyCommentsTable.paragraphIndex,
+        c: count(),
+      })
+      .from(storyCommentsTable)
+      .where(
+        and(
+          eq(storyCommentsTable.storyId, params.data.id),
+          sql`${storyCommentsTable.paragraphIndex} IS NOT NULL`,
+        ),
+      )
+      .groupBy(storyCommentsTable.paragraphIndex);
+    res.json(
+      rows
+        .filter((r) => r.paragraphIndex != null)
+        .map((r) => ({
+          paragraphIndex: r.paragraphIndex as number,
+          count: Number(r.c),
+        })),
+    );
+  },
+);
+
 router.post(
   "/stories/:id/comments",
   writeLimiter,
@@ -2512,9 +2831,33 @@ router.post(
         parentId = parent.parentId ?? parent.id;
       }
     }
+    // paragraphIndex anchors the comment to a specific paragraph
+    // (matches `data-paragraph-index` on the rendered story). Replies
+    // inherit the parent's anchor so a thread stays attached to one
+    // paragraph even when the user clicks "reply" without re-anchoring.
+    let paragraphIndex: number | null =
+      typeof body.data.paragraphIndex === "number" &&
+      body.data.paragraphIndex >= 0
+        ? body.data.paragraphIndex
+        : null;
+    if (parentId != null) {
+      const [parentRow] = await db
+        .select({ paragraphIndex: storyCommentsTable.paragraphIndex })
+        .from(storyCommentsTable)
+        .where(eq(storyCommentsTable.id, parentId))
+        .limit(1);
+      if (parentRow) paragraphIndex = parentRow.paragraphIndex;
+    }
     const [comment] = await db
       .insert(storyCommentsTable)
-      .values({ storyId: params.data.id, authorName, body: text, parentId, userId: req.user?.id ?? null })
+      .values({
+        storyId: params.data.id,
+        authorName,
+        body: text,
+        parentId,
+        paragraphIndex,
+        userId: req.user?.id ?? null,
+      })
       .returning();
 
     if (story.authorName && story.authorName !== authorName) {

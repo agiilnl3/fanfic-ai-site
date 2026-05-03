@@ -50,12 +50,15 @@ import type {
   DeleteCharacterParams,
   DeleteSeriesParams,
   DeleteStoryCommentParams,
+  FeedFacets,
   FollowBody,
   FollowInfo,
   GenerateIllustrationBody,
   GenerateStoryBody,
   GetAuthorFollowParams,
   GetBookmarkInfoParams,
+  GetFeedFacetsParams,
+  GetForYouFeedParams,
   GetMyUsageParams,
   GetPublicFeedParams,
   GetReadingProgressParams,
@@ -76,6 +79,7 @@ import type {
   MarkReadBody,
   Notification,
   NotificationPrefs,
+  ParagraphCommentCount,
   ReadingProgressInfo,
   RegenerateIllustrationBody,
   RegenerateSectionBody,
@@ -565,6 +569,286 @@ export const useGenerateStoryStream = <
 > => {
   return useMutation(getGenerateStoryStreamMutationOptions(options));
 };
+
+/**
+ * @summary Personalized recommendations ranked by embedding similarity to the viewer's recent activity. Falls back to trending when the viewer has no signal.
+ */
+export const getGetForYouFeedUrl = (params?: GetForYouFeedParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/feed/for-you?${stringifiedParams}`
+    : `/api/feed/for-you`;
+};
+
+export const getForYouFeed = async (
+  params?: GetForYouFeedParams,
+  options?: RequestInit,
+): Promise<Story[]> => {
+  return customFetch<Story[]>(getGetForYouFeedUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetForYouFeedQueryKey = (params?: GetForYouFeedParams) => {
+  return [`/api/feed/for-you`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetForYouFeedQueryOptions = <
+  TData = Awaited<ReturnType<typeof getForYouFeed>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForYouFeedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouFeed>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetForYouFeedQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getForYouFeed>>> = ({
+    signal,
+  }) => getForYouFeed(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getForYouFeed>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetForYouFeedQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getForYouFeed>>
+>;
+export type GetForYouFeedQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Personalized recommendations ranked by embedding similarity to the viewer's recent activity. Falls back to trending when the viewer has no signal.
+ */
+
+export function useGetForYouFeed<
+  TData = Awaited<ReturnType<typeof getForYouFeed>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetForYouFeedParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getForYouFeed>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetForYouFeedQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Aggregated genre and tag counts across published stories matching the current text query.
+ */
+export const getGetFeedFacetsUrl = (params?: GetFeedFacetsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/feed/facets?${stringifiedParams}`
+    : `/api/stories/feed/facets`;
+};
+
+export const getFeedFacets = async (
+  params?: GetFeedFacetsParams,
+  options?: RequestInit,
+): Promise<FeedFacets> => {
+  return customFetch<FeedFacets>(getGetFeedFacetsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFeedFacetsQueryKey = (params?: GetFeedFacetsParams) => {
+  return [`/api/stories/feed/facets`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetFeedFacetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFeedFacets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFeedFacetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFeedFacets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFeedFacetsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedFacets>>> = ({
+    signal,
+  }) => getFeedFacets(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFeedFacets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFeedFacetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFeedFacets>>
+>;
+export type GetFeedFacetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Aggregated genre and tag counts across published stories matching the current text query.
+ */
+
+export function useGetFeedFacets<
+  TData = Awaited<ReturnType<typeof getFeedFacets>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetFeedFacetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFeedFacets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFeedFacetsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Per-paragraph comment counts for inline-comment badges. Returns one entry per paragraph that has at least one anchored comment.
+ */
+export const getGetParagraphCommentCountsUrl = (id: number) => {
+  return `/api/stories/${id}/comments/paragraph-counts`;
+};
+
+export const getParagraphCommentCounts = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ParagraphCommentCount[]> => {
+  return customFetch<ParagraphCommentCount[]>(
+    getGetParagraphCommentCountsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetParagraphCommentCountsQueryKey = (id: number) => {
+  return [`/api/stories/${id}/comments/paragraph-counts`] as const;
+};
+
+export const getGetParagraphCommentCountsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getParagraphCommentCounts>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getParagraphCommentCounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetParagraphCommentCountsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getParagraphCommentCounts>>
+  > = ({ signal }) =>
+    getParagraphCommentCounts(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getParagraphCommentCounts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetParagraphCommentCountsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getParagraphCommentCounts>>
+>;
+export type GetParagraphCommentCountsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-paragraph comment counts for inline-comment badges. Returns one entry per paragraph that has at least one anchored comment.
+ */
+
+export function useGetParagraphCommentCounts<
+  TData = Awaited<ReturnType<typeof getParagraphCommentCounts>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getParagraphCommentCounts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetParagraphCommentCountsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get public story feed (published only, sorted by newest)

@@ -142,6 +142,107 @@ export const GenerateStoryStreamBody = zod.object({
 });
 
 /**
+ * @summary Personalized recommendations ranked by embedding similarity to the viewer's recent activity. Falls back to trending when the viewer has no signal.
+ */
+export const getForYouFeedQueryLimitDefault = 20;
+
+export const GetForYouFeedQueryParams = zod.object({
+  viewerAuthorName: zod.coerce.string().optional(),
+  limit: zod.coerce.number().default(getForYouFeedQueryLimitDefault),
+});
+
+export const getForYouFeedResponseCoAuthorsDefault = [];
+
+export const GetForYouFeedResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
+  authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(getForYouFeedResponseCoAuthorsDefault),
+  coverImageUrl: zod.string().nullish(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+});
+export const GetForYouFeedResponse = zod.array(GetForYouFeedResponseItem);
+
+/**
+ * @summary Aggregated genre and tag counts across published stories matching the current text query.
+ */
+export const GetFeedFacetsQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+});
+
+export const GetFeedFacetsResponse = zod.object({
+  genres: zod.array(
+    zod.object({
+      value: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  artStyles: zod.array(
+    zod.object({
+      value: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  tags: zod.array(
+    zod.object({
+      value: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Per-paragraph comment counts for inline-comment badges. Returns one entry per paragraph that has at least one anchored comment.
+ */
+export const GetParagraphCommentCountsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetParagraphCommentCountsResponseItem = zod.object({
+  paragraphIndex: zod.number(),
+  count: zod.number(),
+});
+export const GetParagraphCommentCountsResponse = zod.array(
+  GetParagraphCommentCountsResponseItem,
+);
+
+/**
  * @summary Get public story feed (published only, sorted by newest)
  */
 export const getPublicFeedQueryLimitDefault = 20;
@@ -570,6 +671,12 @@ export const GetStoryCommentsResponseItem = zod.object({
     .describe(
       "ID of the parent comment when this is a one-level reply, otherwise null.",
     ),
+  paragraphIndex: zod
+    .number()
+    .nullable()
+    .describe(
+      "Zero-based index of the paragraph this comment is anchored to. Null for whole-story comments.",
+    ),
 });
 export const GetStoryCommentsResponse = zod.array(GetStoryCommentsResponseItem);
 
@@ -586,6 +693,12 @@ export const AddStoryCommentBody = zod.object({
   authorName: zod.string().min(1),
   body: zod.string().min(1).max(addStoryCommentBodyBodyMax),
   parentId: zod.number().nullish(),
+  paragraphIndex: zod
+    .number()
+    .nullish()
+    .describe(
+      "Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.",
+    ),
 });
 
 /**

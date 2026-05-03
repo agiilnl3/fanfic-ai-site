@@ -86,6 +86,11 @@ export interface StoryComment {
    * @nullable
    */
   parentId: number | null;
+  /**
+   * Zero-based index of the paragraph this comment is anchored to. Null for whole-story comments.
+   * @nullable
+   */
+  paragraphIndex: number | null;
 }
 
 export interface AddCommentBody {
@@ -98,6 +103,27 @@ export interface AddCommentBody {
   body: string;
   /** @nullable */
   parentId?: number | null;
+  /**
+   * Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.
+   * @nullable
+   */
+  paragraphIndex?: number | null;
+}
+
+export interface ParagraphCommentCount {
+  paragraphIndex: number;
+  count: number;
+}
+
+export interface FacetBucket {
+  value: string;
+  count: number;
+}
+
+export interface FeedFacets {
+  genres: FacetBucket[];
+  artStyles: FacetBucket[];
+  tags: FacetBucket[];
 }
 
 export interface Illustration {
@@ -924,6 +950,15 @@ export const ListStoriesStatus = {
   published: "published",
   cancelled: "cancelled",
 } as const;
+
+export type GetForYouFeedParams = {
+  viewerAuthorName?: string;
+  limit?: number;
+};
+
+export type GetFeedFacetsParams = {
+  q?: string;
+};
 
 export type GetPublicFeedParams = {
   genre?: string;

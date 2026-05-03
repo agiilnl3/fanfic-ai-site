@@ -144,6 +144,73 @@ paths:
         "429":
           description: Quota exceeded
 
+  /feed/for-you:
+    get:
+      operationId: getForYouFeed
+      tags: [stories]
+      summary: Personalized recommendations ranked by embedding similarity to the viewer's recent activity. Falls back to trending when the viewer has no signal.
+      parameters:
+        - name: viewerAuthorName
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Personalized feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+
+  /stories/feed/facets:
+    get:
+      operationId: getFeedFacets
+      tags: [stories]
+      summary: Aggregated genre and tag counts across published stories matching the current text query.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Facet counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedFacets"
+
+  /stories/{id}/comments/paragraph-counts:
+    get:
+      operationId: getParagraphCommentCounts
+      tags: [comments]
+      summary: Per-paragraph comment counts for inline-comment badges. Returns one entry per paragraph that has at least one anchored comment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ParagraphCommentCount"
+
   /stories/feed:
     get:
       operationId: getPublicFeed
@@ -2186,6 +2253,9 @@ components:
         parentId:
           type: ["integer", "null"]
           description: ID of the parent comment when this is a one-level reply, otherwise null.
+        paragraphIndex:
+          type: ["integer", "null"]
+          description: Zero-based index of the paragraph this comment is anchored to. Null for whole-story comments.
       required:
         - id
         - storyId
@@ -2193,6 +2263,7 @@ components:
         - body
         - createdAt
         - parentId
+        - paragraphIndex
 
     AddCommentBody:
       type: object
@@ -2206,7 +2277,45 @@ components:
           maxLength: 2000
         parentId:
           type: ["integer", "null"]
+        paragraphIndex:
+          type: ["integer", "null"]
+          description: Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.
       required: [authorName, body]
+
+    ParagraphCommentCount:
+      type: object
+      properties:
+        paragraphIndex:
+          type: integer
+        count:
+          type: integer
+      required: [paragraphIndex, count]
+
+    FacetBucket:
+      type: object
+      properties:
+        value:
+          type: string
+        count:
+          type: integer
+      required: [value, count]
+
+    FeedFacets:
+      type: object
+      properties:
+        genres:
+          type: array
+          items:
+            $ref: "#/components/schemas/FacetBucket"
+        artStyles:
+          type: array
+          items:
+            $ref: "#/components/schemas/FacetBucket"
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FacetBucket"
+      required: [genres, artStyles, tags]
 
     StoryWithIllustrations:
       allOf:

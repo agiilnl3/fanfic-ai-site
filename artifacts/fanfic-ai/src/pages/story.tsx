@@ -7,6 +7,7 @@ import { LikeButton } from "@/components/like-button";
 import { RepostButton } from "@/components/repost-button";
 import { IllustrationReorderDialog } from "@/components/illustration-reorder-dialog";
 import { CommentsSection } from "@/components/comments-section";
+import { ParagraphCommentsPopover } from "@/components/paragraph-comments-popover";
 import { ManageCollaboratorsDialog } from "@/components/manage-collaborators-dialog";
 import { CharactersDialog } from "@/components/characters-dialog";
 import { BranchesSidebar } from "@/components/branches-sidebar";
@@ -35,6 +36,8 @@ import {
   getGetReadingProgressQueryKey,
   useGetStoryAnalytics,
   useGetStoryTags,
+  useGetParagraphCommentCounts,
+  getGetParagraphCommentCountsQueryKey,
   useGetStorySeriesContext,
   useSetStoryTags,
   getGetStoryAnalyticsQueryKey,
@@ -82,6 +85,23 @@ export default function StoryReading() {
       queryKey: getGetStoryQueryKey(storyId),
     },
   });
+
+  // Per-paragraph comment counts power the inline "+N" badges next
+  // to each paragraph. Cheap aggregate query, refreshed when the
+  // user posts a paragraph comment.
+  const { data: paragraphCommentCounts } = useGetParagraphCommentCounts(
+    storyId,
+    {
+      query: {
+        enabled: !!storyId,
+        staleTime: 30_000,
+        queryKey: getGetParagraphCommentCountsQueryKey(storyId),
+      },
+    },
+  );
+  const paragraphCommentCountMap = new Map<number, number>(
+    (paragraphCommentCounts ?? []).map((r) => [r.paragraphIndex, r.count]),
+  );
 
   const updateMutation = useUpdateStory();
   const deleteIllustrationMutation = useDeleteIllustration();
@@ -761,6 +781,19 @@ export default function StoryReading() {
                 <Pencil className="w-3 h-3" />
               )}
             </Button>
+          </div>
+        )}
+        {!editMode && !isChapterHeading && (
+          // Inline paragraph comments. Sits on the right gutter so
+          // it never collides with the author's rewrite pencil on
+          // the left. Visible-on-hover (or always-visible when this
+          // paragraph already has comments — see component).
+          <div className="absolute -right-10 top-1">
+            <ParagraphCommentsPopover
+              storyId={story.id}
+              paragraphIndex={i}
+              count={paragraphCommentCountMap.get(i) ?? 0}
+            />
           </div>
         )}
         {isChapterHeading ? (

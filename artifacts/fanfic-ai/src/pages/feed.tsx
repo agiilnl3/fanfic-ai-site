@@ -4,8 +4,11 @@ import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import {
   useGetPublicFeed,
+  useGetForYouFeed,
   useListTags,
   getListTagsQueryKey,
+  getGetPublicFeedQueryKey,
+  getGetForYouFeedQueryKey,
   type Story,
   type GetPublicFeedParams,
 } from "@workspace/api-client-react";
@@ -13,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { StoryCard } from "@/components/story-card";
 import { AuthorSearch } from "@/components/author-search";
 import { Input } from "@/components/ui/input";
-import { Search, BookOpen, Users, Globe } from "lucide-react";
+import { Search, BookOpen, Users, Globe, Sparkles } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -126,7 +129,7 @@ export default function Feed() {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All Genres");
-  const [tab, setTab] = useState<"all" | "following">("all");
+  const [tab, setTab] = useState<"all" | "following" | "forYou">("all");
   const [sort, setSort] = useState<SortMode>("new");
   const [tag, setTag] = useState<string | null>(() => readQueryParam("tag"));
   const debouncedSearch = useDebounced(search, 300);
@@ -138,16 +141,39 @@ export default function Feed() {
     query: { queryKey: getListTagsQueryKey(), staleTime: 60_000 },
   });
 
-  const { data: feed, isLoading } = useGetPublicFeed({
+  const publicFeedParams: GetPublicFeedParams = {
     genre: genre === "All Genres" ? undefined : genre,
     q: debouncedSearch.trim() || undefined,
     followerName: followingEnabled ? authorName : undefined,
     sort,
     tag: tag ?? undefined,
     viewerAuthorName: authorName?.trim() || undefined,
+  };
+  const publicFeedQuery = useGetPublicFeed(publicFeedParams, {
+    // For-you tab uses the personalized endpoint instead, so we
+    // skip this fetch to avoid spurious network traffic / loading
+    // skeletons while the user browses recommendations.
+    query: {
+      enabled: tab !== "forYou",
+      queryKey: getGetPublicFeedQueryKey(publicFeedParams),
+    },
   });
 
-  const filteredFeed = feed;
+  const forYouParams = {
+    viewerAuthorName: authorName?.trim() || undefined,
+    limit: 40,
+  };
+  const forYouQuery = useGetForYouFeed(forYouParams, {
+    query: {
+      enabled: tab === "forYou",
+      queryKey: getGetForYouFeedQueryKey(forYouParams),
+    },
+  });
+
+  const filteredFeed =
+    tab === "forYou" ? forYouQuery.data : publicFeedQuery.data;
+  const isLoading =
+    tab === "forYou" ? forYouQuery.isLoading : publicFeedQuery.isLoading;
 
   return (
     <Layout>
@@ -163,8 +189,17 @@ export default function Feed() {
           </p>
         </div>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "following")} className="max-w-3xl mx-auto mb-6">
-          <TabsList className="grid grid-cols-2 w-full md:w-auto md:inline-flex">
+        <Tabs
+          value={tab}
+          onValueChange={(v) =>
+            setTab(v as "all" | "following" | "forYou")
+          }
+          className="max-w-3xl mx-auto mb-6"
+        >
+          <TabsList className="grid grid-cols-3 w-full md:w-auto md:inline-flex">
+            <TabsTrigger value="forYou" className="gap-2" data-testid="tab-feed-for-you">
+              <Sparkles className="w-4 h-4" /> {t("feed.forYou")}
+            </TabsTrigger>
             <TabsTrigger value="all" className="gap-2" data-testid="tab-feed-all">
               <Globe className="w-4 h-4" /> {t("feed.allStories")}
             </TabsTrigger>

@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapBranchingSchema } from "./lib/bootstrapSchema";
+import { startEmbeddingBackfill } from "./lib/embeddings";
 
 const rawPort = process.env["PORT"];
 
@@ -26,5 +27,8 @@ void bootstrapBranchingSchema().finally(() => {
       process.exit(1);
     }
     logger.info({ port }, "Server listening");
+    // Lazily backfill embeddings for any published stories that don't
+    // have one yet. Runs once per boot, capped, in the background.
+    startEmbeddingBackfill();
   });
 });

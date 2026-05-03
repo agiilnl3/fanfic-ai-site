@@ -241,6 +241,8 @@
     "subtitle": "Explore tales conjured by authors across the realm.",
     "allStories": "All Stories",
     "following": "Following",
+    "forYou": "For you",
+    "forYouHint": "Personalized picks based on what you've liked and read.",
     "searchPlaceholder": "Search by title, summary, or seed prompt...",
     "allGenres": "All Genres",
     "genre": "Genre",
@@ -371,7 +373,11 @@
     "postFailed": "Failed to post comment",
     "deleteFailed": "Failed to delete comment",
     "setPenNameTitle": "Set your pen name first",
-    "setPenNameDesc": "Open the New Story page to choose a name before commenting."
+    "setPenNameDesc": "Open the New Story page to choose a name before commenting.",
+    "addToParagraphAria": "Comment on this paragraph",
+    "paragraphHeader": "Comments on this paragraph",
+    "paragraphEmpty": "Be the first to comment on this paragraph.",
+    "paragraphPlaceholder": "Comment on this paragraph as {{name}}…"
   },
   "follow": {
     "follow": "Follow",
