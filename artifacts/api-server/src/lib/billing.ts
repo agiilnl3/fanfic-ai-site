@@ -217,10 +217,7 @@ export async function applyPlanForCustomer(
     });
   invalidatePlanCache(userId);
 
-  // When a user drops back to free (cancelled/expired/inactive Conjurer),
-  // their existing private stories must become readable again — privacy is
-  // a Conjurer-only feature. We flip isPrivate=false on every story they
-  // own. Idempotent.
+  // Privacy is Conjurer-only; clear isPrivate when downgrading.
   if (resolved.plan !== "conjurer") {
     await db
       .update(storiesTable)

@@ -26,8 +26,6 @@ function slugify(input: string): string {
 }
 
 router.get("/tags", async (_req, res): Promise<void> => {
-  // Public tag counts must only reflect publicly visible stories — do not
-  // count private (Conjurer-only) stories or unpublished drafts.
   const rows = await db
     .select({
       id: tagsTable.id,
@@ -49,8 +47,6 @@ router.get("/stories/:id/tags", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
-  // Don't expose tags for private stories to non-readers — that leaks
-  // story metadata that the privacy gate everywhere else hides.
   const [story] = await db
     .select()
     .from(storiesTable)

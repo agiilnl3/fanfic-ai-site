@@ -15,9 +15,6 @@ router.get("/usage/me", async (req, res): Promise<void> => {
     res.status(400).json({ error: "authorName required" });
     return;
   }
-  // Pass the authenticated user id so Conjurer subscribers see their
-  // higher limits in the meter immediately after checkout. Anonymous
-  // callers always resolve to free.
   res.json(await getUsage(author, req.user?.id ?? null));
 });
 

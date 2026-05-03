@@ -111,20 +111,7 @@ import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
 
-// Free-tier users are quietly downgraded to the cheaper model. The create
-// page also hides the gpt-5.1 option for free users; this is the
-// authoritative server-side guard.
-const PREMIUM_MODELS = new Set(["gpt-5.1"]);
-function gateModelForPlan(
-  model: string,
-  plan: "free" | "conjurer",
-): string {
-  if (plan === "conjurer") return model;
-  return PREMIUM_MODELS.has(model) ? "gpt-5-mini" : model;
-}
-
-// canReadStory lives in lib/storyAuthz so the privacy gate (plan check
-// included) stays in one place across routes.
+import { gateModelForPlan } from "../lib/modelGating";
 
 /**
  * Filter a story list down to rows the requester is allowed to see. Public
@@ -1771,8 +1758,9 @@ router.post(
     req.log.info({ storyId: story.id, sectionIndex }, "Regenerating section text");
 
     const sectionSystemPrompt = `You are a creative fiction writer continuing a ${story.genre} story in ${story.artStyle} style. Rewrite the given passage to be more vivid and compelling while keeping the same plot points.`;
+    const sectionPlan = req.user ? await getUserPlan(req.user.id) : "free";
     const sectionResponse = await openai.chat.completions.create({
-      model: "gpt-5.1",
+      model: gateModelForPlan("gpt-5.1", sectionPlan),
       max_completion_tokens: 1024,
       messages: [
         { role: "system", content: sectionSystemPrompt },
@@ -1912,8 +1900,9 @@ ${body.data.seedPrompt ? `Hint for the next chapter: "${body.data.seedPrompt}".`
 Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent. Return JSON:
 { "chapterTitle": string, "chapterText": string, "newSection": string (1-2 sentence scene description for an illustration prompt) }`;
 
+    const continuePlan = req.user ? await getUserPlan(req.user.id) : "free";
     const response = await openai.chat.completions.create({
-      model: "gpt-5.1",
+      model: gateModelForPlan("gpt-5.1", continuePlan),
       max_completion_tokens: 16000,
       messages: [
         { role: "system", content: `You are continuing an ongoing ${story.genre} story. Always respond in valid JSON.` },

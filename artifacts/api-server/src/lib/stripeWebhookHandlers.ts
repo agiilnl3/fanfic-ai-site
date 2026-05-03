@@ -58,10 +58,7 @@ export async function processStripeWebhook(
     return;
   }
 
-  // Let failures here propagate. Stripe will retry the delivery, which is
-  // exactly what we want when a transient DB or Stripe API hiccup prevents
-  // the local subscription row from updating — silently 200-ing would
-  // permanently miss the tier flip.
+  // Throw on failure so Stripe retries the delivery.
   const resolved = await resolvePlanForCustomer(customerId);
   await applyPlanForCustomer(customerId, resolved);
   logger.info({ type: event.type, customerId, plan: resolved.plan }, "applied stripe event");

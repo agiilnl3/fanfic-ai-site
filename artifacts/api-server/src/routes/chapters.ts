@@ -14,6 +14,8 @@ import {
 } from "@workspace/api-zod";
 import { canEditStory } from "../lib/storyAuthz";
 import { checkAndBumpStory } from "../lib/usage";
+import { getUserPlan } from "../lib/subscriptions";
+import { gateModelForPlan } from "../lib/modelGating";
 import {
   backfillStoryToChapters,
   computeCanonicalChapters,
@@ -134,9 +136,7 @@ router.post(
       return;
     }
 
-    // Charge quota to the authenticated editor (canEditStory above
-     // guarantees req.user is present), not a client-supplied
-     // authorName, so co-authors can't bypass daily AI limits.
+    // Quota is charged to the authenticated editor, not a client-supplied handle.
     const quota = await checkAndBumpStory(req.user!.handle, req.user!.id);
     if (!quota.ok) {
       res.status(429).json({
@@ -178,8 +178,9 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
 
     let parsed: { branches?: Array<{ branchLabel?: string; title?: string; text?: string }> };
     try {
+      const branchPlan = req.user ? await getUserPlan(req.user.id) : "free";
       const response = await openai.chat.completions.create({
-        model: "gpt-5.1",
+        model: gateModelForPlan("gpt-5.1", branchPlan),
         max_completion_tokens: 16000,
         messages: [
           { role: "system", content: `You are continuing an ongoing ${story.genre} story with creative alternate paths. Always respond in valid JSON.` },

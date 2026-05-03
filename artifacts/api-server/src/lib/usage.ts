@@ -2,9 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, dailyUsageTable, tariffsTable } from "@workspace/db";
 import { getUserPlan, type Plan } from "./subscriptions";
 
-// Plan resolution for quota is strictly tied to the authenticated user.
-// Anonymous callers always fall back to free — they cannot pass an author
-// handle and inherit a Conjurer user's higher limits.
+// Quota plan is tied to req.user; anonymous callers fall back to free.
 async function resolvePlanForQuota(
   userId?: number | null,
 ): Promise<Plan> {

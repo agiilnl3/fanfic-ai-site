@@ -169,9 +169,7 @@ router.post(
       const customerId = await ensureStripeCustomer(user);
       const stripe = await getUncachableStripeClient();
 
-      // Refuse a duplicate checkout when the user already has an
-      // active/trialing/past_due subscription — without this guard a fast
-      // double-click or direct API call could create a second active sub.
+      // Refuse duplicate checkout when an active sub already exists.
       const existingSubs = await stripe.subscriptions.list({
         customer: customerId,
         status: "all",
