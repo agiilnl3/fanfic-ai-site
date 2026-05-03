@@ -99,5 +99,14 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // CI runs e2e against `vite preview`. Forward /api to whichever
+    // host the api-server is bound on so Playwright's pwRequest hits
+    // the real backend without the test having to know two origins.
+    proxy: {
+      "/api": {
+        target: process.env.E2E_API_TARGET ?? "http://localhost:3000",
+        changeOrigin: true,
+      },
+    },
   },
 });

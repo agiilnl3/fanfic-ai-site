@@ -36,6 +36,8 @@ jobs:
       SENTRY_PROJECT_API: ${{ secrets.SENTRY_PROJECT_API }}
       SENTRY_PROJECT_WEB: ${{ secrets.SENTRY_PROJECT_WEB }}
       SENTRY_RELEASE: ${{ github.sha }}
+      VITE_SENTRY_RELEASE: ${{ github.sha }}
+      E2E_API_TARGET: http://localhost:3000
 
     steps:
       - uses: actions/checkout@v4
