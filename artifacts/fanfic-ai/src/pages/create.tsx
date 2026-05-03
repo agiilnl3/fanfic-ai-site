@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuthor } from "@/hooks/use-author";
-import { generateStory, generateIllustration } from "@workspace/api-client-react";
+import {
+  generateStory,
+  generateIllustration,
+  useListSeries,
+  useAddStoryToSeries,
+  getListSeriesQueryKey,
+} from "@workspace/api-client-react";
 import { UsageMeter } from "@/components/usage-meter";
 import type { Story, Illustration } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -76,6 +82,14 @@ export default function CreateStory() {
   const [, setLocation] = useLocation();
   const { authorName, setAuthorName } = useAuthor();
   const { toast } = useToast();
+  const seriesParams = authorName?.trim() ? { authorName } : {};
+  const { data: mySeries } = useListSeries(seriesParams, {
+    query: {
+      queryKey: getListSeriesQueryKey(seriesParams),
+      enabled: !!authorName?.trim(),
+    },
+  });
+  const addToSeriesMutation = useAddStoryToSeries();
 
   const [genre, setGenre] = useState<string>("Fantasy");
   const [artStyle, setArtStyle] = useState<string>("Watercolor");
@@ -83,6 +97,7 @@ export default function CreateStory() {
   const [seedPrompt, setSeedPrompt] = useState<string>("");
   const [withIllustrations, setWithIllustrations] = useState<boolean>(true);
   const [model, setModel] = useState<"gpt-5.1" | "gpt-5-mini">("gpt-5.1");
+  const [seriesId, setSeriesId] = useState<string>("none");
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [generatedStory, setGeneratedStory] = useState<Story | null>(null);
@@ -115,6 +130,28 @@ export default function CreateStory() {
         model,
       });
       setGeneratedStory(story);
+
+      if (seriesId !== "none") {
+        const sid = Number(seriesId);
+        if (Number.isFinite(sid)) {
+          try {
+            await addToSeriesMutation.mutateAsync({
+              id: sid,
+              data: {
+                storyId: story.id,
+                requesterAuthorName: authorName.trim(),
+              },
+            });
+          } catch {
+            toast({
+              title: "Couldn't add to series",
+              description:
+                "The story was created but we couldn't attach it to that series.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
 
       if (!withIllustrations) {
         setPhase("done");
@@ -407,6 +444,31 @@ export default function CreateStory() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Choose the trade-off between richness of prose and generation speed.
+                </p>
+              </div>
+
+              <div className="space-y-2 pt-4">
+                <Label htmlFor="series">Series (Optional)</Label>
+                <Select value={seriesId} onValueChange={setSeriesId}>
+                  <SelectTrigger
+                    id="series"
+                    className="bg-background/50"
+                    data-testid="select-series"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No series</SelectItem>
+                    {(mySeries ?? []).map((s) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Attach this story to one of your series. Manage series on the
+                  Series page.
                 </p>
               </div>
 

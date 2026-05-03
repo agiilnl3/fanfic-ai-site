@@ -131,7 +131,9 @@ export function CommentsSection({ storyId }: { storyId: number }) {
   const tree = comments ? buildTree(comments) : [];
   const total = comments?.length ?? 0;
 
+  const MAX_DEPTH = 1;
   const renderNode = (node: CommentNode, depth: number) => {
+    const canReply = depth < MAX_DEPTH;
     const trimmedAuthor = authorName?.trim() ?? "";
     const mine = !!trimmedAuthor && node.authorName === trimmedAuthor;
     const isDeleting =
@@ -191,21 +193,23 @@ export function CommentsSection({ storyId }: { storyId: number }) {
         <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
           {node.body}
         </p>
-        <div className="mt-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs text-muted-foreground hover:text-primary"
-            onClick={() => {
-              setReplyOpen(replyOpen === node.id ? null : node.id);
-              setReplyDraft("");
-            }}
-            data-testid={`button-reply-${node.id}`}
-          >
-            Reply
-          </Button>
-        </div>
+        {canReply && (
+          <div className="mt-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-muted-foreground hover:text-primary"
+              onClick={() => {
+                setReplyOpen(replyOpen === node.id ? null : node.id);
+                setReplyDraft("");
+              }}
+              data-testid={`button-reply-${node.id}`}
+            >
+              Reply
+            </Button>
+          </div>
+        )}
 
         {replyOpen === node.id && (
           <div className="mt-3 space-y-2">

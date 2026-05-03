@@ -458,6 +458,24 @@ router.get("/stories/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Hidden stories disappear from public detail too — only the original
+  // author may still fetch their own hidden draft via ?requesterAuthorName.
+  const [hiddenRow] = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable)
+    .where(eq(hiddenStoriesTable.storyId, story.id))
+    .limit(1);
+  if (hiddenRow) {
+    const requester =
+      typeof req.query.requesterAuthorName === "string"
+        ? req.query.requesterAuthorName.trim()
+        : "";
+    if (!requester || requester !== story.authorName) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+  }
+
   const illustrations = await db
     .select()
     .from(illustrationsTable)
@@ -1476,12 +1494,18 @@ router.post(
     let parentId: number | null = null;
     if (typeof body.data.parentId === "number") {
       const [parent] = await db
-        .select({ id: storyCommentsTable.id, storyId: storyCommentsTable.storyId })
+        .select({
+          id: storyCommentsTable.id,
+          storyId: storyCommentsTable.storyId,
+          parentId: storyCommentsTable.parentId,
+        })
         .from(storyCommentsTable)
         .where(eq(storyCommentsTable.id, body.data.parentId))
         .limit(1);
       if (parent && parent.storyId === params.data.id) {
-        parentId = parent.id;
+        // Enforce single-level threading: replies always attach to the
+        // top-level root, not to other replies.
+        parentId = parent.parentId ?? parent.id;
       }
     }
     const [comment] = await db

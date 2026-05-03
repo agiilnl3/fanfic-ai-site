@@ -129,13 +129,34 @@ router.post(
           .set({ status: "draft", updatedAt: new Date() })
           .where(eq(storiesTable.id, report.targetId));
       } else {
+        // Cascade-hide: the reported comment AND every descendant reply.
+        // We do a small BFS over parent_id since threads are 2 levels max,
+        // but the loop is generic in case that ever changes.
+        const allIds = new Set<number>([report.targetId]);
+        let frontier: number[] = [report.targetId];
+        while (frontier.length > 0) {
+          const children = await db
+            .select({ id: storyCommentsTable.id })
+            .from(storyCommentsTable)
+            .where(inArray(storyCommentsTable.parentId, frontier));
+          frontier = children
+            .map((c) => c.id)
+            .filter((id) => !allIds.has(id));
+          for (const id of frontier) allIds.add(id);
+        }
+        const ids = Array.from(allIds);
         await db
           .insert(hiddenCommentsTable)
-          .values({ commentId: report.targetId, reason: report.reason })
+          .values(
+            ids.map((id) => ({
+              commentId: id,
+              reason: id === report.targetId ? report.reason : "cascade",
+            })),
+          )
           .onConflictDoNothing();
         await db
           .delete(storyCommentsTable)
-          .where(eq(storyCommentsTable.id, report.targetId));
+          .where(inArray(storyCommentsTable.id, ids));
       }
     }
     const [updated] = await db
