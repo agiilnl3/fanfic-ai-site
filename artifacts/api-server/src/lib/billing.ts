@@ -233,5 +233,3 @@ export async function applyPlanForCustomer(
   );
 }
 
-/** Discard SQL-only side effect markers; helps tests stay deterministic. */
-export const _internal = { sql };

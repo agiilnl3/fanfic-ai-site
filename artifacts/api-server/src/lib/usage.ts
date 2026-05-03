@@ -2,14 +2,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, dailyUsageTable, tariffsTable } from "@workspace/db";
 import { getUserPlan, type Plan } from "./subscriptions";
 
-// Quota plan is tied to req.user; anonymous callers fall back to free.
-async function resolvePlanForQuota(
-  userId?: number | null,
-): Promise<Plan> {
-  if (typeof userId === "number") return getUserPlan(userId);
-  return "free";
-}
-
 const FALLBACK_STORY_LIMIT = Number(process.env.FREE_DAILY_STORY_LIMIT ?? 5);
 const FALLBACK_ILLUSTRATION_LIMIT = Number(
   process.env.FREE_DAILY_ILLUSTRATION_LIMIT ?? 20,
@@ -24,10 +16,6 @@ interface CachedTariff {
 const tariffCache = new Map<string, { row: CachedTariff; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-// Conjurer is the paid tier. We seed both the legacy
-// "premium" name (used by the admin UI to set custom quotas) and the
-// canonical "conjurer" plan so admins keep their existing controls and the
-// billing webhook lands on a real row.
 const TIER_DEFAULTS: Record<string, CachedTariff> = {
   free: {
     tier: "free",
@@ -68,8 +56,6 @@ async function loadTariff(tier: string): Promise<CachedTariff> {
       illustrationDailyLimit: row.illustrationDailyLimit,
     };
   } else {
-    // Seed all known tier defaults on first miss so the admin UI never
-    // 404s on a freshly provisioned database. Idempotent.
     await db
       .insert(tariffsTable)
       .values(Object.values(TIER_DEFAULTS))
@@ -97,16 +83,29 @@ function today(): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+// Stable accounting key. Authenticated users key by user id so they
+// cannot rotate authorName to reset their daily bucket. Anonymous
+// callers fall back to the (untrusted) handle they supplied.
+function quotaKey(authorName: string, userId?: number | null): string {
+  return typeof userId === "number" ? `uid:${userId}` : authorName;
+}
+
+async function resolvePlan(userId?: number | null): Promise<Plan> {
+  if (typeof userId === "number") return getUserPlan(userId);
+  return "free";
+}
+
 export async function getUsage(authorName: string, userId?: number | null) {
   const day = today();
-  const plan = await resolvePlanForQuota(userId);
+  const key = quotaKey(authorName, userId);
+  const plan = await resolvePlan(userId);
   const tariff = await getTariffForPlan(plan);
   const [row] = await db
     .select()
     .from(dailyUsageTable)
     .where(
       and(
-        eq(dailyUsageTable.authorName, authorName),
+        eq(dailyUsageTable.authorName, key),
         eq(dailyUsageTable.day, day),
       ),
     )
@@ -127,7 +126,7 @@ export async function getUsage(authorName: string, userId?: number | null) {
   };
 }
 
-async function bump(authorName: string, column: "story_count" | "illustration_count") {
+async function bump(key: string, column: "story_count" | "illustration_count") {
   const day = today();
   const colExpr =
     column === "story_count"
@@ -136,7 +135,7 @@ async function bump(authorName: string, column: "story_count" | "illustration_co
   await db
     .insert(dailyUsageTable)
     .values({
-      authorName,
+      authorName: key,
       day,
       storyCount: column === "story_count" ? 1 : 0,
       illustrationCount: column === "illustration_count" ? 1 : 0,
@@ -149,20 +148,26 @@ async function bump(authorName: string, column: "story_count" | "illustration_co
     });
 }
 
-export async function checkAndBumpStory(authorName: string, userId?: number | null): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
+export async function checkAndBumpStory(
+  authorName: string,
+  userId?: number | null,
+): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
   const usage = await getUsage(authorName, userId);
   if (usage.storiesRemaining <= 0) {
     return { ok: false, remaining: 0, limit: usage.storyLimit };
   }
-  await bump(authorName, "story_count");
+  await bump(quotaKey(authorName, userId), "story_count");
   return { ok: true };
 }
 
-export async function checkAndBumpIllustration(authorName: string, userId?: number | null): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
+export async function checkAndBumpIllustration(
+  authorName: string,
+  userId?: number | null,
+): Promise<{ ok: true } | { ok: false; remaining: number; limit: number }> {
   const usage = await getUsage(authorName, userId);
   if (usage.illustrationsRemaining <= 0) {
     return { ok: false, remaining: 0, limit: usage.illustrationLimit };
   }
-  await bump(authorName, "illustration_count");
+  await bump(quotaKey(authorName, userId), "illustration_count");
   return { ok: true };
 }
