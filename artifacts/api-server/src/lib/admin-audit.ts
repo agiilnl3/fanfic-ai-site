@@ -11,16 +11,15 @@ export async function logAdminAction(
   },
 ): Promise<void> {
   const actorLabel = req.user?.handle ?? "x-admin-token";
-  try {
-    await db.insert(adminActionsTable).values({
-      actorUserId: req.user?.id ?? null,
-      actorLabel,
-      action: params.action,
-      targetType: params.targetType,
-      targetId: params.targetId ?? null,
-      metadata: params.metadata ? JSON.stringify(params.metadata) : null,
-    });
-  } catch (err) {
-    req.log?.warn({ err }, "logAdminAction failed");
-  }
+  // Fail-closed: a privileged admin mutation MUST be auditable. If the audit
+  // insert fails, surface the error to the route so the caller can return a
+  // 5xx instead of silently completing an unauditable action.
+  await db.insert(adminActionsTable).values({
+    actorUserId: req.user?.id ?? null,
+    actorLabel,
+    action: params.action,
+    targetType: params.targetType,
+    targetId: params.targetId ?? null,
+    metadata: params.metadata ? JSON.stringify(params.metadata) : null,
+  });
 }

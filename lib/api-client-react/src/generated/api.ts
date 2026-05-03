@@ -3517,7 +3517,7 @@ export const getAdminListUsersQueryKey = (params?: AdminListUsersParams) => {
 
 export const getAdminListUsersQueryOptions = <
   TData = Awaited<ReturnType<typeof adminListUsers>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   params?: AdminListUsersParams,
   options?: {
@@ -3547,7 +3547,7 @@ export const getAdminListUsersQueryOptions = <
 export type AdminListUsersQueryResult = NonNullable<
   Awaited<ReturnType<typeof adminListUsers>>
 >;
-export type AdminListUsersQueryError = ErrorType<unknown>;
+export type AdminListUsersQueryError = ErrorType<void>;
 
 /**
  * @summary List recent users (newest first)
@@ -3555,7 +3555,7 @@ export type AdminListUsersQueryError = ErrorType<unknown>;
 
 export function useAdminListUsers<
   TData = Awaited<ReturnType<typeof adminListUsers>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
 >(
   params?: AdminListUsersParams,
   options?: {

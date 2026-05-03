@@ -1006,6 +1006,8 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/AdminUserRow" }
+        "401":
+          description: Missing or invalid admin credentials
 
   /admin/users/{id}/ban:
     post:
@@ -1016,7 +1018,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema: { type: integer }
+          schema: { type: integer, minimum: 1 }
       requestBody:
         required: true
         content:
@@ -1028,6 +1030,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AdminUserRow" }
+        "401":
+          description: Missing or invalid admin credentials
         "404":
           description: Not found
 

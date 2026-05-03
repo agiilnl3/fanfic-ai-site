@@ -1051,8 +1051,9 @@ export const AdminListUsersResponse = zod.array(AdminListUsersResponseItem);
 /**
  * @summary Ban or unban a user
  */
+
 export const AdminSetUserBannedParams = zod.object({
-  id: zod.coerce.number(),
+  id: zod.coerce.number().min(1),
 });
 
 export const AdminSetUserBannedBody = zod.object({

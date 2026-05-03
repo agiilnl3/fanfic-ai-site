@@ -825,7 +825,7 @@ function UsersTab({ requestOptions }: { requestOptions: ReqOpts }) {
                           disabled={setBanned.isPending}
                           onClick={() => {
                             if (
-                              confirm(`Ban @${u.handle}? They won't be able to post.`)
+                              confirm(`Mark @${u.handle} as banned?`)
                             ) {
                               setBanned.mutate({
                                 id: u.id,
