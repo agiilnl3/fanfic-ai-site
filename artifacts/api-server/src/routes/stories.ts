@@ -94,6 +94,7 @@ import {
   writeLimiter,
 } from "../middlewares/rate-limit";
 import { embedStoryInBackground, toVectorLiteral } from "../lib/embeddings";
+import { getUserPlan } from "../lib/subscriptions";
 import { generatePosterCoverInBackground } from "../lib/posterCover";
 import { synthesizeStoryNarration } from "../lib/ttsCache";
 import {
@@ -109,6 +110,61 @@ import {
 import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
+
+// Free-tier users are quietly downgraded to the cheaper model. The create
+// page also hides the gpt-5.1 option for free users; this is the
+// authoritative server-side guard.
+const PREMIUM_MODELS = new Set(["gpt-5.1"]);
+function gateModelForPlan(
+  model: string,
+  plan: "free" | "conjurer",
+): string {
+  if (plan === "conjurer") return model;
+  return PREMIUM_MODELS.has(model) ? "gpt-5-mini" : model;
+}
+
+/**
+ * Returns true when the requester may read this story. Public (non-private)
+ * rows are always readable; private rows only by the author / co-author.
+ * Use from any /stories/:id/* read endpoint.
+ */
+function canReadStory(
+  story: {
+    isPrivate?: boolean | null;
+    userId: number | null;
+    authorName: string;
+    coAuthors?: string[] | null;
+  },
+  user: { id: number; handle: string } | null | undefined,
+): boolean {
+  if (!story.isPrivate) return true;
+  return canEditStory(
+    { authorName: story.authorName, coAuthors: story.coAuthors ?? [], userId: story.userId },
+    user ?? null,
+  );
+}
+
+/**
+ * Filter a story list down to rows the requester is allowed to see. Public
+ * (non-private) rows are always visible; private rows only to the owner /
+ * co-author.
+ */
+function filterVisibleStories<
+  T extends {
+    isPrivate?: boolean | null;
+    userId: number | null;
+    authorName: string;
+    coAuthors?: string[] | null;
+  },
+>(rows: T[], user: { id: number; handle: string } | null | undefined): T[] {
+  return rows.filter((s) => {
+    if (!s.isPrivate) return true;
+    return canEditStory(
+      { authorName: s.authorName, coAuthors: s.coAuthors ?? [], userId: s.userId },
+      user ?? null,
+    );
+  });
+}
 
 async function generateStoryText(
   genre: string,
@@ -231,7 +287,9 @@ router.get("/stories", async (req, res): Promise<void> => {
           .from(storiesTable)
           .orderBy(desc(storiesTable.createdAt));
 
-  res.json(await attachCounts(stories));
+  // Hide private stories from anyone but their author/co-authors.
+  const visible = filterVisibleStories(stories, req.user);
+  res.json(await attachCounts(visible));
 });
 
 router.post("/stories", writeLimiter, async (req, res): Promise<void> => {
@@ -241,10 +299,21 @@ router.post("/stories", writeLimiter, async (req, res): Promise<void> => {
     return;
   }
 
+  // Privacy is a Conjurer perk; silently coerce to public for free users
+  // so a stale client cannot bypass the upsell.
+  let isPrivate = parsed.data.isPrivate ?? false;
+  if (isPrivate && req.user) {
+    const plan = await getUserPlan(req.user.id);
+    if (plan !== "conjurer") isPrivate = false;
+  } else if (isPrivate && !req.user) {
+    isPrivate = false;
+  }
+
   const [story] = await db
     .insert(storiesTable)
     .values({
       ...parsed.data,
+      isPrivate,
       userId: req.user?.id ?? null,
       status: "draft",
     })
@@ -263,6 +332,11 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
   const { genre, artStyle, lengthSetting, seedPrompt, authorName, generateIllustrations, model } =
     parsed.data;
 
+  // Resolve plan once; gates both privacy and model selection.
+  const plan = req.user ? await getUserPlan(req.user.id) : "free";
+  const effectiveModel = gateModelForPlan(model ?? "gpt-5.1", plan);
+  const isPrivate = plan === "conjurer" ? parsed.data.isPrivate ?? false : false;
+
   const quota = await checkAndBumpStory(authorName);
   if (!quota.ok) {
     res.status(429).json({
@@ -273,14 +347,17 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
     return;
   }
 
-  req.log.info({ genre, artStyle, lengthSetting, model }, "Generating story with AI");
+  req.log.info(
+    { genre, artStyle, lengthSetting, model: effectiveModel, plan, isPrivate },
+    "Generating story with AI",
+  );
 
   const generated = await generateStoryText(
     genre,
     artStyle,
     lengthSetting,
     seedPrompt,
-    model,
+    effectiveModel,
   );
 
   const [story] = await db
@@ -297,6 +374,7 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
       authorName,
       userId: req.user?.id ?? null,
       status: "draft",
+      isPrivate,
     })
     .returning();
 
@@ -388,6 +466,10 @@ router.post(
       model,
     } = parsed.data;
 
+    const plan = req.user ? await getUserPlan(req.user.id) : "free";
+    const effectiveModel = gateModelForPlan(model ?? "gpt-5.1", plan);
+    const isPrivate = plan === "conjurer" ? parsed.data.isPrivate ?? false : false;
+
     const quota = await checkAndBumpStory(authorName);
     if (!quota.ok) {
       res.status(429).json({
@@ -447,6 +529,7 @@ router.post(
         authorName,
         userId: req.user?.id ?? null,
         status: "draft",
+        isPrivate,
       })
       .returning();
 
@@ -461,7 +544,7 @@ router.post(
 
       const stream = await openai.chat.completions.create(
         {
-          model,
+          model: effectiveModel,
           max_completion_tokens: maxTokens,
           stream: true,
           messages: [
@@ -955,6 +1038,11 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     conditions.push(sql`${storiesTable.id} NOT IN (${sql.join(hiddenIds.map((id) => sql`${id}`), sql`, `)})`);
   }
 
+  // Private stories never appear in the public feed regardless of who is
+  // authenticated. Conjurers reach their own private stories via /stories
+  // (the dashboard list) or by direct id.
+  conditions.push(eq(storiesTable.isPrivate, false));
+
   const sortMode = sort ?? "new";
   const cap = limit ?? 20;
 
@@ -1193,6 +1281,13 @@ router.get("/stories/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // Private (Conjurer-only) stories are 404 to anyone but the owner /
+  // co-author. Treating it as 404 (not 403) avoids leaking existence.
+  if (story.isPrivate && !canEditStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+
   const illustrations = await db
     .select()
     .from(illustrationsTable)
@@ -1236,6 +1331,12 @@ router.patch("/stories/:id", async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
   delete updates.authorName;
   delete updates.userId;
+  // Privacy is a Conjurer perk; silently drop the flag for free users so a
+  // stale client cannot bypass the upsell via PATCH.
+  if ("isPrivate" in updates && updates.isPrivate === true && req.user) {
+    const plan = await getUserPlan(req.user.id);
+    if (plan !== "conjurer") delete updates.isPrivate;
+  }
   const [story] = await db
     .update(storiesTable)
     .set(updates)
@@ -1327,6 +1428,17 @@ router.get("/stories/:id/illustrations", async (req, res): Promise<void> => {
   const params = GetIllustrationsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  // Private stories' illustrations are 404 to non-owners.
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story || !canReadStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Not found" });
     return;
   }
 
@@ -2007,6 +2119,10 @@ router.get("/stories/:id/audio", aiGenerationLimiter, async (req, res): Promise<
     res.status(404).json({ error: "Story has no text" });
     return;
   }
+  if (!canReadStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
 
   const voice = query.data.voice ?? "nova";
   const text = story.fullText.slice(0, 4000);
@@ -2033,7 +2149,7 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story) {
+  if (!story || !canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2170,6 +2286,22 @@ router.get("/stories/:id/like", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid parameters" });
     return;
   }
+  // Don't reveal like-count for a private story to anyone but the owner.
+  const [story] = await db
+    .select({
+      id: storiesTable.id,
+      isPrivate: storiesTable.isPrivate,
+      userId: storiesTable.userId,
+      authorName: storiesTable.authorName,
+      coAuthors: storiesTable.coAuthors,
+    })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story || !canReadStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
   const info = await getLikeInfo(params.data.id, query.data.authorName);
   res.json(info);
 });
@@ -2272,7 +2404,7 @@ router.get("/stories/:id/co-authors", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story) {
+  if (!story || !canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2439,7 +2571,7 @@ router.get("/stories/:id/collaborators", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story) {
+  if (!story || !canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2714,7 +2846,7 @@ router.get("/stories/:id/chapters", async (req, res): Promise<void> => {
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story) {
+  if (!story || !canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -2743,11 +2875,17 @@ router.get("/stories/:id/comments", async (req, res): Promise<void> => {
     return;
   }
   const [story] = await db
-    .select({ id: storiesTable.id })
+    .select({
+      id: storiesTable.id,
+      isPrivate: storiesTable.isPrivate,
+      userId: storiesTable.userId,
+      authorName: storiesTable.authorName,
+      coAuthors: storiesTable.coAuthors,
+    })
     .from(storiesTable)
     .where(eq(storiesTable.id, params.data.id))
     .limit(1);
-  if (!story) {
+  if (!story || !canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Story not found" });
     return;
   }
@@ -2994,6 +3132,12 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
   // Trailer URL/status is only visible to the author/co-authors while a
   // story is unpublished. Once published, anyone can read its status.
   if (story.status !== "published" && !canEditStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  // Private stories — even when "published" — never expose a trailer to
+  // non-owners.
+  if (!canReadStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }

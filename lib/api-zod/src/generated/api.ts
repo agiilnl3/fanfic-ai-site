@@ -26,6 +26,7 @@ export const ListStoriesQueryParams = zod.object({
 });
 
 export const listStoriesResponseCoAuthorsDefault = [];
+export const listStoriesResponseIsPrivateDefault = false;
 
 export const ListStoriesResponseItem = zod.object({
   id: zod.number(),
@@ -91,12 +92,20 @@ export const ListStoriesResponseItem = zod.object({
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
     ),
+  isPrivate: zod
+    .boolean()
+    .default(listStoriesResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
 });
 export const ListStoriesResponse = zod.array(ListStoriesResponseItem);
 
 /**
  * @summary Create a new story (saves without generating)
  */
+export const createStoryBodyIsPrivateDefault = false;
+
 export const CreateStoryBody = zod.object({
   title: zod.string(),
   genre: zod.string(),
@@ -105,6 +114,12 @@ export const CreateStoryBody = zod.object({
   seedPrompt: zod.string().optional(),
   fullText: zod.string().optional(),
   authorName: zod.string(),
+  isPrivate: zod
+    .boolean()
+    .default(createStoryBodyIsPrivateDefault)
+    .describe(
+      "Conjurer-only flag; ignored unless the requester is on the Conjurer plan.",
+    ),
 });
 
 /**
@@ -113,6 +128,7 @@ export const CreateStoryBody = zod.object({
  */
 export const generateStoryBodyGenerateIllustrationsDefault = true;
 export const generateStoryBodyModelDefault = `gpt-5.1`;
+export const generateStoryBodyIsPrivateDefault = false;
 
 export const GenerateStoryBody = zod.object({
   genre: zod.string(),
@@ -129,6 +145,12 @@ export const GenerateStoryBody = zod.object({
     .describe(
       "Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.",
     ),
+  isPrivate: zod
+    .boolean()
+    .default(generateStoryBodyIsPrivateDefault)
+    .describe(
+      "Conjurer-only. Private stories are hidden from public feeds and require the author to view.",
+    ),
 });
 
 /**
@@ -144,6 +166,7 @@ endpoint remains as a fallback.
  */
 export const generateStoryStreamBodyGenerateIllustrationsDefault = true;
 export const generateStoryStreamBodyModelDefault = `gpt-5.1`;
+export const generateStoryStreamBodyIsPrivateDefault = false;
 
 export const GenerateStoryStreamBody = zod.object({
   genre: zod.string(),
@@ -160,6 +183,12 @@ export const GenerateStoryStreamBody = zod.object({
     .describe(
       "Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.",
     ),
+  isPrivate: zod
+    .boolean()
+    .default(generateStoryStreamBodyIsPrivateDefault)
+    .describe(
+      "Conjurer-only. Private stories are hidden from public feeds and require the author to view.",
+    ),
 });
 
 /**
@@ -173,6 +202,7 @@ export const GetForYouFeedQueryParams = zod.object({
 });
 
 export const getForYouFeedResponseCoAuthorsDefault = [];
+export const getForYouFeedResponseIsPrivateDefault = false;
 
 export const GetForYouFeedResponseItem = zod.object({
   id: zod.number(),
@@ -237,6 +267,12 @@ export const GetForYouFeedResponseItem = zod.object({
     .nullish()
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(getForYouFeedResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
 });
 export const GetForYouFeedResponse = zod.array(GetForYouFeedResponseItem);
@@ -341,6 +377,7 @@ export const GetPublicFeedQueryParams = zod.object({
 });
 
 export const getPublicFeedResponseCoAuthorsDefault = [];
+export const getPublicFeedResponseIsPrivateDefault = false;
 
 export const GetPublicFeedResponseItem = zod.object({
   id: zod.number(),
@@ -406,6 +443,12 @@ export const GetPublicFeedResponseItem = zod.object({
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
     ),
+  isPrivate: zod
+    .boolean()
+    .default(getPublicFeedResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
 });
 export const GetPublicFeedResponse = zod.array(GetPublicFeedResponseItem);
 
@@ -433,6 +476,7 @@ export const GetStoryParams = zod.object({
 });
 
 export const getStoryResponseOneCoAuthorsDefault = [];
+export const getStoryResponseOneIsPrivateDefault = false;
 
 export const GetStoryResponse = zod
   .object({
@@ -499,6 +543,12 @@ export const GetStoryResponse = zod
       .describe(
         "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
       ),
+    isPrivate: zod
+      .boolean()
+      .default(getStoryResponseOneIsPrivateDefault)
+      .describe(
+        "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+      ),
   })
   .and(
     zod.object({
@@ -531,9 +581,16 @@ export const UpdateStoryBody = zod.object({
   fullText: zod.string().optional(),
   status: zod.enum(["draft", "published"]).optional(),
   coverImageUrl: zod.string().optional(),
+  isPrivate: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Conjurer-only flag; ignored unless the requester is on the Conjurer plan.",
+    ),
 });
 
 export const updateStoryResponseCoAuthorsDefault = [];
+export const updateStoryResponseIsPrivateDefault = false;
 
 export const UpdateStoryResponse = zod.object({
   id: zod.number(),
@@ -599,6 +656,12 @@ export const UpdateStoryResponse = zod.object({
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
     ),
+  isPrivate: zod
+    .boolean()
+    .default(updateStoryResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
 });
 
 /**
@@ -616,6 +679,7 @@ export const PublishStoryParams = zod.object({
 });
 
 export const publishStoryResponseCoAuthorsDefault = [];
+export const publishStoryResponseIsPrivateDefault = false;
 
 export const PublishStoryResponse = zod.object({
   id: zod.number(),
@@ -680,6 +744,12 @@ export const PublishStoryResponse = zod.object({
     .nullish()
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(publishStoryResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
 });
 
@@ -888,6 +958,7 @@ export const ContinueStoryBody = zod.object({
 });
 
 export const continueStoryResponseCoAuthorsDefault = [];
+export const continueStoryResponseIsPrivateDefault = false;
 
 export const ContinueStoryResponse = zod.object({
   id: zod.number(),
@@ -952,6 +1023,12 @@ export const ContinueStoryResponse = zod.object({
     .nullish()
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(continueStoryResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
 });
 
@@ -1018,6 +1095,7 @@ export const RegenerateStoryTextParams = zod.object({
 });
 
 export const regenerateStoryTextResponseCoAuthorsDefault = [];
+export const regenerateStoryTextResponseIsPrivateDefault = false;
 
 export const RegenerateStoryTextResponse = zod.object({
   id: zod.number(),
@@ -1082,6 +1160,12 @@ export const RegenerateStoryTextResponse = zod.object({
     .nullish()
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(regenerateStoryTextResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
 });
 
@@ -1476,6 +1560,7 @@ export const AdminUpdateStoryBody = zod.object({
 });
 
 export const adminUpdateStoryResponseCoAuthorsDefault = [];
+export const adminUpdateStoryResponseIsPrivateDefault = false;
 
 export const AdminUpdateStoryResponse = zod.object({
   id: zod.number(),
@@ -1540,6 +1625,12 @@ export const AdminUpdateStoryResponse = zod.object({
     .nullish()
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(adminUpdateStoryResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
 });
 
@@ -1611,6 +1702,7 @@ export const GetAuthorProfileParams = zod.object({
 });
 
 export const getAuthorProfileResponseStoriesItemCoAuthorsDefault = [];
+export const getAuthorProfileResponseStoriesItemIsPrivateDefault = false;
 
 export const GetAuthorProfileResponse = zod.object({
   authorName: zod.string(),
@@ -1688,6 +1780,12 @@ export const GetAuthorProfileResponse = zod.object({
         .nullish()
         .describe(
           "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+        ),
+      isPrivate: zod
+        .boolean()
+        .default(getAuthorProfileResponseStoriesItemIsPrivateDefault)
+        .describe(
+          "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
         ),
     }),
   ),
@@ -1894,6 +1992,7 @@ export const ListAuthorRepostsParams = zod.object({
 });
 
 export const listAuthorRepostsResponseStoryCoAuthorsDefault = [];
+export const listAuthorRepostsResponseStoryIsPrivateDefault = false;
 
 export const ListAuthorRepostsResponseItem = zod.object({
   repostId: zod.number(),
@@ -1964,6 +2063,12 @@ export const ListAuthorRepostsResponseItem = zod.object({
       .describe(
         "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
       ),
+    isPrivate: zod
+      .boolean()
+      .default(listAuthorRepostsResponseStoryIsPrivateDefault)
+      .describe(
+        "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+      ),
   }),
 });
 export const ListAuthorRepostsResponse = zod.array(
@@ -2004,15 +2109,68 @@ export const GetMyUsageQueryParams = zod.object({
   authorName: zod.coerce.string(),
 });
 
+export const getMyUsageResponsePlanDefault = `free`;
+
 export const GetMyUsageResponse = zod.object({
   authorName: zod.string(),
   day: zod.string(),
+  plan: zod.enum(["free", "conjurer"]).default(getMyUsageResponsePlanDefault),
   storyCount: zod.number(),
   illustrationCount: zod.number(),
   storyLimit: zod.number(),
   illustrationLimit: zod.number(),
   storiesRemaining: zod.number(),
   illustrationsRemaining: zod.number(),
+});
+
+/**
+ * @summary Current user's plan and subscription state
+ */
+export const GetBillingMeResponse = zod.object({
+  plan: zod.enum(["free", "conjurer"]),
+  status: zod.string(),
+  currentPeriodEnd: zod.string().nullish(),
+  hasStripeCustomer: zod.boolean(),
+});
+
+/**
+ * @summary Create a Stripe Checkout Session for the Conjurer plan
+ */
+export const StartCheckoutBody = zod.object({
+  origin: zod
+    .string()
+    .optional()
+    .describe("Browser origin for success\/cancel redirects."),
+});
+
+export const StartCheckoutResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Create a Stripe Customer Portal session
+ */
+export const OpenBillingPortalBody = zod.object({
+  origin: zod.string().optional(),
+});
+
+export const OpenBillingPortalResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Public Stripe config (publishable key + Conjurer price)
+ */
+export const GetBillingConfigResponse = zod.object({
+  publishableKey: zod.string().nullable(),
+  conjurer: zod
+    .object({
+      productId: zod.string(),
+      priceId: zod.string(),
+      unitAmount: zod.number().nullish(),
+      currency: zod.string(),
+    })
+    .nullable(),
 });
 
 /**
@@ -2253,6 +2411,7 @@ export const ListBookmarksParams = zod.object({
 });
 
 export const listBookmarksResponseStoryCoAuthorsDefault = [];
+export const listBookmarksResponseStoryIsPrivateDefault = false;
 
 export const ListBookmarksResponseItem = zod.object({
   id: zod.number(),
@@ -2324,6 +2483,12 @@ export const ListBookmarksResponseItem = zod.object({
         .describe(
           "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
         ),
+      isPrivate: zod
+        .boolean()
+        .default(listBookmarksResponseStoryIsPrivateDefault)
+        .describe(
+          "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+        ),
     })
     .optional(),
 });
@@ -2337,6 +2502,7 @@ export const ListReadingHistoryParams = zod.object({
 });
 
 export const listReadingHistoryResponseStoryCoAuthorsDefault = [];
+export const listReadingHistoryResponseStoryIsPrivateDefault = false;
 
 export const ListReadingHistoryResponseItem = zod.object({
   storyId: zod.number(),
@@ -2405,6 +2571,12 @@ export const ListReadingHistoryResponseItem = zod.object({
       .nullish()
       .describe(
         "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+      ),
+    isPrivate: zod
+      .boolean()
+      .default(listReadingHistoryResponseStoryIsPrivateDefault)
+      .describe(
+        "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
       ),
   }),
 });
@@ -2541,6 +2713,7 @@ export const GetSeriesParams = zod.object({
 });
 
 export const getSeriesResponseTwoStoriesItemOneCoAuthorsDefault = [];
+export const getSeriesResponseTwoStoriesItemOneIsPrivateDefault = false;
 
 export const GetSeriesResponse = zod
   .object({
@@ -2620,6 +2793,12 @@ export const GetSeriesResponse = zod
               .describe(
                 "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
               ),
+            isPrivate: zod
+              .boolean()
+              .default(getSeriesResponseTwoStoriesItemOneIsPrivateDefault)
+              .describe(
+                "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+              ),
           })
           .and(
             zod.object({
@@ -2682,6 +2861,7 @@ export const AddStoryToSeriesBody = zod.object({
 });
 
 export const addStoryToSeriesResponseTwoStoriesItemOneCoAuthorsDefault = [];
+export const addStoryToSeriesResponseTwoStoriesItemOneIsPrivateDefault = false;
 
 export const AddStoryToSeriesResponse = zod
   .object({
@@ -2762,6 +2942,14 @@ export const AddStoryToSeriesResponse = zod
               .nullish()
               .describe(
                 "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+              ),
+            isPrivate: zod
+              .boolean()
+              .default(
+                addStoryToSeriesResponseTwoStoriesItemOneIsPrivateDefault,
+              )
+              .describe(
+                "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
               ),
           })
           .and(

@@ -104,6 +104,8 @@ treat them as incomplete drafts.
    * @nullable
    */
   readingProgress?: number | null;
+  /** Conjurer-only privacy flag. Private stories are hidden from feeds and listings. */
+  isPrivate?: boolean;
 }
 
 export interface StoryComment {
@@ -212,6 +214,8 @@ export interface CreateStoryBody {
   seedPrompt?: string;
   fullText?: string;
   authorName: string;
+  /** Conjurer-only flag; ignored unless the requester is on the Conjurer plan. */
+  isPrivate?: boolean;
 }
 
 export interface ContinueStoryBody {
@@ -264,6 +268,8 @@ export interface GenerateStoryBody {
   generateIllustrations?: boolean;
   /** Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper. */
   model?: GenerateStoryBodyModel;
+  /** Conjurer-only. Private stories are hidden from public feeds and require the author to view. */
+  isPrivate?: boolean;
 }
 
 export type UpdateStoryBodyLengthSetting =
@@ -291,6 +297,8 @@ export interface UpdateStoryBody {
   fullText?: string;
   status?: UpdateStoryBodyStatus;
   coverImageUrl?: string;
+  /** Conjurer-only flag; ignored unless the requester is on the Conjurer plan. */
+  isPrivate?: boolean;
 }
 
 export interface GenerateIllustrationBody {
@@ -613,15 +621,56 @@ export interface ReorderIllustrationsBody {
   requesterAuthorName: string;
 }
 
+export type UsageInfoPlan = (typeof UsageInfoPlan)[keyof typeof UsageInfoPlan];
+
+export const UsageInfoPlan = {
+  free: "free",
+  conjurer: "conjurer",
+} as const;
+
 export interface UsageInfo {
   authorName: string;
   day: string;
+  plan?: UsageInfoPlan;
   storyCount: number;
   illustrationCount: number;
   storyLimit: number;
   illustrationLimit: number;
   storiesRemaining: number;
   illustrationsRemaining: number;
+}
+
+export type BillingMePlan = (typeof BillingMePlan)[keyof typeof BillingMePlan];
+
+export const BillingMePlan = {
+  free: "free",
+  conjurer: "conjurer",
+} as const;
+
+export interface BillingMe {
+  plan: BillingMePlan;
+  status: string;
+  /** @nullable */
+  currentPeriodEnd?: string | null;
+  hasStripeCustomer: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type BillingConfigConjurer = {
+  productId: string;
+  priceId: string;
+  /** @nullable */
+  unitAmount?: number | null;
+  currency: string;
+} | null;
+
+export interface BillingConfig {
+  /** @nullable */
+  publishableKey: string | null;
+  /** @nullable */
+  conjurer: BillingConfigConjurer;
 }
 
 export interface Tariff {
@@ -1113,6 +1162,23 @@ export type UnrepostStoryParams = {
 
 export type GetMyUsageParams = {
   authorName: string;
+};
+
+export type StartCheckoutBody = {
+  /** Browser origin for success/cancel redirects. */
+  origin?: string;
+};
+
+export type StartCheckout200 = {
+  url: string;
+};
+
+export type OpenBillingPortalBody = {
+  origin?: string;
+};
+
+export type OpenBillingPortal200 = {
+  url: string;
 };
 
 export type AdminListReportsParams = {

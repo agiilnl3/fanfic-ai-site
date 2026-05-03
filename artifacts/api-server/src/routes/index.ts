@@ -18,6 +18,7 @@ import moderationRouter from "./moderation";
 import meRouter from "./me";
 import charactersRouter from "./characters";
 import chaptersRouter from "./chapters";
+import billingRouter from "./billing";
 
 const router: IRouter = Router();
 
@@ -40,5 +41,6 @@ router.use(moderationRouter);
 router.use(meRouter);
 router.use(charactersRouter);
 router.use(chaptersRouter);
+router.use(billingRouter);
 
 export default router;

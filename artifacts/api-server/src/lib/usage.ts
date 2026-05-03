@@ -1,60 +1,87 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, dailyUsageTable, tariffsTable } from "@workspace/db";
+import { getPlanByHandle, type Plan } from "./subscriptions";
 
 const FALLBACK_STORY_LIMIT = Number(process.env.FREE_DAILY_STORY_LIMIT ?? 5);
 const FALLBACK_ILLUSTRATION_LIMIT = Number(
   process.env.FREE_DAILY_ILLUSTRATION_LIMIT ?? 20,
 );
 
-let cached: { tier: string; storyDailyLimit: number; illustrationDailyLimit: number } | null = null;
-let cachedAt = 0;
+interface CachedTariff {
+  tier: string;
+  storyDailyLimit: number;
+  illustrationDailyLimit: number;
+}
+
+const tariffCache = new Map<string, { row: CachedTariff; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-export async function getFreeTariff() {
+// Conjurer is the paid tier shipped by Task #17. We seed both the legacy
+// "premium" name (used by the admin UI to set custom quotas) and the
+// canonical "conjurer" plan so admins keep their existing controls and the
+// billing webhook lands on a real row.
+const TIER_DEFAULTS: Record<string, CachedTariff> = {
+  free: {
+    tier: "free",
+    storyDailyLimit: FALLBACK_STORY_LIMIT,
+    illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT,
+  },
+  premium: {
+    tier: "premium",
+    storyDailyLimit: FALLBACK_STORY_LIMIT * 10,
+    illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT * 10,
+  },
+  conjurer: {
+    tier: "conjurer",
+    storyDailyLimit: FALLBACK_STORY_LIMIT * 10,
+    illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT * 10,
+  },
+};
+
+function defaultTariff(tier: string): CachedTariff {
+  return TIER_DEFAULTS[tier] ?? TIER_DEFAULTS.free;
+}
+
+async function loadTariff(tier: string): Promise<CachedTariff> {
   const now = Date.now();
-  if (cached && now - cachedAt < CACHE_TTL_MS) return cached;
+  const cached = tariffCache.get(tier);
+  if (cached && cached.expiresAt > now) return cached.row;
+
   const [row] = await db
     .select()
     .from(tariffsTable)
-    .where(eq(tariffsTable.tier, "free"))
+    .where(eq(tariffsTable.tier, tier))
     .limit(1);
+  let result: CachedTariff;
   if (row) {
-    cached = {
+    result = {
       tier: row.tier,
       storyDailyLimit: row.storyDailyLimit,
       illustrationDailyLimit: row.illustrationDailyLimit,
     };
   } else {
-    // Seed defaults on first call. Both tiers are seeded so the admin UI
-    // never 404s on the premium card.
+    // Seed all known tier defaults on first miss so the admin UI never
+    // 404s on a freshly provisioned database. Idempotent.
     await db
       .insert(tariffsTable)
-      .values([
-        {
-          tier: "free",
-          storyDailyLimit: FALLBACK_STORY_LIMIT,
-          illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT,
-        },
-        {
-          tier: "premium",
-          storyDailyLimit: FALLBACK_STORY_LIMIT * 10,
-          illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT * 10,
-        },
-      ])
+      .values(Object.values(TIER_DEFAULTS))
       .onConflictDoNothing();
-    cached = {
-      tier: "free",
-      storyDailyLimit: FALLBACK_STORY_LIMIT,
-      illustrationDailyLimit: FALLBACK_ILLUSTRATION_LIMIT,
-    };
+    result = defaultTariff(tier);
   }
-  cachedAt = now;
-  return cached;
+  tariffCache.set(tier, { row: result, expiresAt: now + CACHE_TTL_MS });
+  return result;
 }
 
-export function invalidateTariffCache() {
-  cached = null;
-  cachedAt = 0;
+export async function getFreeTariff(): Promise<CachedTariff> {
+  return loadTariff("free");
+}
+
+export async function getTariffForPlan(plan: Plan): Promise<CachedTariff> {
+  return loadTariff(plan === "conjurer" ? "conjurer" : "free");
+}
+
+export function invalidateTariffCache(): void {
+  tariffCache.clear();
 }
 
 function today(): string {
@@ -64,7 +91,8 @@ function today(): string {
 
 export async function getUsage(authorName: string) {
   const day = today();
-  const tariff = await getFreeTariff();
+  const plan = await getPlanByHandle(authorName);
+  const tariff = await getTariffForPlan(plan);
   const [row] = await db
     .select()
     .from(dailyUsageTable)
@@ -78,6 +106,7 @@ export async function getUsage(authorName: string) {
   return {
     authorName,
     day,
+    plan,
     storyCount: row?.storyCount ?? 0,
     illustrationCount: row?.illustrationCount ?? 0,
     storyLimit: tariff.storyDailyLimit,

@@ -16,6 +16,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, invalidateUserCache } from "../middlewares/auth";
 import { isUserAdmin } from "../middlewares/admin";
+import { getUserPlan } from "../lib/subscriptions";
 
 const router: IRouter = Router();
 
@@ -35,7 +36,10 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
   const u = req.user!;
   // Canonical admin marker is membership in the `admins` allow-list table.
   // The legacy `users.is_admin` column is no longer trusted by adminAuth.
-  const isAdmin = await isUserAdmin(u.id);
+  const [isAdmin, plan] = await Promise.all([
+    isUserAdmin(u.id),
+    getUserPlan(u.id),
+  ]);
   res.json({
     id: u.id,
     clerkUserId: u.clerkUserId,
@@ -44,6 +48,7 @@ router.get("/me", requireAuth, async (req, res): Promise<void> => {
     avatarUrl: u.avatarUrl,
     bio: u.bio,
     isAdmin,
+    plan,
     createdAt: u.createdAt.toISOString(),
   });
 });
@@ -144,6 +149,7 @@ router.put("/me", requireAuth, async (req, res): Promise<void> => {
   });
 
   invalidateUserCache(me.clerkUserId);
+  const plan = await getUserPlan(updated.id);
   res.json({
     id: updated.id,
     clerkUserId: updated.clerkUserId,
@@ -152,6 +158,7 @@ router.put("/me", requireAuth, async (req, res): Promise<void> => {
     avatarUrl: updated.avatarUrl,
     bio: updated.bio,
     isAdmin: updated.isAdmin,
+    plan,
     createdAt: updated.createdAt.toISOString(),
   });
 });

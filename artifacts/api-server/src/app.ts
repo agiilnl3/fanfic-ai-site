@@ -11,6 +11,7 @@ import {
 import { attachUser, overrideClientIdentity } from "./middlewares/auth";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { processStripeWebhook } from "./lib/stripeWebhookHandlers";
 
 const app: Express = express();
 
@@ -38,6 +39,28 @@ app.use(
 
 // Mount the Clerk proxy BEFORE body parsers — it streams raw bytes.
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+
+// Stripe webhook also needs the raw body for signature verification, so it
+// must be mounted BEFORE express.json(). The handler uses Buffer parsing.
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    if (typeof sig !== "string") {
+      res.status(400).json({ error: "Missing stripe-signature header" });
+      return;
+    }
+    try {
+      await processStripeWebhook(req.body as Buffer, sig);
+      res.json({ received: true });
+    } catch (err) {
+      // Log loudly but return 400 so Stripe retries with backoff.
+      logger.error({ err }, "stripe webhook processing failed");
+      res.status(400).json({ error: "Webhook processing failed" });
+    }
+  },
+);
 
 app.use(cors({ credentials: true, origin: true }));
 // Bumped from the default ~100 KB so character reference images uploaded

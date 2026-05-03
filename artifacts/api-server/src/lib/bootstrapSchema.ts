@@ -63,6 +63,33 @@ export async function bootstrapBranchingSchema(): Promise<void> {
       ALTER TABLE stories
       ADD COLUMN IF NOT EXISTS trailer_hash TEXT
     `);
+    // Stripe paid tiers ("Conjurer" subscription) — Task #17.
+    // Private stories are a Conjurer perk; column is non-nullable so the
+    // story authz fast path can rely on it without coalescing.
+    await db.execute(sql`
+      ALTER TABLE stories
+      ADD COLUMN IF NOT EXISTS is_private BOOLEAN NOT NULL DEFAULT false
+    `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        stripe_customer_id TEXT NOT NULL,
+        stripe_subscription_id TEXT,
+        plan TEXT NOT NULL DEFAULT 'free',
+        status TEXT NOT NULL DEFAULT 'inactive',
+        current_period_end TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_user_id_unique
+        ON subscriptions(user_id)
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_customer_id_unique
+        ON subscriptions(stripe_customer_id)
+    `);
     logger.info("chapters schema bootstrap OK");
   } catch (err) {
     logger.error({ err }, "Failed to bootstrap chapters schema");

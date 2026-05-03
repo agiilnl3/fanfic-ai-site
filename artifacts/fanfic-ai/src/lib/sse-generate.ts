@@ -32,6 +32,7 @@ export interface GenerateStreamBody {
   seedPrompt?: string;
   generateIllustrations?: boolean;
   model?: "gpt-5.1" | "gpt-5-mini";
+  isPrivate?: boolean;
 }
 
 /**

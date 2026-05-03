@@ -9,6 +9,7 @@ interface MeResponse {
   avatarUrl: string | null;
   bio: string | null;
   isAdmin: boolean;
+  plan?: "free" | "conjurer";
 }
 
 const ME_QUERY_KEY = ["me"] as const;
@@ -71,6 +72,7 @@ export function useAuthor() {
     displayName: isSignedIn ? me?.displayName ?? "" : guestName,
     avatarUrl: isSignedIn ? me?.avatarUrl ?? null : null,
     isAdmin: !!me?.isAdmin,
+    plan: (me?.plan ?? "free") as "free" | "conjurer",
     me,
     refetchMe: () => queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY }),
   };

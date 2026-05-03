@@ -104,6 +104,10 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      // Loads SQL migration files from disk via path traversal; bundling
+      // strips the migrations/ directory and the schema bootstrap fails.
+      "stripe-replit-sync",
+      "pg-node-migrations",
     ],
     sourcemap: "linked",
     plugins: [

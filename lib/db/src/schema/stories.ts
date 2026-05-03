@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, index, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, index, integer, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -28,6 +28,7 @@ export const storiesTable = pgTable(
     trailerUrl: text("trailer_url"),
     trailerStatus: text("trailer_status"),
     trailerHash: text("trailer_hash"),
+    isPrivate: boolean("is_private").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

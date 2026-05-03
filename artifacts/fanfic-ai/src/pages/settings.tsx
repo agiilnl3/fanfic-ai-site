@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Show } from "@clerk/react";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -10,14 +11,96 @@ import {
   useUpdateNotificationPrefs,
   getGetNotificationPrefsQueryKey,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2, Settings as SettingsIcon, UserCircle2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Settings as SettingsIcon, UserCircle2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { fetchBillingMe, openBillingPortal } from "@/lib/billing";
+
+function BillingCard() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+  const { data: me, isLoading } = useQuery({
+    queryKey: ["billing", "me"],
+    queryFn: fetchBillingMe,
+    staleTime: 30_000,
+  });
+
+  const isConjurer = me?.plan === "conjurer";
+
+  async function manage() {
+    setBusy(true);
+    try {
+      const { url } = await openBillingPortal();
+      window.location.href = url;
+    } catch (err) {
+      toast({
+        title: t("settings.portalFailed", "Could not open billing portal"),
+        description: (err as Error).message,
+        variant: "destructive",
+      });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-8">
+      <CardHeader>
+        <CardTitle className="font-serif flex items-center gap-2">
+          <Wand2 className="w-5 h-5 text-primary" />
+          {t("settings.billing", "Billing")}
+          {isConjurer ? (
+            <Badge className="ml-2 bg-primary/20 text-primary border border-primary/40">
+              {t("pricing.conjurer", "Conjurer")}
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="ml-2">
+              {t("pricing.apprentice", "Apprentice")}
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          {isConjurer
+            ? t(
+                "settings.billingConjurerDesc",
+                "You're on the Conjurer plan. Manage payment, invoices, or cancel any time.",
+              )
+            : t(
+                "settings.billingFreeDesc",
+                "Upgrade to Conjurer for higher quotas, private stories, and the premium model.",
+              )}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        ) : isConjurer && me?.hasStripeCustomer ? (
+          <Button
+            onClick={manage}
+            disabled={busy}
+            data-testid="button-manage-billing"
+          >
+            {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {t("settings.manageBilling", "Manage billing")}
+          </Button>
+        ) : (
+          <Link href="/pricing">
+            <Button data-testid="button-view-pricing">
+              <Wand2 className="w-4 h-4 mr-2" />
+              {t("settings.viewPricing", "View pricing")}
+            </Button>
+          </Link>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 const FIELD_KEYS = ["comment", "follow", "like", "repost", "coAuthorChapter"] as const;
 type FieldKey = (typeof FIELD_KEYS)[number];
@@ -197,6 +280,7 @@ export default function SettingsPage() {
 
         <Show when="signed-in">
           <ProfileEditor />
+          <BillingCard />
         </Show>
 
         <Show when="signed-out">

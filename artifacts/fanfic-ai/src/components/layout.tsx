@@ -8,6 +8,7 @@ import {
   User,
   Bookmark,
   Settings,
+  Wand2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -25,6 +26,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/library", label: t("nav.myLibrary", "My Library"), icon: Bookmark },
     { href: "/create", label: t("nav.create"), icon: Sparkles },
     { href: "/dashboard", label: t("nav.dashboard"), icon: PenTool },
+    { href: "/pricing", label: t("nav.pricing", "Pricing"), icon: Wand2 },
     { href: "/settings", label: t("nav.settings", "Settings"), icon: Settings },
   ];
 

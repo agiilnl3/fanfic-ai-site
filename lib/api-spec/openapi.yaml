@@ -1633,6 +1633,78 @@ paths:
               schema:
                 $ref: "#/components/schemas/UsageInfo"
 
+  /billing/me:
+    get:
+      operationId: getBillingMe
+      tags: [billing]
+      summary: Current user's plan and subscription state
+      responses:
+        "200":
+          description: Billing state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingMe" }
+
+  /billing/checkout:
+    post:
+      operationId: startCheckout
+      tags: [billing]
+      summary: Create a Stripe Checkout Session for the Conjurer plan
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                origin:
+                  type: string
+                  description: Browser origin for success/cancel redirects.
+      responses:
+        "200":
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { url: { type: string } }
+                required: [url]
+
+  /billing/portal:
+    post:
+      operationId: openBillingPortal
+      tags: [billing]
+      summary: Create a Stripe Customer Portal session
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                origin: { type: string }
+      responses:
+        "200":
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { url: { type: string } }
+                required: [url]
+
+  /billing/config:
+    get:
+      operationId: getBillingConfig
+      tags: [billing]
+      summary: Public Stripe config (publishable key + Conjurer price)
+      responses:
+        "200":
+          description: Stripe config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingConfig" }
+
   /admin/tariffs/{tier}:
     get:
       operationId: adminGetTariff
@@ -2307,6 +2379,10 @@ components:
         readingProgress:
           type: ["integer", "null"]
           description: Viewer-specific reading progress percentage (0-100). Only set by /stories/feed when viewerAuthorName matches the requester.
+        isPrivate:
+          type: boolean
+          default: false
+          description: Conjurer-only privacy flag. Private stories are hidden from feeds and listings.
       required:
         - id
         - title
@@ -2505,6 +2581,10 @@ components:
           type: string
         authorName:
           type: string
+        isPrivate:
+          type: boolean
+          default: false
+          description: Conjurer-only flag; ignored unless the requester is on the Conjurer plan.
       required:
         - title
         - genre
@@ -2567,6 +2647,10 @@ components:
           enum: [gpt-5.1, gpt-5-mini]
           default: gpt-5.1
           description: Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.
+        isPrivate:
+          type: boolean
+          default: false
+          description: Conjurer-only. Private stories are hidden from public feeds and require the author to view.
       required:
         - genre
         - artStyle
@@ -2592,6 +2676,9 @@ components:
           enum: [draft, published]
         coverImageUrl:
           type: string
+        isPrivate:
+          type: boolean
+          description: Conjurer-only flag; ignored unless the requester is on the Conjurer plan.
 
     GenerateIllustrationBody:
       type: object
@@ -3044,6 +3131,10 @@ components:
           type: string
         day:
           type: string
+        plan:
+          type: string
+          enum: [free, conjurer]
+          default: free
         storyCount:
           type: integer
         illustrationCount:
@@ -3057,6 +3148,35 @@ components:
         illustrationsRemaining:
           type: integer
       required: [authorName, day, storyCount, illustrationCount, storyLimit, illustrationLimit, storiesRemaining, illustrationsRemaining]
+
+    BillingMe:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, conjurer]
+        status:
+          type: string
+        currentPeriodEnd:
+          type: ["string", "null"]
+        hasStripeCustomer:
+          type: boolean
+      required: [plan, status, hasStripeCustomer]
+
+    BillingConfig:
+      type: object
+      properties:
+        publishableKey:
+          type: ["string", "null"]
+        conjurer:
+          type: ["object", "null"]
+          properties:
+            productId: { type: string }
+            priceId: { type: string }
+            unitAmount: { type: ["integer", "null"] }
+            currency: { type: string }
+          required: [productId, priceId, currency]
+      required: [publishableKey, conjurer]
 
     Tariff:
       type: object

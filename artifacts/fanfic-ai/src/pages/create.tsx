@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
+import { Link } from "wouter";
+import { Lock } from "lucide-react";
 import {
   useListSeries,
   useAddStoryToSeries,
@@ -75,7 +77,8 @@ const NUM_SECTIONS = 4;
 export default function CreateStory() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
-  const { authorName, setAuthorName } = useAuthor();
+  const { authorName, setAuthorName, plan } = useAuthor();
+  const isConjurer = plan === "conjurer";
   const { toast } = useToast();
   const seriesParams = authorName?.trim() ? { authorName } : {};
   const { data: mySeries } = useListSeries(seriesParams, {
@@ -91,7 +94,12 @@ export default function CreateStory() {
   const [lengthSetting, setLengthSetting] = useState<"short" | "medium" | "long">("medium");
   const [seedPrompt, setSeedPrompt] = useState<string>("");
   const [withIllustrations, setWithIllustrations] = useState<boolean>(true);
-  const [model, setModel] = useState<"gpt-5.1" | "gpt-5-mini">("gpt-5.1");
+  const [isPrivate, setIsPrivate] = useState<boolean>(false);
+  // Default free users to the model they're actually allowed to use so the UI
+  // matches what the server will run.
+  const [model, setModel] = useState<"gpt-5.1" | "gpt-5-mini">(
+    isConjurer ? "gpt-5.1" : "gpt-5-mini",
+  );
   const [seriesId, setSeriesId] = useState<string>("none");
   const [tagDraft, setTagDraft] = useState<string>("");
   const setTagsMutation = useSetStoryTags();
@@ -150,6 +158,7 @@ export default function CreateStory() {
           seedPrompt: seedPrompt.trim() || undefined,
           generateIllustrations: withIllustrations,
           model,
+          isPrivate: isConjurer ? isPrivate : false,
         },
         ctrl.signal,
       )) {
@@ -533,15 +542,32 @@ export default function CreateStory() {
 
               <div className="space-y-2 pt-4">
                 <Label>{t("create.model")}</Label>
-                <Select value={model} onValueChange={(val) => setModel(val as "gpt-5.1" | "gpt-5-mini")}>
+                <Select
+                  value={model}
+                  onValueChange={(val) => setModel(val as "gpt-5.1" | "gpt-5-mini")}
+                >
                   <SelectTrigger className="bg-background/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-5.1">{t("create.modelHigh")}</SelectItem>
+                    {isConjurer && (
+                      <SelectItem value="gpt-5.1">{t("create.modelHigh")}</SelectItem>
+                    )}
                     <SelectItem value="gpt-5-mini">{t("create.modelFast")}</SelectItem>
                   </SelectContent>
                 </Select>
+                {!isConjurer && (
+                  <p className="text-xs text-muted-foreground">
+                    <Link
+                      href="/pricing"
+                      className="text-primary hover:underline inline-flex items-center gap-1"
+                      data-testid="link-upgrade-model"
+                    >
+                      <Lock className="w-3 h-3" />
+                      {t("create.upgradeModel", "Upgrade to Conjurer for the premium model")}
+                    </Link>
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   {t("create.modelHelp")}
                 </p>
@@ -615,6 +641,50 @@ export default function CreateStory() {
                   onCheckedChange={setWithIllustrations}
                 />
               </div>
+
+              {isConjurer ? (
+                <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center text-base">
+                      <Lock className="w-4 h-4 mr-2 text-primary" />
+                      {t("create.privateStory", "Private story")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        "create.privateStoryDesc",
+                        "Hidden from the public feed. Only you can read it.",
+                      )}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isPrivate}
+                    onCheckedChange={setIsPrivate}
+                    data-testid="switch-private"
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between pt-4 border-t border-border/50 opacity-70">
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center text-base">
+                      <Lock className="w-4 h-4 mr-2" />
+                      {t("create.privateStory", "Private story")}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      <Link
+                        href="/pricing"
+                        className="text-primary hover:underline"
+                        data-testid="link-upgrade-private"
+                      >
+                        {t(
+                          "create.upgradePrivate",
+                          "Upgrade to Conjurer to write private stories",
+                        )}
+                      </Link>
+                    </p>
+                  </div>
+                  <Switch checked={false} disabled />
+                </div>
+              )}
 
               <Button
                 className="w-full h-14 text-lg font-serif mt-6"

@@ -22,6 +22,7 @@ const Library = lazy(() => import("@/pages/library"));
 const Series = lazy(() => import("@/pages/series"));
 const SeriesDetail = lazy(() => import("@/pages/series-detail"));
 const Settings = lazy(() => import("@/pages/settings"));
+const Pricing = lazy(() => import("@/pages/pricing"));
 const SignInPage = lazy(() => import("@/pages/sign-in"));
 const SignUpPage = lazy(() => import("@/pages/sign-up"));
 
@@ -139,6 +140,7 @@ function Router() {
         <Route path="/series" component={Series} />
         <Route path="/series/:id" component={SeriesDetail} />
         <Route path="/settings" component={Settings} />
+        <Route path="/pricing" component={Pricing} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/admin" component={Admin} />
         <Route path="/author/:name" component={AuthorPage} />

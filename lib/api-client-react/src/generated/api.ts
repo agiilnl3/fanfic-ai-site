@@ -30,6 +30,8 @@ import type {
   AdminUserRow,
   AuthorProfile,
   AuthorSearchHit,
+  BillingConfig,
+  BillingMe,
   Bookmark,
   BookmarkBody,
   BookmarkInfo,
@@ -79,6 +81,8 @@ import type {
   MarkReadBody,
   Notification,
   NotificationPrefs,
+  OpenBillingPortal200,
+  OpenBillingPortalBody,
   ParagraphCommentCount,
   ReadingProgressInfo,
   RegenerateIllustrationBody,
@@ -98,6 +102,8 @@ import type {
   SeriesWithStories,
   SetStoryCharactersBody,
   SetUserBannedBody,
+  StartCheckout200,
+  StartCheckoutBody,
   Story,
   StoryAnalytics,
   StoryComment,
@@ -5982,6 +5988,328 @@ export function useGetMyUsage<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetMyUsageQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Current user's plan and subscription state
+ */
+export const getGetBillingMeUrl = () => {
+  return `/api/billing/me`;
+};
+
+export const getBillingMe = async (
+  options?: RequestInit,
+): Promise<BillingMe> => {
+  return customFetch<BillingMe>(getGetBillingMeUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBillingMeQueryKey = () => {
+  return [`/api/billing/me`] as const;
+};
+
+export const getGetBillingMeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillingMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBillingMeQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillingMe>>> = ({
+    signal,
+  }) => getBillingMe({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingMe>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBillingMeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillingMe>>
+>;
+export type GetBillingMeQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current user's plan and subscription state
+ */
+
+export function useGetBillingMe<
+  TData = Awaited<ReturnType<typeof getBillingMe>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingMe>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillingMeQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a Stripe Checkout Session for the Conjurer plan
+ */
+export const getStartCheckoutUrl = () => {
+  return `/api/billing/checkout`;
+};
+
+export const startCheckout = async (
+  startCheckoutBody?: StartCheckoutBody,
+  options?: RequestInit,
+): Promise<StartCheckout200> => {
+  return customFetch<StartCheckout200>(getStartCheckoutUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(startCheckoutBody),
+  });
+};
+
+export const getStartCheckoutMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startCheckout>>,
+    TError,
+    { data: BodyType<StartCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startCheckout>>,
+  TError,
+  { data: BodyType<StartCheckoutBody> },
+  TContext
+> => {
+  const mutationKey = ["startCheckout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startCheckout>>,
+    { data: BodyType<StartCheckoutBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startCheckout(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartCheckoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startCheckout>>
+>;
+export type StartCheckoutMutationBody = BodyType<StartCheckoutBody>;
+export type StartCheckoutMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Stripe Checkout Session for the Conjurer plan
+ */
+export const useStartCheckout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startCheckout>>,
+    TError,
+    { data: BodyType<StartCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startCheckout>>,
+  TError,
+  { data: BodyType<StartCheckoutBody> },
+  TContext
+> => {
+  return useMutation(getStartCheckoutMutationOptions(options));
+};
+
+/**
+ * @summary Create a Stripe Customer Portal session
+ */
+export const getOpenBillingPortalUrl = () => {
+  return `/api/billing/portal`;
+};
+
+export const openBillingPortal = async (
+  openBillingPortalBody?: OpenBillingPortalBody,
+  options?: RequestInit,
+): Promise<OpenBillingPortal200> => {
+  return customFetch<OpenBillingPortal200>(getOpenBillingPortalUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(openBillingPortalBody),
+  });
+};
+
+export const getOpenBillingPortalMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof openBillingPortal>>,
+    TError,
+    { data: BodyType<OpenBillingPortalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof openBillingPortal>>,
+  TError,
+  { data: BodyType<OpenBillingPortalBody> },
+  TContext
+> => {
+  const mutationKey = ["openBillingPortal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof openBillingPortal>>,
+    { data: BodyType<OpenBillingPortalBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return openBillingPortal(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type OpenBillingPortalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof openBillingPortal>>
+>;
+export type OpenBillingPortalMutationBody = BodyType<OpenBillingPortalBody>;
+export type OpenBillingPortalMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a Stripe Customer Portal session
+ */
+export const useOpenBillingPortal = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof openBillingPortal>>,
+    TError,
+    { data: BodyType<OpenBillingPortalBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof openBillingPortal>>,
+  TError,
+  { data: BodyType<OpenBillingPortalBody> },
+  TContext
+> => {
+  return useMutation(getOpenBillingPortalMutationOptions(options));
+};
+
+/**
+ * @summary Public Stripe config (publishable key + Conjurer price)
+ */
+export const getGetBillingConfigUrl = () => {
+  return `/api/billing/config`;
+};
+
+export const getBillingConfig = async (
+  options?: RequestInit,
+): Promise<BillingConfig> => {
+  return customFetch<BillingConfig>(getGetBillingConfigUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBillingConfigQueryKey = () => {
+  return [`/api/billing/config`] as const;
+};
+
+export const getGetBillingConfigQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillingConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBillingConfigQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getBillingConfig>>
+  > = ({ signal }) => getBillingConfig({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingConfig>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBillingConfigQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillingConfig>>
+>;
+export type GetBillingConfigQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Public Stripe config (publishable key + Conjurer price)
+ */
+
+export function useGetBillingConfig<
+  TData = Awaited<ReturnType<typeof getBillingConfig>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingConfig>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillingConfigQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
