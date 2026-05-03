@@ -1,0 +1,48 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import storiesRouter from "./stories";
+import sitemapRouter from "./sitemap";
+import storageRouter from "./storage";
+import adminRouter from "./admin";
+import authorsRouter from "./authors";
+import notificationsRouter from "./notifications";
+import repostsRouter from "./reposts";
+import usageRouter from "./usage";
+import notificationsStreamRouter from "./notifications-stream";
+import libraryRouter from "./library";
+import seriesRouter from "./series";
+import tagsRouter from "./tags";
+import settingsRouter from "./settings";
+import analyticsRouter from "./analytics";
+import moderationRouter from "./moderation";
+import meRouter from "./me";
+import charactersRouter from "./characters";
+import chaptersRouter from "./chapters";
+import billingRouter from "./billing";
+import flagsRouter from "./flags";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(storiesRouter);
+router.use(sitemapRouter);
+router.use(storageRouter);
+router.use(adminRouter);
+router.use(authorsRouter);
+router.use(notificationsRouter);
+router.use(notificationsStreamRouter);
+router.use(repostsRouter);
+router.use(usageRouter);
+router.use(libraryRouter);
+router.use(seriesRouter);
+router.use(tagsRouter);
+router.use(settingsRouter);
+router.use(analyticsRouter);
+router.use(moderationRouter);
+router.use(meRouter);
+router.use(charactersRouter);
+router.use(chaptersRouter);
+router.use(billingRouter);
+router.use(flagsRouter);
+
+export default router;

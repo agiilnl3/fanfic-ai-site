@@ -1,0 +1,21 @@
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "migrate-base64-illustrations": "tsx ./src/migrate-base64-illustrations.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
+    "@workspace/db": "workspace:*",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}

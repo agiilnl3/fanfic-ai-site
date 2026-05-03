@@ -1,0 +1,288 @@
+import { Router, type IRouter } from "express";
+import { and, desc, eq, inArray, sql, or, isNull } from "drizzle-orm";
+import {
+  db,
+  bookmarksTable,
+  readingProgressTable,
+  storiesTable,
+  chaptersTable,
+} from "@workspace/db";
+import {
+  AddBookmarkParams,
+  AddBookmarkBody,
+  RemoveBookmarkParams,
+  RemoveBookmarkQueryParams,
+  GetBookmarkInfoParams,
+  GetBookmarkInfoQueryParams,
+  ListBookmarksParams,
+  ListReadingHistoryParams,
+  GetReadingProgressParams,
+  GetReadingProgressQueryParams,
+  SetReadingProgressParams,
+  SetReadingProgressBody,
+} from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+router.get("/stories/:id/bookmark", async (req, res): Promise<void> => {
+  const params = GetBookmarkInfoParams.safeParse(req.params);
+  const query = GetBookmarkInfoQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const author = (query.data.authorName ?? "").trim();
+  if (!author) {
+    res.json({ storyId: params.data.id, bookmarked: false });
+    return;
+  }
+  const [row] = await db
+    .select({ id: bookmarksTable.id })
+    .from(bookmarksTable)
+    .where(
+      and(
+        eq(bookmarksTable.storyId, params.data.id),
+        eq(bookmarksTable.authorName, author),
+      ),
+    )
+    .limit(1);
+  res.json({ storyId: params.data.id, bookmarked: !!row });
+});
+
+router.post("/stories/:id/bookmark", async (req, res): Promise<void> => {
+  const params = AddBookmarkParams.safeParse(req.params);
+  const body = AddBookmarkBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const author = body.data.authorName.trim();
+  await db
+    .insert(bookmarksTable)
+    .values({ authorName: author, storyId: params.data.id, userId: req.user?.id ?? null })
+    .onConflictDoNothing();
+  res.json({ storyId: params.data.id, bookmarked: true });
+});
+
+router.delete("/stories/:id/bookmark", async (req, res): Promise<void> => {
+  const params = RemoveBookmarkParams.safeParse(req.params);
+  const query = RemoveBookmarkQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  // Prefer stable Clerk user_id ownership; fall back to handle only for
+  // legacy rows whose user_id was not yet recorded.
+  const ownership = req.user
+    ? or(
+        eq(bookmarksTable.userId, req.user.id),
+        and(
+          isNull(bookmarksTable.userId),
+          eq(bookmarksTable.authorName, req.user.handle),
+        ),
+      )
+    : eq(bookmarksTable.authorName, query.data.authorName.trim());
+  await db
+    .delete(bookmarksTable)
+    .where(
+      and(eq(bookmarksTable.storyId, params.data.id), ownership!),
+    );
+  res.json({ storyId: params.data.id, bookmarked: false });
+});
+
+router.get("/authors/:name/bookmarks", async (req, res): Promise<void> => {
+  const params = ListBookmarksParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(bookmarksTable)
+    .where(eq(bookmarksTable.authorName, params.data.name))
+    .orderBy(desc(bookmarksTable.createdAt));
+  if (rows.length === 0) {
+    res.json([]);
+    return;
+  }
+  const storyIds = rows.map((r) => r.storyId);
+  // Hide bookmarked private stories from non-owners (the bookmarker may
+  // have lost access, or the story was never readable). Owners/co-authors
+  // still see them.
+  const callerHandle = req.user?.handle;
+  const stories = (
+    await db
+      .select()
+      .from(storiesTable)
+      .where(inArray(storiesTable.id, storyIds))
+  ).filter((s) => {
+    if (!s.isPrivate) return true;
+    if (!callerHandle) return false;
+    if (s.authorName === callerHandle) return true;
+    return ((s.coAuthors ?? []) as string[]).includes(callerHandle);
+  });
+  const sMap = new Map(stories.map((s) => [s.id, s]));
+  res.json(
+    rows
+      .map((r) => {
+        const s = sMap.get(r.storyId);
+        if (!s) return null;
+        return {
+          id: r.id,
+          authorName: r.authorName,
+          storyId: r.storyId,
+          createdAt: r.createdAt.toISOString(),
+          story: {
+            ...s,
+            createdAt: s.createdAt.toISOString(),
+            updatedAt: s.updatedAt.toISOString(),
+          },
+        };
+      })
+      .filter(Boolean),
+  );
+});
+
+router.get("/authors/:name/history", async (req, res): Promise<void> => {
+  const params = ListReadingHistoryParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(readingProgressTable)
+    .where(eq(readingProgressTable.authorName, params.data.name))
+    .orderBy(desc(readingProgressTable.updatedAt))
+    .limit(50);
+  if (rows.length === 0) {
+    res.json([]);
+    return;
+  }
+  const storyIds = rows.map((r) => r.storyId);
+  const callerHandle = req.user?.handle;
+  const stories = (
+    await db
+      .select()
+      .from(storiesTable)
+      .where(inArray(storiesTable.id, storyIds))
+  ).filter((s) => {
+    if (!s.isPrivate) return true;
+    if (!callerHandle) return false;
+    if (s.authorName === callerHandle) return true;
+    return ((s.coAuthors ?? []) as string[]).includes(callerHandle);
+  });
+  const sMap = new Map(stories.map((s) => [s.id, s]));
+  res.json(
+    rows
+      .map((r) => {
+        const s = sMap.get(r.storyId);
+        if (!s) return null;
+        return {
+          storyId: r.storyId,
+          progress: r.progress,
+          updatedAt: r.updatedAt.toISOString(),
+          story: {
+            ...s,
+            createdAt: s.createdAt.toISOString(),
+            updatedAt: s.updatedAt.toISOString(),
+          },
+        };
+      })
+      .filter(Boolean),
+  );
+});
+
+router.get("/stories/:id/progress", async (req, res): Promise<void> => {
+  const params = GetReadingProgressParams.safeParse(req.params);
+  const query = GetReadingProgressQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(readingProgressTable)
+    .where(
+      and(
+        eq(readingProgressTable.storyId, params.data.id),
+        eq(readingProgressTable.authorName, query.data.authorName.trim()),
+      ),
+    )
+    .limit(1);
+  res.json({
+    storyId: params.data.id,
+    authorName: query.data.authorName.trim(),
+    progress: row?.progress ?? 0,
+    paragraphIndex: row?.paragraphIndex ?? 0,
+    chapterId: row?.chapterId ?? null,
+    updatedAt: row?.updatedAt?.toISOString() ?? null,
+  });
+});
+
+router.post("/stories/:id/progress", async (req, res): Promise<void> => {
+  const params = SetReadingProgressParams.safeParse(req.params);
+  const body = SetReadingProgressBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const author = body.data.authorName.trim();
+  const progress = Math.max(0, Math.min(100, body.data.progress));
+  const paragraphIndex = Math.max(0, body.data.paragraphIndex ?? 0);
+  let chapterId = body.data.chapterId ?? null;
+  // Verify the chapterId actually belongs to this story before we
+  // persist it — otherwise a malicious or stale client could pin a
+  // reader's progress to an unrelated story's chapter.
+  if (chapterId != null) {
+    const owned = await db
+      .select({ id: chaptersTable.id })
+      .from(chaptersTable)
+      .where(
+        and(
+          eq(chaptersTable.id, chapterId),
+          eq(chaptersTable.storyId, params.data.id),
+        ),
+      )
+      .limit(1);
+    if (owned.length === 0) chapterId = null;
+  }
+  const [row] = await db
+    .insert(readingProgressTable)
+    .values({
+      authorName: author,
+      userId: req.user?.id ?? null,
+      storyId: params.data.id,
+      progress,
+      paragraphIndex,
+      chapterId,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [readingProgressTable.authorName, readingProgressTable.storyId],
+      set: {
+        progress: sql`GREATEST(${readingProgressTable.progress}, ${progress})`,
+        // The latest paragraph the user actually scrolled to wins,
+        // even if their percentage stays at the previous max — readers
+        // skip around (footnotes, illustrations) and we want the resume
+        // point to track their cursor, not their high-water mark.
+        paragraphIndex: paragraphIndex,
+        // chapterId may be null when the client doesn't know which
+        // branch a paragraph came from (e.g. legacy stories pre-backfill).
+        // COALESCE keeps the previously-saved value rather than wiping it.
+        chapterId: sql`COALESCE(${chapterId}, ${readingProgressTable.chapterId})`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  res.json({
+    storyId: params.data.id,
+    authorName: author,
+    progress: row?.progress ?? progress,
+    paragraphIndex: row?.paragraphIndex ?? paragraphIndex,
+    chapterId: row?.chapterId ?? chapterId,
+    updatedAt: row?.updatedAt?.toISOString() ?? new Date().toISOString(),
+  });
+});
+
+export default router;

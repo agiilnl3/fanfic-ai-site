@@ -1,0 +1,369 @@
+import { Router, type IRouter } from "express";
+import { and, asc, desc, eq, inArray, count } from "drizzle-orm";
+import {
+  db,
+  seriesTable,
+  seriesStoriesTable,
+  storiesTable,
+  hiddenStoriesTable,
+} from "@workspace/db";
+import { notInArray } from "drizzle-orm";
+import { canEditSeries, canEditStory } from "../lib/storyAuthz";
+import {
+  ListSeriesQueryParams,
+  CreateSeriesBody,
+  GetSeriesParams,
+  UpdateSeriesParams,
+  UpdateSeriesBody,
+  DeleteSeriesParams,
+  DeleteSeriesQueryParams,
+  AddStoryToSeriesParams,
+  AddStoryToSeriesBody,
+  RemoveStoryFromSeriesParams,
+  RemoveStoryFromSeriesQueryParams,
+} from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+async function withCounts(rows: { id: number }[]) {
+  if (rows.length === 0) return new Map<number, number>();
+  const ids = rows.map((r) => r.id);
+  const counts = await db
+    .select({ seriesId: seriesStoriesTable.seriesId, c: count() })
+    .from(seriesStoriesTable)
+    .where(inArray(seriesStoriesTable.seriesId, ids))
+    .groupBy(seriesStoriesTable.seriesId);
+  return new Map(counts.map((r) => [r.seriesId, Number(r.c)]));
+}
+
+// Hide moderator-removed and unpublished (draft/archived) stories from
+// the public series response. The series author still sees the link in
+// their authoring UI via /series listings, but visitors hitting
+// /series/:id should never see content the moderation team has pulled.
+async function visibleStoriesForLinks(
+  links: { storyId: number; position: number }[],
+): Promise<(typeof storiesTable.$inferSelect & { position: number })[]> {
+  if (links.length === 0) return [];
+  const ids = links.map((l) => l.storyId);
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable)
+    .where(inArray(hiddenStoriesTable.storyId, ids));
+  const hiddenIds = hiddenRows.map((r) => r.id);
+  const sRows = await db
+    .select()
+    .from(storiesTable)
+    .where(
+      and(
+        inArray(storiesTable.id, ids),
+        eq(storiesTable.status, "published"),
+        // Never expose private stories in a public series listing.
+        eq(storiesTable.isPrivate, false),
+        hiddenIds.length > 0
+          ? notInArray(storiesTable.id, hiddenIds)
+          : undefined,
+      ),
+    );
+  const sMap = new Map(sRows.map((s) => [s.id, s]));
+  return links
+    .map((l) => {
+      const s = sMap.get(l.storyId);
+      return s ? { ...s, position: l.position } : null;
+    })
+    .filter(
+      (x): x is typeof storiesTable.$inferSelect & { position: number } => !!x,
+    );
+}
+
+function shapeSeries(s: typeof seriesTable.$inferSelect, storyCount: number) {
+  return {
+    id: s.id,
+    title: s.title,
+    summary: s.summary,
+    authorName: s.authorName,
+    storyCount,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+  };
+}
+
+router.get("/series", async (req, res): Promise<void> => {
+  const query = ListSeriesQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const where = query.data.authorName?.trim()
+    ? eq(seriesTable.authorName, query.data.authorName.trim())
+    : undefined;
+  const rows = where
+    ? await db.select().from(seriesTable).where(where).orderBy(desc(seriesTable.updatedAt))
+    : await db.select().from(seriesTable).orderBy(desc(seriesTable.updatedAt));
+  const counts = await withCounts(rows);
+  res.json(rows.map((s) => shapeSeries(s, counts.get(s.id) ?? 0)));
+});
+
+router.post("/series", async (req, res): Promise<void> => {
+  const body = CreateSeriesBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [row] = await db
+    .insert(seriesTable)
+    .values({
+      title: body.data.title,
+      summary: body.data.summary ?? null,
+      authorName: body.data.authorName.trim(),
+      userId: req.user?.id ?? null,
+    })
+    .returning();
+  res.status(201).json(shapeSeries(row, 0));
+});
+
+router.get("/series/:id", async (req, res): Promise<void> => {
+  const params = GetSeriesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [series] = await db
+    .select()
+    .from(seriesTable)
+    .where(eq(seriesTable.id, params.data.id))
+    .limit(1);
+  if (!series) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const links = await db
+    .select()
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.seriesId, params.data.id))
+    .orderBy(asc(seriesStoriesTable.position));
+  const stories = await visibleStoriesForLinks(links);
+  res.json({
+    ...shapeSeries(series, stories.length),
+    stories: stories.map((s) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    })),
+  });
+});
+
+router.get("/stories/:id/series-context", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const empty = {
+    seriesId: null,
+    seriesTitle: null,
+    position: null,
+    totalStories: null,
+    prevStoryId: null,
+    nextStoryId: null,
+  };
+  const [link] = await db
+    .select({ seriesId: seriesStoriesTable.seriesId })
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.storyId, id))
+    .limit(1);
+  if (!link) {
+    res.json(empty);
+    return;
+  }
+  const [series] = await db
+    .select({ id: seriesTable.id, title: seriesTable.title })
+    .from(seriesTable)
+    .where(eq(seriesTable.id, link.seriesId))
+    .limit(1);
+  if (!series) {
+    res.json(empty);
+    return;
+  }
+  const links = await db
+    .select({
+      storyId: seriesStoriesTable.storyId,
+      position: seriesStoriesTable.position,
+    })
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.seriesId, series.id))
+    .orderBy(asc(seriesStoriesTable.position));
+  const idx = links.findIndex((l) => l.storyId === id);
+  res.json({
+    seriesId: series.id,
+    seriesTitle: series.title,
+    position: idx >= 0 ? links[idx].position : null,
+    totalStories: links.length,
+    prevStoryId: idx > 0 ? links[idx - 1].storyId : null,
+    nextStoryId: idx >= 0 && idx < links.length - 1 ? links[idx + 1].storyId : null,
+  });
+});
+
+router.patch("/series/:id", async (req, res): Promise<void> => {
+  const params = UpdateSeriesParams.safeParse(req.params);
+  const body = UpdateSeriesBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [series] = await db
+    .select()
+    .from(seriesTable)
+    .where(eq(seriesTable.id, params.data.id))
+    .limit(1);
+  if (!series) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!canEditSeries(series, req.user ?? null)) {
+    res.status(403).json({ error: "Only the series author can update it" });
+    return;
+  }
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.data.title !== undefined) patch.title = body.data.title;
+  if (body.data.summary !== undefined) patch.summary = body.data.summary;
+  const [updated] = await db
+    .update(seriesTable)
+    .set(patch)
+    .where(eq(seriesTable.id, params.data.id))
+    .returning();
+  const counts = await withCounts([{ id: updated.id }]);
+  res.json(shapeSeries(updated, counts.get(updated.id) ?? 0));
+});
+
+router.delete("/series/:id", async (req, res): Promise<void> => {
+  const params = DeleteSeriesParams.safeParse(req.params);
+  const query = DeleteSeriesQueryParams.safeParse(req.query);
+  if (!params.success || !query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [series] = await db
+    .select()
+    .from(seriesTable)
+    .where(eq(seriesTable.id, params.data.id))
+    .limit(1);
+  if (!series) {
+    res.sendStatus(204);
+    return;
+  }
+  if (!canEditSeries(series, req.user ?? null)) {
+    res.status(403).json({ error: "Only the series author can delete it" });
+    return;
+  }
+  await db.delete(seriesTable).where(eq(seriesTable.id, params.data.id));
+  res.sendStatus(204);
+});
+
+router.post("/series/:id/stories", async (req, res): Promise<void> => {
+  const params = AddStoryToSeriesParams.safeParse(req.params);
+  const body = AddStoryToSeriesBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [series] = await db
+    .select()
+    .from(seriesTable)
+    .where(eq(seriesTable.id, params.data.id))
+    .limit(1);
+  if (!series) {
+    res.status(404).json({ error: "Series not found" });
+    return;
+  }
+  if (!canEditSeries(series, req.user ?? null)) {
+    res.status(403).json({ error: "Only the series author can edit it" });
+    return;
+  }
+  // The story must also belong to the same author. Without this check a
+  // requester could attach (and effectively reparent, via the storyId
+  // conflict target) another author's story to their own series.
+  const [story] = await db
+    .select({ id: storiesTable.id, authorName: storiesTable.authorName, userId: storiesTable.userId, coAuthors: storiesTable.coAuthors })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, body.data.storyId))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(story, req.user ?? null)) {
+    res.status(403).json({ error: "You can only add your own stories" });
+    return;
+  }
+  await db
+    .insert(seriesStoriesTable)
+    .values({
+      seriesId: params.data.id,
+      storyId: body.data.storyId,
+      position: body.data.position ?? 0,
+    })
+    .onConflictDoUpdate({
+      target: seriesStoriesTable.storyId,
+      set: { seriesId: params.data.id, position: body.data.position ?? 0 },
+    });
+  // Re-fetch and return the populated series.
+  const links = await db
+    .select()
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.seriesId, params.data.id))
+    .orderBy(asc(seriesStoriesTable.position));
+  const stories = await visibleStoriesForLinks(links);
+  res.json({
+    ...shapeSeries(series, stories.length),
+    stories: stories.map((s) => ({
+      ...s,
+      createdAt: s.createdAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    })),
+  });
+});
+
+router.delete(
+  "/series/:id/stories/:storyId",
+  async (req, res): Promise<void> => {
+    const params = RemoveStoryFromSeriesParams.safeParse(req.params);
+    const query = RemoveStoryFromSeriesQueryParams.safeParse(req.query);
+    if (!params.success || !query.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [series] = await db
+      .select()
+      .from(seriesTable)
+      .where(eq(seriesTable.id, params.data.id))
+      .limit(1);
+    if (!series) {
+      res.sendStatus(204);
+      return;
+    }
+    if (!canEditSeries(series, req.user ?? null)) {
+      res.status(403).json({ error: "Only the series author can edit it" });
+      return;
+    }
+    const [story] = await db
+      .select({ id: storiesTable.id, authorName: storiesTable.authorName, userId: storiesTable.userId, coAuthors: storiesTable.coAuthors })
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.storyId))
+      .limit(1);
+    if (story && !canEditStory(story, req.user ?? null)) {
+      res.status(403).json({ error: "You can only edit your own stories" });
+      return;
+    }
+    await db
+      .delete(seriesStoriesTable)
+      .where(
+        and(
+          eq(seriesStoriesTable.seriesId, params.data.id),
+          eq(seriesStoriesTable.storyId, params.data.storyId),
+        ),
+      );
+    res.sendStatus(204);
+  },
+);
+
+export default router;

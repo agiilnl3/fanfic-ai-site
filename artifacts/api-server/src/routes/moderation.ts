@@ -1,0 +1,211 @@
+import { Router, type IRouter } from "express";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  db,
+  reportsTable,
+  hiddenStoriesTable,
+  hiddenCommentsTable,
+  storiesTable,
+  storyCommentsTable,
+  storyRepostsTable,
+} from "@workspace/db";
+import {
+  CreateReportBody,
+  AdminListReportsQueryParams,
+  AdminResolveReportParams,
+  AdminResolveReportBody,
+} from "@workspace/api-zod";
+import { adminAuth } from "../middlewares/admin";
+import { logAdminAction } from "../lib/admin-audit";
+
+const router: IRouter = Router();
+
+async function attachPreviews(
+  rows: (typeof reportsTable.$inferSelect)[],
+): Promise<Array<typeof reportsTable.$inferSelect & { targetPreview: string | null }>> {
+  if (rows.length === 0) return [];
+  const storyIds = rows.filter((r) => r.targetType === "story").map((r) => r.targetId);
+  const commentIds = rows.filter((r) => r.targetType === "comment").map((r) => r.targetId);
+  const repostIds = rows.filter((r) => r.targetType === "repost").map((r) => r.targetId);
+  const stories = storyIds.length
+    ? await db
+        .select({ id: storiesTable.id, title: storiesTable.title })
+        .from(storiesTable)
+        .where(inArray(storiesTable.id, storyIds))
+    : [];
+  const comments = commentIds.length
+    ? await db
+        .select({ id: storyCommentsTable.id, body: storyCommentsTable.body })
+        .from(storyCommentsTable)
+        .where(inArray(storyCommentsTable.id, commentIds))
+    : [];
+  const reposts = repostIds.length
+    ? await db
+        .select({
+          id: storyRepostsTable.id,
+          reposterName: storyRepostsTable.reposterName,
+          note: storyRepostsTable.note,
+        })
+        .from(storyRepostsTable)
+        .where(inArray(storyRepostsTable.id, repostIds))
+    : [];
+  const sMap = new Map(stories.map((s) => [s.id, s.title]));
+  const cMap = new Map(comments.map((c) => [c.id, c.body]));
+  const rMap = new Map(
+    reposts.map((r) => [
+      r.id,
+      r.note ? `@${r.reposterName}: ${r.note}` : `@${r.reposterName}`,
+    ]),
+  );
+  return rows.map((r) => ({
+    ...r,
+    targetPreview:
+      r.targetType === "story"
+        ? sMap.get(r.targetId) ?? null
+        : r.targetType === "comment"
+          ? cMap.get(r.targetId)?.slice(0, 200) ?? null
+          : rMap.get(r.targetId)?.slice(0, 200) ?? null,
+  }));
+}
+
+function shape(
+  r: typeof reportsTable.$inferSelect & { targetPreview?: string | null },
+) {
+  return {
+    id: r.id,
+    targetType: r.targetType,
+    targetId: r.targetId,
+    reporterName: r.reporterName,
+    reason: r.reason,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+    resolvedAt: r.resolvedAt?.toISOString() ?? null,
+    targetPreview: r.targetPreview ?? null,
+  };
+}
+
+router.post("/reports", async (req, res): Promise<void> => {
+  const body = CreateReportBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const [row] = await db
+    .insert(reportsTable)
+    .values({
+      targetType: body.data.targetType,
+      targetId: body.data.targetId,
+      reporterName: body.data.reporterName.trim(),
+      reporterUserId: req.user?.id ?? null,
+      reason: (body.data.reason ?? "").trim(),
+    })
+    .returning();
+  res.status(201).json(shape(row));
+});
+
+router.get("/admin/reports", adminAuth, async (req, res): Promise<void> => {
+  const query = AdminListReportsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const rows = query.data.status
+    ? await db
+        .select()
+        .from(reportsTable)
+        .where(eq(reportsTable.status, query.data.status))
+        .orderBy(desc(reportsTable.createdAt))
+    : await db.select().from(reportsTable).orderBy(desc(reportsTable.createdAt));
+  const decorated = await attachPreviews(rows);
+  res.json(decorated.map(shape));
+});
+
+router.post(
+  "/admin/reports/:id",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = AdminResolveReportParams.safeParse(req.params);
+    const body = AdminResolveReportBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [report] = await db
+      .select()
+      .from(reportsTable)
+      .where(eq(reportsTable.id, params.data.id))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+    if (body.data.action === "hide") {
+      if (report.targetType === "story") {
+        await db
+          .insert(hiddenStoriesTable)
+          .values({ storyId: report.targetId, reason: report.reason })
+          .onConflictDoNothing();
+        // Also flip the story to "draft" so the public feed drops it.
+        await db
+          .update(storiesTable)
+          .set({ status: "draft", updatedAt: new Date() })
+          .where(eq(storiesTable.id, report.targetId));
+      } else if (report.targetType === "repost") {
+        // Reposts have no "hidden" join table; the safe action is to delete
+        // the repost row so it disappears from author profiles and from
+        // engagement aggregations.
+        await db
+          .delete(storyRepostsTable)
+          .where(eq(storyRepostsTable.id, report.targetId));
+      } else {
+        // Cascade-hide: the reported comment AND every descendant reply.
+        // We do a small BFS over parent_id since threads are 2 levels max,
+        // but the loop is generic in case that ever changes.
+        const allIds = new Set<number>([report.targetId]);
+        let frontier: number[] = [report.targetId];
+        while (frontier.length > 0) {
+          const children = await db
+            .select({ id: storyCommentsTable.id })
+            .from(storyCommentsTable)
+            .where(inArray(storyCommentsTable.parentId, frontier));
+          frontier = children
+            .map((c) => c.id)
+            .filter((id) => !allIds.has(id));
+          for (const id of frontier) allIds.add(id);
+        }
+        const ids = Array.from(allIds);
+        await db.transaction(async (tx) => {
+          await tx
+            .insert(hiddenCommentsTable)
+            .values(
+              ids.map((id) => ({
+                commentId: id,
+                reason: id === report.targetId ? report.reason : "cascade",
+              })),
+            )
+            .onConflictDoNothing();
+          await tx
+            .delete(storyCommentsTable)
+            .where(inArray(storyCommentsTable.id, ids));
+        });
+      }
+    }
+    const [updated] = await db
+      .update(reportsTable)
+      .set({
+        status: body.data.action === "hide" ? "hidden" : "dismissed",
+        resolvedAt: new Date(),
+      })
+      .where(eq(reportsTable.id, params.data.id))
+      .returning();
+    await logAdminAction(req, {
+      action: body.data.action === "hide" ? "hide_report" : "dismiss_report",
+      targetType: report.targetType,
+      targetId: report.targetId,
+      metadata: { reportId: report.id, reason: report.reason },
+    });
+    res.json(shape(updated));
+  },
+);
+
+export default router;
