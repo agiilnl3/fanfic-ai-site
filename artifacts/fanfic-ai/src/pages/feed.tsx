@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import {
@@ -122,6 +123,7 @@ function readQueryParam(name: string): string | null {
 }
 
 export default function Feed() {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All Genres");
   const [tab, setTab] = useState<"all" | "following">("all");
@@ -150,24 +152,24 @@ export default function Feed() {
   return (
     <Layout>
       <Seo
-        title="The Grand Library"
-        description="Explore a curated feed of AI-generated, illustrated fanfiction stories from the FanFic AI community."
+        title={t("feed.seoTitle")}
+        description={t("feed.seoDesc")}
       />
       <div className="container mx-auto px-4 py-12">
         <div className="flex flex-col items-center mb-12 text-center">
-          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4 glow-text">The Grand Library</h1>
+          <h1 className="font-serif text-4xl md:text-5xl font-bold mb-4 glow-text">{t("feed.title")}</h1>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Explore tales conjured by authors across the realm.
+            {t("feed.subtitle")}
           </p>
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "following")} className="max-w-3xl mx-auto mb-6">
           <TabsList className="grid grid-cols-2 w-full md:w-auto md:inline-flex">
             <TabsTrigger value="all" className="gap-2" data-testid="tab-feed-all">
-              <Globe className="w-4 h-4" /> All Stories
+              <Globe className="w-4 h-4" /> {t("feed.allStories")}
             </TabsTrigger>
             <TabsTrigger value="following" className="gap-2" data-testid="tab-feed-following">
-              <Users className="w-4 h-4" /> Following
+              <Users className="w-4 h-4" /> {t("feed.following")}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -176,7 +178,7 @@ export default function Feed() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Search by title, summary, or seed prompt..."
+              placeholder={t("feed.searchPlaceholder")}
               className="pl-10 h-12 bg-card/50 backdrop-blur-sm border-primary/20 text-lg"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -185,18 +187,20 @@ export default function Feed() {
           </div>
           <Select value={genre} onValueChange={setGenre}>
             <SelectTrigger className="w-full md:w-[200px] h-12 bg-card/50 border-primary/20">
-              <SelectValue placeholder="Genre" />
+              <SelectValue placeholder={t("feed.genre")} />
             </SelectTrigger>
             <SelectContent className="max-h-72">
               {GENRES.map((g) => (
-                <SelectItem key={g} value={g}>{g}</SelectItem>
+                <SelectItem key={g} value={g}>
+                  {g === "All Genres" ? t("feed.allGenres") : t(`genres.${g}`, g)}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
         <div className="max-w-3xl mx-auto mb-6 flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground">Sort:</span>
+          <span className="text-sm text-muted-foreground">{t("feed.sort")}</span>
           <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
             <SelectTrigger
               className="w-[170px] h-9 bg-card/50 border-primary/20"
@@ -205,10 +209,10 @@ export default function Feed() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="new">Newest</SelectItem>
-              <SelectItem value="today">Trending today</SelectItem>
-              <SelectItem value="week">Trending this week</SelectItem>
-              <SelectItem value="all">All-time top</SelectItem>
+              <SelectItem value="new">{t("feed.sortNew")}</SelectItem>
+              <SelectItem value="today">{t("feed.sortToday")}</SelectItem>
+              <SelectItem value="week">{t("feed.sortWeek")}</SelectItem>
+              <SelectItem value="all">{t("feed.sortAll")}</SelectItem>
             </SelectContent>
           </Select>
           {tag && (
@@ -216,7 +220,7 @@ export default function Feed() {
               variant="outline"
               role="button"
               tabIndex={0}
-              aria-label={`Clear tag filter ${tag}`}
+              aria-label={t("feed.clearTagAria", { tag })}
               className="cursor-pointer gap-2"
               onClick={() => setTag(null)}
               onKeyDown={(e) => {
@@ -235,27 +239,27 @@ export default function Feed() {
 
         {(tagsData ?? []).length > 0 && (
           <div className="max-w-3xl mx-auto mb-8 flex flex-wrap gap-2">
-            {(tagsData ?? []).slice(0, 24).map((t) => {
-              const active = tag === t.slug;
+            {(tagsData ?? []).slice(0, 24).map((tg) => {
+              const active = tag === tg.slug;
               return (
                 <Badge
-                  key={t.id}
+                  key={tg.id}
                   variant={active ? "default" : "secondary"}
                   role="button"
                   tabIndex={0}
                   aria-pressed={active}
-                  aria-label={`Filter by tag ${t.label}`}
+                  aria-label={t("feed.filterByTagAria", { tag: tg.label })}
                   className="cursor-pointer hover:bg-primary/30"
-                  onClick={() => setTag(active ? null : t.slug)}
+                  onClick={() => setTag(active ? null : tg.slug)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      setTag(active ? null : t.slug);
+                      setTag(active ? null : tg.slug);
                     }
                   }}
-                  data-testid={`tag-chip-${t.slug}`}
+                  data-testid={`tag-chip-${tg.slug}`}
                 >
-                  #{t.label}
+                  #{tg.label}
                 </Badge>
               );
             })}
@@ -267,10 +271,8 @@ export default function Feed() {
         {tab === "following" && !authorName?.trim() ? (
           <div className="text-center py-32 border border-dashed border-border/50 rounded-2xl bg-card/10">
             <Users className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="font-serif text-2xl mb-2">Set a pen name to follow authors</h3>
-            <p className="text-muted-foreground">
-              Open the New Story page to choose your pen name, then follow authors from their profile.
-            </p>
+            <h3 className="font-serif text-2xl mb-2">{t("feed.setPenNameTitle")}</h3>
+            <p className="text-muted-foreground">{t("feed.setPenNameHint")}</p>
           </div>
         ) : isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -296,12 +298,10 @@ export default function Feed() {
           <div className="text-center py-32 border border-dashed border-border/50 rounded-2xl bg-card/10">
             <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
             <h3 className="font-serif text-2xl mb-2">
-              {tab === "following" ? "No stories from authors you follow yet" : "No tales found"}
+              {tab === "following" ? t("feed.noFollowing") : t("feed.noTales")}
             </h3>
             <p className="text-muted-foreground">
-              {tab === "following"
-                ? "Visit an author's profile and tap Follow to see their stories here."
-                : "Try adjusting your search or filter."}
+              {tab === "following" ? t("feed.noFollowingHint") : t("feed.noTalesHint")}
             </p>
           </div>
         )}

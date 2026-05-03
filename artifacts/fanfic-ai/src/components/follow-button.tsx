@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   useGetAuthorFollow,
   useFollowAuthor,
@@ -26,6 +27,7 @@ export function FollowButton({
   className,
   showCount = false,
 }: FollowButtonProps) {
+  const { t } = useTranslation();
   const { authorName: follower } = useAuthor();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -39,7 +41,7 @@ export function FollowButton({
   const followMutation = useFollowAuthor({
     mutation: {
       onSuccess: (next) => queryClient.setQueryData(queryKey, next),
-      onError: () => toast({ title: "Failed to follow", variant: "destructive" }),
+      onError: () => toast({ title: t("follow.failed"), variant: "destructive" }),
     },
   });
   const unfollowMutation = useUnfollowAuthor({
@@ -59,8 +61,8 @@ export function FollowButton({
     e.stopPropagation();
     if (!follower?.trim()) {
       toast({
-        title: "Set your pen name first",
-        description: "Open the New Story page to choose a name before you can follow.",
+        title: t("follow.setPenNameTitle"),
+        description: t("follow.setPenNameDesc"),
       });
       return;
     }
@@ -82,7 +84,7 @@ export function FollowButton({
       data-testid={`button-follow-${authorName}`}
     >
       {isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-      <span>{isFollowing ? "Following" : "Follow"}</span>
+      <span>{isFollowing ? t("follow.following") : t("follow.follow")}</span>
       {showCount && data && (
         <span className="text-xs tabular-nums opacity-70">· {data.followerCount}</span>
       )}

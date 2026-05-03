@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { formatDistanceToNow } from "date-fns";
+import { ru as ruLocale } from "date-fns/locale";
 import {
   useGetUnreadNotificationCount,
   useListNotifications,
@@ -28,21 +30,8 @@ function iconForType(type: string) {
   return Sparkles;
 }
 
-function summarize(n: {
-  type: string;
-  actorName: string;
-  payload?: Record<string, unknown> | null;
-}) {
-  const title = (n.payload?.storyTitle as string | undefined) ?? "your story";
-  if (n.type === "comment") return `${n.actorName} commented on “${title}”`;
-  if (n.type === "follow") return `${n.actorName} started following you`;
-  if (n.type === "like") return `${n.actorName} liked “${title}”`;
-  if (n.type === "repost") return `${n.actorName} reposted “${title}”`;
-  if (n.type === "co_author_chapter") return `${n.actorName} added a chapter to “${title}”`;
-  return `${n.actorName}: ${n.type}`;
-}
-
 export function NotificationsBell() {
+  const { t, i18n } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -104,6 +93,25 @@ export function NotificationsBell() {
     }
   };
 
+  const summarize = (n: {
+    type: string;
+    actorName: string;
+    payload?: Record<string, unknown> | null;
+  }) => {
+    const title = (n.payload?.storyTitle as string | undefined) ?? t("notifications.yourStory");
+    const known = ["comment", "follow", "like", "repost", "co_author_chapter"];
+    const key =
+      n.type === "co_author_chapter" ? "coAuthorChapter" : n.type;
+    if (known.includes(n.type)) {
+      return t(`notifications.${key}`, { actor: n.actorName, title });
+    }
+    return t("notifications.fallback", { actor: n.actorName, type: n.type });
+  };
+
+  const dateLocale = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru")
+    ? ruLocale
+    : undefined;
+
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -111,7 +119,7 @@ export function NotificationsBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label="Notifications"
+          aria-label={t("notifications.ariaLabel")}
           data-testid="button-notifications"
         >
           <Bell className="w-5 h-5" />
@@ -127,7 +135,7 @@ export function NotificationsBell() {
         className="w-80 max-h-[70vh] overflow-y-auto p-0"
       >
         <div className="px-3 py-2 border-b border-border/50 flex items-center justify-between">
-          <span className="font-medium text-sm">Notifications</span>
+          <span className="font-medium text-sm">{t("notifications.label")}</span>
           <span className="text-xs text-muted-foreground">@{recipient}</span>
         </div>
         {notifications && notifications.length > 0 ? (
@@ -149,7 +157,7 @@ export function NotificationsBell() {
                     <div className="min-w-0">
                       <p className="text-sm leading-snug">{summarize(n)}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
                       </p>
                     </div>
                   </Link>
@@ -159,7 +167,7 @@ export function NotificationsBell() {
           </ul>
         ) : (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No notifications yet.
+            {t("notifications.empty")}
           </div>
         )}
       </DropdownMenuContent>

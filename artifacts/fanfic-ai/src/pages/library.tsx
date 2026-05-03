@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -14,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Bookmark, History, BookOpen } from "lucide-react";
 
 export default function LibraryPage() {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const recipient = authorName?.trim() ?? "";
   const enabled = !!recipient;
@@ -29,30 +31,26 @@ export default function LibraryPage() {
 
   return (
     <Layout>
-      <Seo title="My Library" description="Bookmarks and reading history." />
+      <Seo title={t("library.seoTitle")} description={t("library.seoDesc")} />
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="mb-8">
-          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">My Library</h1>
-          <p className="text-muted-foreground">
-            Stories you've saved, and ones you've started reading.
-          </p>
+          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">{t("library.title")}</h1>
+          <p className="text-muted-foreground">{t("library.subtitle")}</p>
         </div>
 
         {!enabled ? (
           <div className="text-center py-24 border border-dashed border-border/50 rounded-2xl bg-card/10">
             <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">
-              Set a pen name on the New Story page to use your library.
-            </p>
+            <p className="text-muted-foreground">{t("library.setPenName")}</p>
           </div>
         ) : (
           <Tabs defaultValue="bookmarks">
             <TabsList>
               <TabsTrigger value="bookmarks" data-testid="tab-library-bookmarks">
-                <Bookmark className="w-4 h-4 mr-2" /> Bookmarks
+                <Bookmark className="w-4 h-4 mr-2" /> {t("library.bookmarks")}
               </TabsTrigger>
               <TabsTrigger value="history" data-testid="tab-library-history">
-                <History className="w-4 h-4 mr-2" /> History
+                <History className="w-4 h-4 mr-2" /> {t("library.history")}
               </TabsTrigger>
             </TabsList>
 
@@ -63,9 +61,7 @@ export default function LibraryPage() {
                   <Skeleton className="h-28" />
                 </div>
               ) : (bookmarks ?? []).length === 0 ? (
-                <p className="text-muted-foreground italic">
-                  No bookmarks yet — tap Save on any story to add it here.
-                </p>
+                <p className="text-muted-foreground italic">{t("library.noBookmarks")}</p>
               ) : (
                 <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {(bookmarks ?? []).map((b) => (
@@ -74,12 +70,12 @@ export default function LibraryPage() {
                         <Card className="cursor-pointer hover:bg-accent/30 transition-colors">
                           <CardHeader>
                             <CardTitle className="font-serif text-lg line-clamp-1">
-                              {b.story?.title ?? "Untitled"}
+                              {b.story?.title ?? t("common.untitled")}
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="text-sm text-muted-foreground">
                             <p className="line-clamp-2">{b.story?.summary}</p>
-                            <p className="mt-2 italic">by {b.story?.authorName}</p>
+                            <p className="mt-2 italic">{t("common.by")} {b.story?.authorName}</p>
                           </CardContent>
                         </Card>
                       </Link>
@@ -96,9 +92,7 @@ export default function LibraryPage() {
                   <Skeleton className="h-20" />
                 </div>
               ) : (history ?? []).length === 0 ? (
-                <p className="text-muted-foreground italic">
-                  Nothing read yet — open a story to start tracking your progress.
-                </p>
+                <p className="text-muted-foreground italic">{t("library.noHistory")}</p>
               ) : (
                 <ul className="space-y-3">
                   {(history ?? []).map((h) => (
@@ -108,10 +102,10 @@ export default function LibraryPage() {
                           <CardContent className="p-4 flex items-center justify-between gap-4">
                             <div className="min-w-0">
                               <p className="font-serif text-base truncate">
-                                {h.story?.title ?? "Untitled"}
+                                {h.story?.title ?? t("common.untitled")}
                               </p>
                               <p className="text-xs text-muted-foreground italic truncate">
-                                by {h.story?.authorName}
+                                {t("common.by")} {h.story?.authorName}
                               </p>
                             </div>
                             <div className="text-right shrink-0">

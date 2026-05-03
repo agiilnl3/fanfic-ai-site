@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useReorderIllustrations, getGetStoryQueryKey, getGetIllustrationsQueryKey } from "@workspace/api-client-react";
 import type { Illustration } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,6 +21,7 @@ export function IllustrationReorderDialog({
   open: boolean;
   onOpenChange: (next: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [order, setOrder] = useState<Illustration[]>(illustrations);
@@ -33,10 +35,10 @@ export function IllustrationReorderDialog({
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetStoryQueryKey(storyId) });
         queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(storyId) });
-        toast({ title: "Order saved" });
+        toast({ title: t("illReorder.saved") });
         onOpenChange(false);
       },
-      onError: () => toast({ title: "Could not save order", variant: "destructive" }),
+      onError: () => toast({ title: t("illReorder.failed"), variant: "destructive" }),
     },
   });
 
@@ -59,7 +61,7 @@ export function IllustrationReorderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Reorder illustrations</DialogTitle>
+          <DialogTitle>{t("illReorder.title")}</DialogTitle>
         </DialogHeader>
         <ul className="space-y-2 max-h-[60vh] overflow-y-auto">
           {order.map((ill, idx) => (
@@ -83,7 +85,7 @@ export function IllustrationReorderDialog({
                   className="h-7 w-7"
                   disabled={idx === 0}
                   onClick={() => move(idx, -1)}
-                  aria-label="Move up"
+                  aria-label={t("illReorder.moveUp")}
                 >
                   <ArrowUp className="w-4 h-4" />
                 </Button>
@@ -93,7 +95,7 @@ export function IllustrationReorderDialog({
                   className="h-7 w-7"
                   disabled={idx === order.length - 1}
                   onClick={() => move(idx, 1)}
-                  aria-label="Move down"
+                  aria-label={t("illReorder.moveDown")}
                 >
                   <ArrowDown className="w-4 h-4" />
                 </Button>
@@ -103,11 +105,11 @@ export function IllustrationReorderDialog({
         </ul>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button onClick={save} disabled={mutation.isPending}>
             {mutation.isPending && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />}
-            Save order
+            {t("illReorder.saveOrder")}
           </Button>
         </DialogFooter>
       </DialogContent>

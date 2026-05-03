@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -18,6 +19,7 @@ import { Plus, Loader2, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SeriesPage() {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -36,10 +38,10 @@ export default function SeriesPage() {
         queryClient.invalidateQueries({ queryKey });
         setTitle("");
         setSummary("");
-        toast({ title: "Series created" });
+        toast({ title: t("series.created") });
       },
       onError: () =>
-        toast({ title: "Failed to create series", variant: "destructive" }),
+        toast({ title: t("series.createFailed"), variant: "destructive" }),
     },
   });
 
@@ -57,21 +59,17 @@ export default function SeriesPage() {
 
   return (
     <Layout>
-      <Seo title="My Series" description="Group your stories into ongoing series." />
+      <Seo title={t("series.seoTitle")} description={t("series.seoDesc")} />
       <div className="container mx-auto px-4 py-12 max-w-4xl">
         <div className="mb-8">
-          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">My Series</h1>
-          <p className="text-muted-foreground">
-            Bundle related stories so readers can binge them in order.
-          </p>
+          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">{t("series.title")}</h1>
+          <p className="text-muted-foreground">{t("series.subtitle")}</p>
         </div>
 
         {!authorName?.trim() ? (
           <div className="text-center py-24 border border-dashed border-border/50 rounded-2xl bg-card/10">
             <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">
-              Set a pen name on the New Story page to manage series.
-            </p>
+            <p className="text-muted-foreground">{t("series.setPenName")}</p>
           </div>
         ) : (
           <>
@@ -83,13 +81,13 @@ export default function SeriesPage() {
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Series title (e.g. The Twilight Chronicles)"
+                placeholder={t("series.titlePlaceholder")}
                 data-testid="input-series-title"
               />
               <Textarea
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
-                placeholder="Optional one-line synopsis"
+                placeholder={t("series.summaryPlaceholder")}
                 rows={2}
                 data-testid="textarea-series-summary"
               />
@@ -104,7 +102,7 @@ export default function SeriesPage() {
                 ) : (
                   <Plus className="w-4 h-4 mr-2" />
                 )}
-                Create series
+                {t("series.create")}
               </Button>
             </form>
 
@@ -114,7 +112,7 @@ export default function SeriesPage() {
                 <Skeleton className="h-24" />
               </div>
             ) : (series ?? []).length === 0 ? (
-              <p className="text-muted-foreground italic">No series yet.</p>
+              <p className="text-muted-foreground italic">{t("series.noSeries")}</p>
             ) : (
               <ul className="space-y-3">
                 {(series ?? []).map((s) => (
@@ -131,7 +129,7 @@ export default function SeriesPage() {
                             <p className="line-clamp-2 mb-1">{s.summary}</p>
                           )}
                           <p className="text-xs">
-                            {s.storyCount} {s.storyCount === 1 ? "story" : "stories"}
+                            {t("series.storyCount", { count: s.storyCount })}
                           </p>
                         </CardContent>
                       </Card>

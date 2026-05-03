@@ -1,5 +1,7 @@
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
+import { ru as ruLocale } from "date-fns/locale";
 import { Story, getGetStoryQueryOptions } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
@@ -9,6 +11,7 @@ import { LikeButton } from "@/components/like-button";
 import { BookmarkButton } from "@/components/bookmark-button";
 
 export function StoryCard({ story }: { story: Story }) {
+  const { t, i18n } = useTranslation();
   const tags = (story as Story & { tags?: { id: number; slug: string; label: string }[] }).tags;
   const progress = (story as Story & { readingProgress?: number | null }).readingProgress;
   const queryClient = useQueryClient();
@@ -19,6 +22,10 @@ export function StoryCard({ story }: { story: Story }) {
       staleTime: 30_000,
     });
   };
+
+  const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
+  const dateLocale = isRu ? ruLocale : undefined;
+  const dateFmt = isRu ? "d MMM yyyy" : "MMM d, yyyy";
 
   return (
     <Link
@@ -46,7 +53,7 @@ export function StoryCard({ story }: { story: Story }) {
           <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
           <div className="absolute bottom-3 left-3 right-3">
             <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/30 backdrop-blur-sm mb-2">
-              {story.genre}
+              {t(`genres.${story.genre}`, story.genre)}
             </Badge>
           </div>
         </div>
@@ -57,7 +64,7 @@ export function StoryCard({ story }: { story: Story }) {
         </CardHeader>
         <CardContent className="p-4 pt-0 flex-1">
           <p className="text-muted-foreground text-sm italic">
-            by{" "}
+            {t("storyCard.by")}{" "}
             <span
               role="link"
               tabIndex={0}
@@ -88,13 +95,13 @@ export function StoryCard({ story }: { story: Story }) {
               className="flex flex-wrap gap-1 mt-3"
               data-testid={`tags-${story.id}`}
             >
-              {tags.slice(0, 4).map((t) => (
+              {tags.slice(0, 4).map((tag) => (
                 <Badge
-                  key={t.id}
+                  key={tag.id}
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 font-normal"
                 >
-                  #{t.label}
+                  #{tag.label}
                 </Badge>
               ))}
             </div>
@@ -105,7 +112,7 @@ export function StoryCard({ story }: { story: Story }) {
               data-testid={`progress-${story.id}`}
             >
               <BookOpen className="w-3 h-3" />
-              Continue from {progress}%
+              {t("storyCard.continueFrom", { progress })}
             </div>
           )}
         </CardContent>
@@ -116,14 +123,14 @@ export function StoryCard({ story }: { story: Story }) {
             <span
               className="inline-flex items-center gap-1 text-muted-foreground tabular-nums"
               data-testid={`comment-count-${story.id}`}
-              title={`${story.commentCount} comment${story.commentCount === 1 ? "" : "s"}`}
+              title={t("storyCard.commentsTitle", { count: story.commentCount })}
             >
               <MessageCircle className="w-3.5 h-3.5" />
               {story.commentCount}
             </span>
             <BookmarkButton storyId={story.id} variant="compact" />
           </div>
-          <span>{format(new Date(story.createdAt), "MMM d, yyyy")}</span>
+          <span>{format(new Date(story.createdAt), dateFmt, { locale: dateLocale })}</span>
         </CardFooter>
       </Card>
     </Link>

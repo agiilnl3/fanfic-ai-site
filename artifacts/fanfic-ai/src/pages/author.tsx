@@ -1,11 +1,13 @@
 import { useRoute, Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import {
   useGetAuthorProfile,
   getGetAuthorProfileQueryKey,
   useListAuthorReposts,
   getListAuthorRepostsQueryKey,
 } from "@workspace/api-client-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
+import { ru as ruLocale } from "date-fns/locale";
 import { Repeat2 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
@@ -15,7 +17,6 @@ import { ReportButton } from "@/components/report-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { BookOpen, Heart, Users, UserPlus } from "lucide-react";
-import { format } from "date-fns";
 
 function StatCard({
   icon: Icon,
@@ -38,6 +39,7 @@ function StatCard({
 }
 
 export default function AuthorPage() {
+  const { t, i18n } = useTranslation();
   const [, params] = useRoute<{ name: string }>("/author/:name");
   const name = params?.name ? decodeURIComponent(params.name) : "";
 
@@ -57,11 +59,15 @@ export default function AuthorPage() {
     },
   });
 
+  const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
+  const dateLocale = isRu ? ruLocale : undefined;
+  const monthYearFmt = isRu ? "LLLL yyyy" : "MMMM yyyy";
+
   return (
     <Layout>
       <Seo
-        title={name ? `${name} — FanFic AI` : "Author"}
-        description={name ? `Stories and profile for author ${name} on FanFic AI.` : ""}
+        title={name ? `${name} — ${t("author.seoTitleSuffix")}` : t("author.seoTitleSuffix")}
+        description={name ? t("author.seoDesc", { name }) : ""}
       />
       <div className="container mx-auto px-4 py-12 max-w-6xl">
         {isLoading && (
@@ -76,12 +82,12 @@ export default function AuthorPage() {
         )}
         {error && (
           <div className="text-center py-32">
-            <h1 className="font-serif text-3xl mb-2">Author not found</h1>
+            <h1 className="font-serif text-3xl mb-2">{t("author.notFoundTitle")}</h1>
             <p className="text-muted-foreground">
-              No public profile for <span className="italic">{name}</span>.
+              {t("author.notFoundBody", { name })}
             </p>
             <Link href="/feed" className="text-primary underline mt-4 inline-block">
-              Back to library
+              {t("author.backToLibrary")}
             </Link>
           </div>
         )}
@@ -95,26 +101,28 @@ export default function AuthorPage() {
                   </h1>
                   {data.firstSeenAt && (
                     <p className="text-sm text-muted-foreground mt-2">
-                      Joined the realm {format(new Date(data.firstSeenAt), "MMMM yyyy")}
+                      {t("author.joined", {
+                        date: format(new Date(data.firstSeenAt), monthYearFmt, { locale: dateLocale }),
+                      })}
                     </p>
                   )}
                 </div>
                 <FollowButton authorName={data.authorName} size="default" showCount />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <StatCard icon={BookOpen} label="Published" value={data.publishedCount} />
-                <StatCard icon={Heart} label="Total Likes" value={data.totalLikes} />
-                <StatCard icon={Users} label="Followers" value={data.followerCount} />
-                <StatCard icon={UserPlus} label="Following" value={data.followingCount} />
+                <StatCard icon={BookOpen} label={t("author.publishedStat")} value={data.publishedCount} />
+                <StatCard icon={Heart} label={t("author.totalLikes")} value={data.totalLikes} />
+                <StatCard icon={Users} label={t("author.followers")} value={data.followerCount} />
+                <StatCard icon={UserPlus} label={t("author.followingStat")} value={data.followingCount} />
               </div>
             </div>
 
-            <h2 className="font-serif text-2xl mb-6">Published tales</h2>
+            <h2 className="font-serif text-2xl mb-6">{t("author.publishedTales")}</h2>
             {data.stories.length === 0 ? (
               <div className="text-center py-16 border border-dashed border-border/50 rounded-2xl bg-card/10">
                 <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
                 <p className="text-muted-foreground">
-                  {data.authorName} hasn't published any stories yet.
+                  {t("author.noPublished", { name: data.authorName })}
                 </p>
               </div>
             ) : (
@@ -129,10 +137,10 @@ export default function AuthorPage() {
               <div className="mt-12">
                 <h2 className="font-serif text-2xl mb-2 flex items-center gap-2">
                   <Repeat2 className="w-5 h-5 text-primary" />
-                  Reposted tales
+                  {t("author.repostedTales")}
                 </h2>
                 <p className="text-sm text-muted-foreground mb-6">
-                  Stories {data.authorName} has shared with their followers.
+                  {t("author.repostedSubtitle", { name: data.authorName })}
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {reposts.map((entry) => (
@@ -140,7 +148,9 @@ export default function AuthorPage() {
                       <StoryCard story={entry.story} />
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="text-xs text-muted-foreground">
-                          Reposted {formatDistanceToNow(new Date(entry.repostedAt), { addSuffix: true })}
+                          {t("author.repostedTime", {
+                            time: formatDistanceToNow(new Date(entry.repostedAt), { addSuffix: true, locale: dateLocale }),
+                          })}
                           {entry.note ? ` — “${entry.note}”` : ""}
                         </div>
                         <ReportButton targetType="repost" targetId={entry.repostId} />

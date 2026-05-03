@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useRoute } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -30,6 +31,7 @@ import { Trash2, Loader2, Plus, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function SeriesDetailPage() {
+  const { t } = useTranslation();
   const [, params] = useRoute("/series/:id");
   const seriesId = Number(params?.id);
   const { authorName } = useAuthor();
@@ -62,14 +64,14 @@ export default function SeriesDetailPage() {
     mutation: {
       onSuccess: () => {
         refresh();
-        toast({ title: "Series updated" });
+        toast({ title: t("series.updated") });
       },
     },
   });
   const del = useDeleteSeries({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Series deleted" });
+        toast({ title: t("series.deleted") });
         window.history.back();
       },
     },
@@ -112,7 +114,10 @@ export default function SeriesDetailPage() {
           <p className="text-muted-foreground mb-6">{series.summary}</p>
         )}
         <p className="text-xs text-muted-foreground italic mb-8">
-          by {series.authorName} · {series.stories?.length ?? 0} stories
+          {t("series.byAuthorCount", {
+            author: series.authorName,
+            count: series.stories?.length ?? 0,
+          })}
         </p>
 
         {isOwner && (
@@ -134,13 +139,13 @@ export default function SeriesDetailPage() {
                   })
                 }
               >
-                Rename
+                {t("common.rename")}
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
                 onClick={() => {
-                  if (confirm("Delete this series? Stories themselves are kept.")) {
+                  if (confirm(t("series.confirmDelete"))) {
                     del.mutate({
                       id: seriesId,
                       params: { requesterAuthorName: authorName },
@@ -148,19 +153,19 @@ export default function SeriesDetailPage() {
                   }
                 }}
               >
-                <Trash2 className="w-4 h-4 mr-1" /> Delete series
+                <Trash2 className="w-4 h-4 mr-1" /> {t("series.deleteSeries")}
               </Button>
             </div>
 
             <div className="flex gap-2 items-center pt-2 border-t border-border/30">
               <Select value={pickStoryId} onValueChange={setPickStoryId}>
                 <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Pick a story to add" />
+                  <SelectValue placeholder={t("series.pickStory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {candidates.length === 0 ? (
                     <SelectItem value="__none" disabled>
-                      No more stories to add
+                      {t("series.noMoreStories")}
                     </SelectItem>
                   ) : (
                     candidates.map((s) => (
@@ -190,7 +195,7 @@ export default function SeriesDetailPage() {
                 ) : (
                   <Plus className="w-4 h-4 mr-1" />
                 )}
-                Add story
+                {t("series.addStory")}
               </Button>
             </div>
           </div>
@@ -200,7 +205,7 @@ export default function SeriesDetailPage() {
           <div className="text-center py-12 border border-dashed border-border/50 rounded-2xl">
             <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-muted-foreground italic">
-              No stories in this series yet.
+              {t("series.noStoriesInSeries")}
             </p>
           </div>
         ) : (
@@ -220,7 +225,7 @@ export default function SeriesDetailPage() {
                         {s.title}
                       </Link>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {s.genre}
+                        {t(`genres.${s.genre}`, s.genre)}
                       </p>
                     </div>
                     {isOwner && (
@@ -234,7 +239,7 @@ export default function SeriesDetailPage() {
                             params: { requesterAuthorName: authorName },
                           })
                         }
-                        aria-label="Remove from series"
+                        aria-label={t("series.removeFromSeries")}
                       >
                         <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                       </Button>

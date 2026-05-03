@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -13,17 +14,11 @@ import { Switch } from "@/components/ui/switch";
 import { Loader2, Settings as SettingsIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const FIELDS = [
-  { key: "comment", label: "New comments on my stories" },
-  { key: "follow", label: "New followers" },
-  { key: "like", label: "Likes on my stories" },
-  { key: "repost", label: "Reposts of my stories" },
-  { key: "coAuthorChapter", label: "Co-author added a chapter" },
-] as const;
-
-type FieldKey = (typeof FIELDS)[number]["key"];
+const FIELD_KEYS = ["comment", "follow", "like", "repost", "coAuthorChapter"] as const;
+type FieldKey = (typeof FIELD_KEYS)[number];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -58,10 +53,10 @@ export default function SettingsPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey });
-        toast({ title: "Preferences saved" });
+        toast({ title: t("settings.saved") });
       },
       onError: () =>
-        toast({ title: "Failed to save preferences", variant: "destructive" }),
+        toast({ title: t("settings.saveFailed"), variant: "destructive" }),
     },
   });
 
@@ -75,44 +70,42 @@ export default function SettingsPage() {
 
   return (
     <Layout>
-      <Seo title="Settings" description="Manage your notification preferences." />
+      <Seo title={t("settings.seoTitle")} description={t("settings.seoDesc")} />
       <div className="container mx-auto px-4 py-12 max-w-2xl">
         <div className="flex items-center gap-3 mb-8">
           <SettingsIcon className="w-7 h-7 text-primary" />
-          <h1 className="font-serif text-3xl md:text-4xl font-bold">Settings</h1>
+          <h1 className="font-serif text-3xl md:text-4xl font-bold">{t("settings.title")}</h1>
         </div>
 
         {!recipient ? (
           <div className="text-center py-12 border border-dashed border-border/50 rounded-2xl bg-card/10">
-            <p className="text-muted-foreground">
-              Set a pen name on the New Story page to manage settings.
-            </p>
+            <p className="text-muted-foreground">{t("settings.setPenName")}</p>
           </div>
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="font-serif">Notifications</CardTitle>
+              <CardTitle className="font-serif">{t("settings.notifications")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
               ) : (
-                FIELDS.map((f) => (
+                FIELD_KEYS.map((key) => (
                   <div
-                    key={f.key}
+                    key={key}
                     className="flex items-center justify-between gap-4"
                   >
                     <label
-                      htmlFor={`pref-${f.key}`}
+                      htmlFor={`pref-${key}`}
                       className="text-sm cursor-pointer"
                     >
-                      {f.label}
+                      {t(`settings.${key}`)}
                     </label>
                     <Switch
-                      id={`pref-${f.key}`}
-                      checked={prefs[f.key]}
-                      onCheckedChange={(v) => toggle(f.key, !!v)}
-                      data-testid={`switch-pref-${f.key}`}
+                      id={`pref-${key}`}
+                      checked={prefs[key]}
+                      onCheckedChange={(v) => toggle(key, !!v)}
+                      data-testid={`switch-pref-${key}`}
                     />
                   </div>
                 ))

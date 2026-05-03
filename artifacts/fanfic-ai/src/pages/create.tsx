@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
@@ -81,6 +82,7 @@ function splitIntoSections(fullText: string, n: number): string[] {
 }
 
 export default function CreateStory() {
+  const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const { authorName, setAuthorName } = useAuthor();
   const { toast } = useToast();
@@ -111,8 +113,8 @@ export default function CreateStory() {
   const handleGenerate = async () => {
     if (!authorName.trim()) {
       toast({
-        title: "Pen Name Required",
-        description: "Please enter a pen name to sign your work.",
+        title: t("create.penNameRequired"),
+        description: t("create.penNameRequiredDesc"),
         variant: "destructive",
       });
       return;
@@ -137,8 +139,8 @@ export default function CreateStory() {
 
       const tagSlugs = tagDraft
         .split(",")
-        .map((t) => t.trim().toLowerCase())
-        .filter((t) => t.length > 0)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.length > 0)
         .slice(0, 8);
       if (tagSlugs.length > 0) {
         try {
@@ -148,9 +150,8 @@ export default function CreateStory() {
           });
         } catch {
           toast({
-            title: "Couldn't save tags",
-            description:
-              "The story was created but we couldn't attach those tags. You can add them on the story page.",
+            title: t("create.tagsSaveFailedTitle"),
+            description: t("create.tagsSaveFailedDesc"),
             variant: "destructive",
           });
         }
@@ -169,9 +170,8 @@ export default function CreateStory() {
             });
           } catch {
             toast({
-              title: "Couldn't add to series",
-              description:
-                "The story was created but we couldn't attach it to that series.",
+              title: t("create.addToSeriesFailedTitle"),
+              description: t("create.addToSeriesFailedDesc"),
               variant: "destructive",
             });
           }
@@ -207,8 +207,8 @@ export default function CreateStory() {
     } catch (err) {
       setPhase("idle");
       toast({
-        title: "Failed to conjure story",
-        description: err instanceof Error ? err.message : "An unknown error occurred.",
+        title: t("create.failedConjure"),
+        description: err instanceof Error ? err.message : t("create.unknownError"),
         variant: "destructive",
       });
     }
@@ -223,21 +223,21 @@ export default function CreateStory() {
             <Sparkles className="w-12 h-12 text-primary animate-pulse" />
           </div>
           <div className="text-center space-y-3 max-w-md">
-            <h2 className="font-serif text-3xl font-bold glow-text">Writing Your Story</h2>
-            <p className="text-muted-foreground">The AI is weaving words into prose…</p>
+            <h2 className="font-serif text-3xl font-bold glow-text">{t("create.writingTitle")}</h2>
+            <p className="text-muted-foreground">{t("create.writingDesc")}</p>
             <p className="text-sm text-muted-foreground/60 italic mt-4">
-              This takes about 15–30 seconds. Don't close this page.
+              {t("create.writingHint")}
             </p>
           </div>
           <div className="flex gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span>Writing story…</span>
+              <span>{t("create.writingStep")}</span>
             </div>
             {withIllustrations && (
               <div className="flex items-center gap-2 opacity-40">
                 <ImageIcon className="w-4 h-4" />
-                <span>Illustrations pending</span>
+                <span>{t("create.illsPending")}</span>
               </div>
             )}
           </div>
@@ -257,17 +257,17 @@ export default function CreateStory() {
             {phase === "done" ? (
               <>
                 <CheckCircle2 className="w-12 h-12 text-primary mx-auto mb-4" />
-                <h2 className="font-serif text-3xl font-bold glow-text mb-2">Your Story Is Ready</h2>
-                <p className="text-muted-foreground">"{generatedStory.title}" has been conjured.</p>
+                <h2 className="font-serif text-3xl font-bold glow-text mb-2">{t("create.readyTitle")}</h2>
+                <p className="text-muted-foreground">{t("create.readyDesc", { title: generatedStory.title })}</p>
               </>
             ) : (
               <>
                 <div className="relative w-12 h-12 mx-auto mb-4">
                   <div className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
                 </div>
-                <h2 className="font-serif text-3xl font-bold glow-text mb-2">Painting Illustrations</h2>
+                <h2 className="font-serif text-3xl font-bold glow-text mb-2">{t("create.paintingTitle")}</h2>
                 <p className="text-muted-foreground">
-                  {doneCount} of {totalIlls} illustrations ready…
+                  {t("create.paintingProgress", { done: doneCount, total: totalIlls })}
                 </p>
               </>
             )}
@@ -277,7 +277,7 @@ export default function CreateStory() {
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <Badge className="mb-2 text-xs">{generatedStory.genre} · {generatedStory.artStyle}</Badge>
+                  <Badge className="mb-2 text-xs">{t(`genres.${generatedStory.genre}`, generatedStory.genre)} · {t(`artStyles.${generatedStory.artStyle}`, generatedStory.artStyle)}</Badge>
                   <CardTitle className="font-serif text-2xl">{generatedStory.title}</CardTitle>
                   {generatedStory.summary && (
                     <CardDescription className="mt-2 text-sm leading-relaxed">
@@ -291,7 +291,7 @@ export default function CreateStory() {
 
             {withIllustrations && (
               <CardContent>
-                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-3">Illustrations</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-3">{t("create.illustrationsLabel")}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {Array.from({ length: totalIlls }, (_, idx) => {
                     const ill = illustrations[idx];
@@ -307,7 +307,7 @@ export default function CreateStory() {
                         ) : isActive ? (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
                             <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            <span className="text-xs text-muted-foreground">Painting…</span>
+                            <span className="text-xs text-muted-foreground">{t("create.painting")}</span>
                           </div>
                         ) : (
                           <Skeleton className="w-full h-full" />
@@ -334,7 +334,7 @@ export default function CreateStory() {
                 onClick={() => setLocation(`/story/${generatedStory.id}`)}
               >
                 <BookOpen className="w-4 h-4 mr-2" />
-                Read Your Story
+                {t("create.readYourStory")}
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             ) : (
@@ -344,7 +344,7 @@ export default function CreateStory() {
                 onClick={() => setLocation(`/story/${generatedStory.id}`)}
               >
                 <ArrowRight className="w-4 h-4 mr-2" />
-                Open Story Now
+                {t("create.openStoryNow")}
               </Button>
             )}
             <Button
@@ -356,7 +356,7 @@ export default function CreateStory() {
                 setIllustrations([]);
               }}
             >
-              Start Over
+              {t("create.startOver")}
             </Button>
           </div>
         </div>
@@ -367,79 +367,79 @@ export default function CreateStory() {
   return (
     <Layout>
       <Seo
-        title="Create a New Story"
-        description="Conjure a fully illustrated AI fanfiction in minutes. Pick a genre, an art style, and a model — your manuscript is one prompt away."
+        title={t("create.title")}
+        description={t("create.subtitle")}
       />
       <div className="container mx-auto px-4 py-12 max-w-3xl">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           <div className="text-center mb-10">
-            <h1 className="font-serif text-4xl font-bold mb-4">A Blank Page Awaits</h1>
-            <p className="text-muted-foreground text-lg">Define the essence of your story, and let the AI weave the details.</p>
+            <h1 className="font-serif text-4xl font-bold mb-4">{t("create.blankPageTitle")}</h1>
+            <p className="text-muted-foreground text-lg">{t("create.blankPageSubtitle")}</p>
           </div>
 
           <Card className="bg-card/50 backdrop-blur-sm border-primary/10 shadow-[0_0_40px_hsl(var(--primary)/0.05)]">
             <CardHeader>
               <CardTitle className="font-serif flex items-center text-2xl">
                 <PenTool className="w-5 h-5 mr-2 text-primary" />
-                Story Parameters
+                {t("create.storyParameters")}
               </CardTitle>
-              <CardDescription>Configure the themes, style, and tone.</CardDescription>
+              <CardDescription>{t("create.storyParametersDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
 
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="authorName">Your Pen Name</Label>
+                  <Label htmlFor="authorName">{t("create.yourPenName")}</Label>
                   <Input
                     id="authorName"
                     value={authorName}
                     onChange={(e) => setAuthorName(e.target.value)}
-                    placeholder="Jane Austen"
+                    placeholder={t("create.penNamePlaceholder")}
                     className="bg-background/50"
                   />
                   {authorName.trim() && <UsageMeter authorName={authorName.trim()} />}
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Length</Label>
+                  <Label>{t("create.length")}</Label>
                   <Select value={lengthSetting} onValueChange={(val) => setLengthSetting(val as "short" | "medium" | "long")}>
                     <SelectTrigger className="bg-background/50">
-                      <SelectValue placeholder="Select length" />
+                      <SelectValue placeholder={t("create.lengthSelect")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="short">Short Tale (~500 words)</SelectItem>
-                      <SelectItem value="medium">Novelette (~1000 words)</SelectItem>
-                      <SelectItem value="long">Novella (~2000 words)</SelectItem>
+                      <SelectItem value="short">{t("create.lengthShort")}</SelectItem>
+                      <SelectItem value="medium">{t("create.lengthMedium")}</SelectItem>
+                      <SelectItem value="long">{t("create.lengthLong")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Genre</Label>
+                  <Label>{t("create.genre")}</Label>
                   <Select value={genre} onValueChange={setGenre}>
                     <SelectTrigger className="bg-background/50">
-                      <SelectValue placeholder="Select genre" />
+                      <SelectValue placeholder={t("create.selectGenre")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
                       {GENRES.map((g) => (
-                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                        <SelectItem key={g} value={g}>{t(`genres.${g}`, g)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Illustration Style</Label>
+                  <Label>{t("create.illustrationStyle")}</Label>
                   <Select value={artStyle} onValueChange={setArtStyle}>
                     <SelectTrigger className="bg-background/50">
-                      <SelectValue placeholder="Select art style" />
+                      <SelectValue placeholder={t("create.selectArtStyle")} />
                     </SelectTrigger>
                     <SelectContent className="max-h-72">
                       {ART_STYLES.map((s) => {
                         const p = ART_STYLE_PREVIEWS[s];
                         return (
                           <SelectItem key={s} value={s}>
-                            <span className="mr-2">{p?.emoji ?? "🎨"}</span>{s}
+                            <span className="mr-2">{p?.emoji ?? "🎨"}</span>{t(`artStyles.${s}`, s)}
                           </SelectItem>
                         );
                       })}
@@ -452,8 +452,8 @@ export default function CreateStory() {
                     >
                       <span className="text-3xl drop-shadow">{ART_STYLE_PREVIEWS[artStyle].emoji}</span>
                       <div className="flex-1">
-                        <div className="font-serif font-semibold drop-shadow-sm">{artStyle}</div>
-                        <div className="text-xs opacity-90 drop-shadow-sm">{ART_STYLE_PREVIEWS[artStyle].hint}</div>
+                        <div className="font-serif font-semibold drop-shadow-sm">{t(`artStyles.${artStyle}`, artStyle)}</div>
+                        <div className="text-xs opacity-90 drop-shadow-sm">{t(`artStyleHints.${artStyle}`, ART_STYLE_PREVIEWS[artStyle].hint)}</div>
                       </div>
                     </div>
                   )}
@@ -461,23 +461,23 @@ export default function CreateStory() {
               </div>
 
               <div className="space-y-2 pt-4">
-                <Label>AI Model</Label>
+                <Label>{t("create.model")}</Label>
                 <Select value={model} onValueChange={(val) => setModel(val as "gpt-5.1" | "gpt-5-mini")}>
                   <SelectTrigger className="bg-background/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-5.1">GPT-5.1 — Higher Quality (slower)</SelectItem>
-                    <SelectItem value="gpt-5-mini">GPT-5 Mini — Faster & Cheaper</SelectItem>
+                    <SelectItem value="gpt-5.1">{t("create.modelHigh")}</SelectItem>
+                    <SelectItem value="gpt-5-mini">{t("create.modelFast")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Choose the trade-off between richness of prose and generation speed.
+                  {t("create.modelHelp")}
                 </p>
               </div>
 
               <div className="space-y-2 pt-4">
-                <Label htmlFor="series">Series (Optional)</Label>
+                <Label htmlFor="series">{t("create.seriesOptional")}</Label>
                 <Select value={seriesId} onValueChange={setSeriesId}>
                   <SelectTrigger
                     id="series"
@@ -487,7 +487,7 @@ export default function CreateStory() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No series</SelectItem>
+                    <SelectItem value="none">{t("create.noSeries")}</SelectItem>
                     {(mySeries ?? []).map((s) => (
                       <SelectItem key={s.id} value={String(s.id)}>
                         {s.title}
@@ -496,38 +496,36 @@ export default function CreateStory() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Attach this story to one of your series. Manage series on the
-                  Series page.
+                  {t("create.seriesHelp")}
                 </p>
               </div>
 
               <div className="space-y-2 pt-4">
-                <Label htmlFor="tags">Tags (Optional)</Label>
+                <Label htmlFor="tags">{t("create.tagsOptional")}</Label>
                 <Input
                   id="tags"
                   value={tagDraft}
                   onChange={(e) => setTagDraft(e.target.value)}
-                  placeholder="Comma-separated, max 8: e.g. magic, slow-burn, found-family"
+                  placeholder={t("create.tagsPlaceholder")}
                   data-testid="input-create-tags"
                   className="bg-background/50"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Help readers discover your story on the feed. You can edit tags
-                  later from the story page.
+                  {t("create.tagsHelp")}
                 </p>
               </div>
 
               <div className="space-y-2 pt-4">
-                <Label htmlFor="seedPrompt">Seed Prompt (Optional)</Label>
+                <Label htmlFor="seedPrompt">{t("create.seedPrompt")}</Label>
                 <Textarea
                   id="seedPrompt"
                   value={seedPrompt}
                   onChange={(e) => setSeedPrompt(e.target.value)}
-                  placeholder="A cursed mirror in a dusty antique shop that shows the viewer's deepest regret…"
+                  placeholder={t("create.seedPromptPlaceholder")}
                   className="h-32 bg-background/50 resize-none"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Give the AI a starting point, a character, or a premise. Leave blank for a completely random story.
+                  {t("create.seedPromptHelp")}
                 </p>
               </div>
 
@@ -535,10 +533,10 @@ export default function CreateStory() {
                 <div className="space-y-0.5">
                   <Label className="flex items-center text-base">
                     <ImageIcon className="w-4 h-4 mr-2" />
-                    Generate Illustrations
+                    {t("create.withIllustrations")}
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Create matching artwork throughout the story.
+                    {t("create.withIllustrationsDesc")}
                   </p>
                 </div>
                 <Switch
@@ -552,7 +550,7 @@ export default function CreateStory() {
                 onClick={handleGenerate}
               >
                 <Sparkles className="mr-2 w-5 h-5" />
-                Conjure Story
+                {t("create.generate")}
               </Button>
             </CardContent>
           </Card>

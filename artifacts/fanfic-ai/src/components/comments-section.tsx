@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useGetStoryComments,
   useAddStoryComment,
@@ -14,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { ru as ruLocale } from "date-fns/locale";
 import {
   MessageCircle,
   Loader2,
@@ -45,7 +47,6 @@ function buildTree(rows: StoryComment[]): CommentNode[] {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
     for (const n of nodes) {
-      // Replies read better oldest-first.
       n.children.sort(
         (a, b) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -58,6 +59,7 @@ function buildTree(rows: StoryComment[]): CommentNode[] {
 }
 
 export function CommentsSection({ storyId }: { storyId: number }) {
+  const { t, i18n } = useTranslation();
   const { authorName } = useAuthor();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,10 +84,10 @@ export function CommentsSection({ storyId }: { storyId: number }) {
         setReplyDraft("");
         setReplyOpen(null);
         refresh();
-        toast({ title: "Comment posted" });
+        toast({ title: t("comments.posted") });
       },
       onError: () =>
-        toast({ title: "Failed to post comment", variant: "destructive" }),
+        toast({ title: t("comments.postFailed"), variant: "destructive" }),
     },
   });
 
@@ -93,16 +95,15 @@ export function CommentsSection({ storyId }: { storyId: number }) {
     mutation: {
       onSuccess: () => refresh(),
       onError: () =>
-        toast({ title: "Failed to delete comment", variant: "destructive" }),
+        toast({ title: t("comments.deleteFailed"), variant: "destructive" }),
     },
   });
 
   const requirePenName = () => {
     if (!authorName?.trim()) {
       toast({
-        title: "Set your pen name first",
-        description:
-          "Open the New Story page to choose a name before commenting.",
+        title: t("comments.setPenNameTitle"),
+        description: t("comments.setPenNameDesc"),
       });
       return false;
     }
@@ -129,6 +130,10 @@ export function CommentsSection({ storyId }: { storyId: number }) {
 
   const tree = comments ? buildTree(comments) : [];
   const total = comments?.length ?? 0;
+
+  const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
+  const dateLocale = isRu ? ruLocale : undefined;
+  const dateFmt = isRu ? "d MMM yyyy · HH:mm" : "MMM d, yyyy · h:mm a";
 
   const MAX_DEPTH = 1;
   const renderNode = (node: CommentNode, depth: number) => {
@@ -158,7 +163,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
               {node.authorName}
             </span>
             <span className="text-xs text-muted-foreground">
-              {format(new Date(node.createdAt), "MMM d, yyyy · h:mm a")}
+              {format(new Date(node.createdAt), dateFmt, { locale: dateLocale })}
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -177,7 +182,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
                     params: { authorName },
                   })
                 }
-                aria-label="Delete comment"
+                aria-label={t("comments.deleteAria")}
                 data-testid={`button-delete-comment-${node.id}`}
               >
                 {isDeleting ? (
@@ -205,7 +210,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
               }}
               data-testid={`button-reply-${node.id}`}
             >
-              Reply
+              {t("comments.reply")}
             </Button>
           </div>
         )}
@@ -215,7 +220,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
             <Textarea
               value={replyDraft}
               onChange={(e) => setReplyDraft(e.target.value)}
-              placeholder={`Reply to ${node.authorName}…`}
+              placeholder={t("comments.replyTo", { name: node.authorName })}
               rows={2}
               maxLength={2000}
               className="bg-background"
@@ -231,7 +236,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
                   setReplyDraft("");
                 }}
               >
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
@@ -245,7 +250,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
                 ) : (
                   <Send className="w-3.5 h-3.5 mr-1" />
                 )}
-                Reply
+                {t("comments.reply")}
               </Button>
             </div>
           </div>
@@ -270,7 +275,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
         <div className="flex items-center gap-2 mb-6">
           <MessageCircle className="w-5 h-5 text-primary" />
           <h2 className="font-serif text-2xl">
-            Reader Comments
+            {t("comments.readerComments")}
             <span className="text-muted-foreground ml-2 text-base">
               ({total})
             </span>
@@ -283,8 +288,8 @@ export function CommentsSection({ storyId }: { storyId: number }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
               authorName
-                ? `Share your thoughts as ${authorName}…`
-                : "Set a pen name to leave a comment…"
+                ? t("comments.shareThoughts", { name: authorName })
+                : t("comments.setPenNamePlaceholder")
             }
             rows={3}
             maxLength={2000}
@@ -308,7 +313,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
               ) : (
                 <Send className="w-4 h-4 mr-2" />
               )}
-              Post Comment
+              {t("comments.post")}
             </Button>
           </div>
         </form>
@@ -320,7 +325,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
           </div>
         ) : tree.length === 0 ? (
           <p className="text-muted-foreground text-sm italic text-center py-8">
-            No comments yet — be the first to share your thoughts.
+            {t("comments.noComments")}
           </p>
         ) : (
           <ul className="space-y-4">

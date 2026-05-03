@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   useGetBookmarkInfo,
   useAddBookmark,
@@ -18,6 +19,7 @@ export function BookmarkButton({
   storyId: number;
   variant?: "default" | "compact";
 }) {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -41,7 +43,7 @@ export function BookmarkButton({
     mutation: {
       onSuccess: () => {
         refresh();
-        toast({ title: "Saved to your library" });
+        toast({ title: t("bookmark.savedToast") });
       },
     },
   });
@@ -49,7 +51,7 @@ export function BookmarkButton({
     mutation: {
       onSuccess: () => {
         refresh();
-        toast({ title: "Removed from library" });
+        toast({ title: t("bookmark.removedToast") });
       },
     },
   });
@@ -61,8 +63,8 @@ export function BookmarkButton({
     e.stopPropagation();
     if (!authorName?.trim()) {
       toast({
-        title: "Set your pen name first",
-        description: "Open the New Story page to choose a name.",
+        title: t("bookmark.setPenNameTitle"),
+        description: t("bookmark.setPenNameDesc"),
       });
       return;
     }
@@ -78,7 +80,7 @@ export function BookmarkButton({
       <button
         type="button"
         onClick={handleClick}
-        aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
+        aria-label={bookmarked ? t("bookmark.removeAria") : t("bookmark.addAria")}
         aria-pressed={bookmarked}
         className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors"
         data-testid={`button-bookmark-compact-${storyId}`}
@@ -103,11 +105,11 @@ export function BookmarkButton({
     >
       {bookmarked ? (
         <>
-          <BookmarkCheck className="w-4 h-4 mr-1" /> Saved
+          <BookmarkCheck className="w-4 h-4 mr-1" /> {t("bookmark.saved")}
         </>
       ) : (
         <>
-          <Bookmark className="w-4 h-4 mr-1" /> Save
+          <Bookmark className="w-4 h-4 mr-1" /> {t("bookmark.save")}
         </>
       )}
     </Button>

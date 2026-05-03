@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useGetStoryLike, useLikeStory, useUnlikeStory, getGetStoryLikeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthor } from "@/hooks/use-author";
@@ -21,6 +22,7 @@ export function LikeButton({
   className,
   showCount = true,
 }: LikeButtonProps) {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -43,7 +45,7 @@ export function LikeButton({
       },
       onError: (_err, _vars, ctx) => {
         if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
-        toast({ title: "Failed to like", variant: "destructive" });
+        toast({ title: t("like.failed"), variant: "destructive" });
       },
       onSettled: () => queryClient.invalidateQueries({ queryKey }),
     },
@@ -71,8 +73,8 @@ export function LikeButton({
     e.stopPropagation();
     if (!authorName?.trim()) {
       toast({
-        title: "Set your pen name first",
-        description: "Open the New Story page to choose a name before you can like.",
+        title: t("like.setPenNameTitle"),
+        description: t("like.setPenNameDesc"),
       });
       return;
     }
@@ -94,7 +96,7 @@ export function LikeButton({
       variant={variant}
       onClick={handleClick}
       disabled={busy}
-      aria-label={liked ? "Unlike story" : "Like story"}
+      aria-label={liked ? t("like.unlikeAria") : t("like.likeAria")}
       data-testid={`button-like-${storyId}`}
       className={cn(
         "gap-1.5 px-2",

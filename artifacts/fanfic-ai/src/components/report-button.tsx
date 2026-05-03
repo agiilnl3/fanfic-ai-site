@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useCreateReport,
   type CreateReportBody,
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -35,19 +37,19 @@ export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
         setOpen(false);
         setReason("");
         toast({
-          title: "Report submitted",
-          description: "Thanks — a moderator will review it.",
+          title: t("report.submitted"),
+          description: t("report.submittedDesc"),
         });
       },
-      onError: () => toast({ title: "Failed to submit report", variant: "destructive" }),
+      onError: () => toast({ title: t("report.submitFailed"), variant: "destructive" }),
     },
   });
 
   const handleSubmit = () => {
     if (!authorName?.trim()) {
       toast({
-        title: "Set your pen name first",
-        description: "Reports include your pen name so moderators can contact you.",
+        title: t("report.setPenNameTitle"),
+        description: t("report.setPenNameDesc"),
       });
       return;
     }
@@ -61,11 +63,13 @@ export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
     });
   };
 
+  const targetLabel = t(`report.targets.${targetType}`, targetType);
+
   const Trigger =
     size === "icon" ? (
       <button
         type="button"
-        aria-label="Report"
+        aria-label={t("report.label")}
         className="text-muted-foreground hover:text-destructive transition-colors p-1"
         data-testid={`button-report-${targetType}-${targetId}`}
       >
@@ -80,7 +84,7 @@ export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
         data-testid={`button-report-${targetType}-${targetId}`}
       >
         <Flag className="w-4 h-4 mr-1" />
-        Report
+        {t("report.label")}
       </Button>
     );
 
@@ -89,22 +93,20 @@ export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
       <DialogTrigger asChild>{Trigger}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Report {targetType}</DialogTitle>
+          <DialogTitle>{t("report.title", { target: targetLabel })}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Tell us what's wrong. Moderators will review the content and take action if needed.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("report.intro")}</p>
         <Textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Reason (optional, max 500 characters)"
+          placeholder={t("report.reasonPlaceholder")}
           rows={4}
           maxLength={500}
           data-testid="textarea-report-reason"
         />
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -116,7 +118,7 @@ export function ReportButton({ targetType, targetId, size = "sm" }: Props) {
             ) : (
               <Flag className="w-4 h-4 mr-2" />
             )}
-            Submit report
+            {t("report.submit")}
           </Button>
         </DialogFooter>
       </DialogContent>

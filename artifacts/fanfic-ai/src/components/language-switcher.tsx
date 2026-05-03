@@ -14,7 +14,7 @@ const LANGS: Array<{ code: "en" | "ru"; label: string }> = [
 ];
 
 export function LanguageSwitcher() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const current = (i18n.resolvedLanguage ?? i18n.language ?? "en").slice(0, 2);
 
   return (
@@ -24,6 +24,7 @@ export function LanguageSwitcher() {
           variant="ghost"
           size="sm"
           className="gap-1 text-muted-foreground hover:text-foreground"
+          aria-label={t("common.language")}
           data-testid="button-language-switcher"
         >
           <Languages className="w-4 h-4" />

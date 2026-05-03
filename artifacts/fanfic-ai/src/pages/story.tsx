@@ -44,7 +44,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthor } from "@/hooks/use-author";
+import { useTranslation } from "react-i18next";
 import { format } from "date-fns";
+import { ru as ruLocale } from "date-fns/locale";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
   RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown,
@@ -53,10 +55,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function StoryReading() {
+  const { t, i18n } = useTranslation();
   const [, params] = useRoute("/story/:id");
   const storyId = Number(params?.id);
   const { authorName } = useAuthor();
   const { toast } = useToast();
+  const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
+  const dateLocale = isRu ? ruLocale : undefined;
+  const headerDateFmt = isRu ? "d MMMM yyyy" : "MMMM do, yyyy";
   const queryClient = useQueryClient();
   const [regeneratingSectionIdx, setRegeneratingSectionIdx] = useState<number | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -83,9 +89,9 @@ export default function StoryReading() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetStoryQueryKey(storyId) });
         queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(storyId) });
-        toast({ title: "New chapter added", description: "Scroll down to read the continuation." });
+        toast({ title: t("story.newChapterAdded"), description: t("story.newChapterDesc") });
       },
-      onError: () => toast({ title: "Failed to continue story", variant: "destructive" }),
+      onError: () => toast({ title: t("story.failedContinue"), variant: "destructive" }),
     },
   });
 
@@ -106,18 +112,18 @@ export default function StoryReading() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
         setCoAuthorDraft("");
-        toast({ title: "Co-author added" });
+        toast({ title: t("story.coAuthorAdded") });
       },
-      onError: () => toast({ title: "Could not add co-author", variant: "destructive" }),
+      onError: () => toast({ title: t("story.coAuthorAddFailed"), variant: "destructive" }),
     },
   });
   const removeCoAuthorMutation = useRemoveCoAuthor({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
-        toast({ title: "Co-author removed" });
+        toast({ title: t("story.coAuthorRemoved") });
       },
-      onError: () => toast({ title: "Could not remove co-author", variant: "destructive" }),
+      onError: () => toast({ title: t("story.coAuthorRemoveFailed"), variant: "destructive" }),
     },
   });
 
@@ -318,9 +324,9 @@ export default function StoryReading() {
         queryClient.invalidateQueries({
           queryKey: getGetStoryTagsQueryKey(storyId),
         });
-        toast({ title: "Tags saved" });
+        toast({ title: t("story.tagsSaved") });
       },
-      onError: () => toast({ title: "Failed to save tags", variant: "destructive" }),
+      onError: () => toast({ title: t("story.tagsSaveFailed"), variant: "destructive" }),
     },
   });
 
@@ -335,10 +341,10 @@ export default function StoryReading() {
         onSuccess: (updated) => {
           queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
           setEditMode(false);
-          toast({ title: "Story Saved", description: "Your edits have been preserved." });
+          toast({ title: t("story.saved"), description: t("story.savedDesc") });
         },
         onError: () => {
-          toast({ title: "Save Failed", description: "Could not save your changes.", variant: "destructive" });
+          toast({ title: t("story.saveFailed"), description: t("story.saveFailedDesc"), variant: "destructive" });
         },
       },
     );
@@ -353,11 +359,11 @@ export default function StoryReading() {
         onSuccess: (updated) => {
           queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
           toast({
-            title: newStatus === "published" ? "Story Published" : "Story Unpublished",
+            title: newStatus === "published" ? t("story.published") : t("story.unpublished"),
             description:
               newStatus === "published"
-                ? "Your story is now visible to the public."
-                : "Your story is back to draft status.",
+                ? t("story.publishedDesc")
+                : t("story.unpublishedDesc"),
           });
         },
       },
@@ -371,10 +377,10 @@ export default function StoryReading() {
       {
         onSuccess: (updated) => {
           queryClient.setQueryData(getGetStoryQueryKey(story.id), { ...story, ...updated });
-          toast({ title: "Story Rewritten", description: "Fresh prose has been conjured." });
+          toast({ title: t("story.rewritten"), description: t("story.rewrittenDesc") });
         },
         onError: () => {
-          toast({ title: "Regeneration Failed", description: "Could not regenerate story text.", variant: "destructive" });
+          toast({ title: t("story.regenFailed"), description: t("story.regenTextFailedDesc"), variant: "destructive" });
         },
       },
     );
@@ -399,10 +405,10 @@ export default function StoryReading() {
             };
           });
           setPromptEditingId(null);
-          toast({ title: "Illustration Regenerated", description: "A new scene has been painted." });
+          toast({ title: t("story.illRegenerated"), description: t("story.illRegeneratedDesc") });
         },
         onError: () => {
-          toast({ title: "Regeneration Failed", description: "Could not regenerate illustration.", variant: "destructive" });
+          toast({ title: t("story.regenFailed"), description: t("story.regenIllFailedDesc"), variant: "destructive" });
         },
       },
     );
@@ -424,7 +430,7 @@ export default function StoryReading() {
             return { ...old, illustrations: old.illustrations.filter((i) => i.id !== ill.id) };
           });
           queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(story.id) });
-          toast({ title: "Illustration Removed" });
+          toast({ title: t("story.illRemoved") });
         },
       },
     );
@@ -440,10 +446,10 @@ export default function StoryReading() {
             if (!old) return old;
             return { ...old, illustrations: [...old.illustrations, newIll] };
           });
-          toast({ title: "Illustration Added" });
+          toast({ title: t("story.illAdded") });
         },
         onError: () => {
-          toast({ title: "Failed", description: "Could not generate illustration.", variant: "destructive" });
+          toast({ title: t("story.failed"), description: t("story.illGenFailedDesc"), variant: "destructive" });
         },
       },
     );
@@ -482,10 +488,10 @@ export default function StoryReading() {
                   : old.coverImageUrl,
             };
           });
-          toast({ title: "Section Rewritten" });
+          toast({ title: t("story.sectionRewritten") });
         },
         onError: () => {
-          toast({ title: "Failed", description: "Could not regenerate this section.", variant: "destructive" });
+          toast({ title: t("story.failed"), description: t("story.regenSectionFailedDesc"), variant: "destructive" });
         },
         onSettled: () => setRegeneratingSectionIdx(null),
       },
@@ -518,8 +524,8 @@ export default function StoryReading() {
       <Layout>
         <div className="container mx-auto px-4 py-32 text-center">
           <BookOpen className="w-16 h-16 mx-auto mb-6 text-muted-foreground/30" />
-          <h1 className="text-2xl font-serif mb-2">Story Not Found</h1>
-          <p className="text-muted-foreground">This tale may have been lost to the void.</p>
+          <h1 className="text-2xl font-serif mb-2">{t("story.notFound")}</h1>
+          <p className="text-muted-foreground">{t("story.notFoundDesc")}</p>
         </div>
       </Layout>
     );
@@ -589,7 +595,7 @@ export default function StoryReading() {
               size="icon"
               variant="ghost"
               className="h-6 w-6"
-              title="Rewrite this section with AI"
+              title={t("story.rewriteSectionTitle")}
               disabled={regenerateStorySectionMutation.isPending || isRegenSection}
               onClick={() => handleRegenerateSection(thisSectionIdx, p)}
             >
@@ -615,7 +621,7 @@ export default function StoryReading() {
               {isRegeneratingIll(ill) ? (
                 <div className="w-full h-64 flex items-center justify-center bg-muted/30">
                   <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="ml-2 text-muted-foreground">Painting new scene…</span>
+                  <span className="ml-2 text-muted-foreground">{t("story.paintingScene")}</span>
                 </div>
               ) : (
                 <img
@@ -638,7 +644,7 @@ export default function StoryReading() {
                   onClick={() => handleRegenerateIllustration(ill)}
                 >
                   <RefreshCw className="w-3 h-3 mr-1" />
-                  Regenerate
+                  {t("story.regenerate")}
                 </Button>
                 <Button
                   size="sm"
@@ -648,7 +654,7 @@ export default function StoryReading() {
                   onClick={() => openPromptEditor(ill)}
                 >
                   <Edit3 className="w-3 h-3 mr-1" />
-                  Edit prompt
+                  {t("story.editPrompt")}
                 </Button>
                 <Button
                   size="sm"
@@ -658,21 +664,21 @@ export default function StoryReading() {
                   onClick={() => handleDeleteIllustration(ill)}
                 >
                   <Trash2 className="w-3 h-3 mr-1" />
-                  Remove
+                  {t("story.remove")}
                 </Button>
               </div>
             )}
             {isAuthor && promptEditingId === ill.id && (
               <div className="mt-3 p-3 rounded-lg border bg-muted/30 space-y-2">
                 <div className="text-xs text-muted-foreground font-medium">
-                  Edit illustration prompt
+                  {t("story.editIllPrompt")}
                 </div>
                 <Textarea
                   value={promptDraft}
                   onChange={(e) => setPromptDraft(e.target.value)}
                   rows={4}
                   className="text-sm font-mono"
-                  placeholder="Describe the scene you want to paint..."
+                  placeholder={t("story.scenePlaceholder")}
                   disabled={isRegeneratingIll(ill)}
                 />
                 <div className="flex justify-end gap-2">
@@ -684,7 +690,7 @@ export default function StoryReading() {
                     onClick={() => setPromptEditingId(null)}
                   >
                     <X className="w-3 h-3 mr-1" />
-                    Cancel
+                    {t("story.cancel")}
                   </Button>
                   <Button
                     size="sm"
@@ -697,7 +703,7 @@ export default function StoryReading() {
                     ) : (
                       <Check className="w-3 h-3 mr-1" />
                     )}
-                    Regenerate with this prompt
+                    {t("story.regenerateWithPrompt")}
                   </Button>
                 </div>
               </div>
@@ -725,7 +731,7 @@ export default function StoryReading() {
               ) : (
                 <RefreshCw className="w-3 h-3 mr-1" />
               )}
-              Add Illustration Here
+              {t("story.addIllHere")}
             </Button>
           </div>,
         );
@@ -737,7 +743,7 @@ export default function StoryReading() {
     <Layout>
       <Seo
         title={story.title}
-        description={story.summary ?? `A ${story.genre} story by ${story.authorName}`}
+        description={story.summary ?? t("story.seoFallback", { genre: t(`genres.${story.genre}`, story.genre), author: story.authorName })}
         image={story.coverImageUrl ?? undefined}
         type="article"
         author={story.authorName}
@@ -756,13 +762,13 @@ export default function StoryReading() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-background/20" />
           <div className="relative z-10 container mx-auto px-4 max-w-4xl text-center">
             <Badge className="mb-6 bg-primary/20 text-primary border-primary/30 backdrop-blur-md">
-              {story.genre} • {story.artStyle}
+              {t(`genres.${story.genre}`, story.genre)} • {t(`artStyles.${story.artStyle}`, story.artStyle)}
             </Badge>
             <h1 className="font-serif text-5xl md:text-7xl font-bold tracking-tight mb-6 glow-text text-white drop-shadow-lg">
               {story.title}
             </h1>
             <p className="text-xl text-white/80 italic font-serif">
-              By{" "}
+              {t("story.byLabel")}{" "}
               <Link
                 href={`/author/${encodeURIComponent(story.authorName)}`}
                 className="hover:text-primary hover:underline transition-colors"
@@ -783,7 +789,7 @@ export default function StoryReading() {
               />
             </div>
             <p className="text-sm text-white/50 mt-4 uppercase tracking-widest">
-              {format(new Date(story.createdAt), "MMMM do, yyyy")}
+              {format(new Date(story.createdAt), headerDateFmt, { locale: dateLocale })}
             </p>
             <div className="mt-6 flex justify-center items-center gap-3">
               <LikeButton storyId={story.id} size="lg" variant="outline" className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 hover:text-rose-400 px-4" />
@@ -813,7 +819,7 @@ export default function StoryReading() {
                       className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
                       data-testid="link-series-prev"
                     >
-                      ← Previous
+                      ← {t("story.previous")}
                     </Badge>
                   </Link>
                 ) : (
@@ -821,7 +827,7 @@ export default function StoryReading() {
                     variant="outline"
                     className="bg-background/10 border-white/10 text-white/40"
                   >
-                    ← Previous
+                    ← {t("story.previous")}
                   </Badge>
                 )}
                 <Link href={`/series/${seriesContext.seriesId}`}>
@@ -832,7 +838,7 @@ export default function StoryReading() {
                   >
                     {seriesContext.seriesTitle}
                     {seriesContext.totalStories
-                      ? ` · Part ${(seriesContext.position ?? 0) + 1} of ${seriesContext.totalStories}`
+                      ? ` · ${t("story.partOf", { current: (seriesContext.position ?? 0) + 1, total: seriesContext.totalStories })}`
                       : ""}
                   </Badge>
                 </Link>
@@ -843,7 +849,7 @@ export default function StoryReading() {
                       className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
                       data-testid="link-series-next"
                     >
-                      Next →
+                      {t("story.next")} →
                     </Badge>
                   </Link>
                 ) : (
@@ -851,7 +857,7 @@ export default function StoryReading() {
                     variant="outline"
                     className="bg-background/10 border-white/10 text-white/40"
                   >
-                    Next →
+                    {t("story.next")} →
                   </Badge>
                 )}
               </div>
@@ -881,15 +887,15 @@ export default function StoryReading() {
             <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground">
-                  Co-authors
+                  {t("story.coAuthors")}
                 </h3>
                 <span className="text-xs text-muted-foreground">
-                  Co-authors can add new chapters.
+                  {t("story.coAuthorsHint")}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 mb-3">
                 {coAuthors.length === 0 && (
-                  <span className="text-sm text-muted-foreground italic">No co-authors yet.</span>
+                  <span className="text-sm text-muted-foreground italic">{t("story.noCoAuthors")}</span>
                 )}
                 {coAuthors.map((name) => (
                   <Badge key={name} variant="secondary" className="gap-2">
@@ -907,7 +913,7 @@ export default function StoryReading() {
                           },
                         })
                       }
-                      aria-label={`Remove ${name}`}
+                      aria-label={t("story.removeCoAuthorAria", { name })}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -930,7 +936,7 @@ export default function StoryReading() {
                   type="text"
                   value={coAuthorDraft}
                   onChange={(e) => setCoAuthorDraft(e.target.value)}
-                  placeholder="Add co-author by pen name"
+                  placeholder={t("story.addCoAuthorPlaceholder")}
                   className="flex-1 h-9 px-3 rounded-md border border-border bg-background text-sm"
                 />
                 <Button
@@ -941,7 +947,7 @@ export default function StoryReading() {
                   {addCoAuthorMutation.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    "Add"
+                    t("story.addCoAuthor")
                   )}
                 </Button>
               </form>
@@ -965,7 +971,7 @@ export default function StoryReading() {
                   ) : (
                     <Check className="w-4 h-4 mr-2" />
                   )}
-                  Save Changes
+                  {t("story.saveChanges")}
                 </Button>
                 <Button
                   variant="outline"
@@ -975,7 +981,7 @@ export default function StoryReading() {
                   disabled={updateMutation.isPending}
                 >
                   <X className="w-4 h-4 mr-2" />
-                  Cancel
+                  {t("story.cancel")}
                 </Button>
               </>
             ) : (
@@ -987,7 +993,7 @@ export default function StoryReading() {
                   onClick={handleEnterEdit}
                 >
                   <Edit3 className="w-4 h-4 mr-2" />
-                  Edit Text
+                  {t("story.editText")}
                 </Button>
                 <Button
                   variant="outline"
@@ -1001,7 +1007,7 @@ export default function StoryReading() {
                   ) : (
                     <RotateCcw className="w-4 h-4 mr-2" />
                   )}
-                  Rewrite Story
+                  {t("story.rewriteStory")}
                 </Button>
                 <Button
                   variant={story.status === "published" ? "outline" : "default"}
@@ -1011,9 +1017,9 @@ export default function StoryReading() {
                   disabled={updateMutation.isPending}
                 >
                   {story.status === "published" ? (
-                    <><Lock className="w-4 h-4 mr-2" /> Make Draft</>
+                    <><Lock className="w-4 h-4 mr-2" /> {t("story.makeDraft")}</>
                   ) : (
-                    <><Globe className="w-4 h-4 mr-2" /> Publish to Feed</>
+                    <><Globe className="w-4 h-4 mr-2" /> {t("story.publishToFeed")}</>
                   )}
                 </Button>
               </>
@@ -1025,13 +1031,13 @@ export default function StoryReading() {
           <div className="container mx-auto px-4 max-w-4xl mt-6 relative z-20">
             <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4 space-y-3">
               <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground">
-                Tags
+                {t("story.tags")}
               </h3>
               <Textarea
                 value={tagDraft}
                 onChange={(e) => setTagDraft(e.target.value)}
                 rows={2}
-                placeholder="Comma-separated tags (max 8): e.g. magic, slow-burn, found-family"
+                placeholder={t("story.tagsPlaceholder")}
                 data-testid="textarea-story-tags"
               />
               <div className="flex justify-end">
@@ -1053,7 +1059,7 @@ export default function StoryReading() {
                   {setTagsMutation.isPending ? (
                     <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
                   ) : null}
-                  Save tags
+                  {t("story.saveTags")}
                 </Button>
               </div>
             </div>
@@ -1064,38 +1070,38 @@ export default function StoryReading() {
           <div className="container mx-auto px-4 max-w-4xl mt-4 relative z-20">
             <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4">
               <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground mb-3">
-                Author analytics
+                {t("story.authorAnalytics")}
               </h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div>
                   <div className="font-serif text-2xl font-bold tabular-nums">
                     {analytics.totalViews}
                   </div>
-                  <div className="text-xs text-muted-foreground">Views</div>
+                  <div className="text-xs text-muted-foreground">{t("story.views")}</div>
                 </div>
                 <div>
                   <div className="font-serif text-2xl font-bold tabular-nums">
                     {analytics.totalCompleted}
                   </div>
-                  <div className="text-xs text-muted-foreground">Finished</div>
+                  <div className="text-xs text-muted-foreground">{t("story.finished")}</div>
                 </div>
                 <div>
                   <div className="font-serif text-2xl font-bold tabular-nums">
                     {analytics.totalLikes}
                   </div>
-                  <div className="text-xs text-muted-foreground">Likes</div>
+                  <div className="text-xs text-muted-foreground">{t("story.likes")}</div>
                 </div>
                 <div>
                   <div className="font-serif text-2xl font-bold tabular-nums">
                     {analytics.totalComments}
                   </div>
-                  <div className="text-xs text-muted-foreground">Comments</div>
+                  <div className="text-xs text-muted-foreground">{t("story.commentsLabel")}</div>
                 </div>
               </div>
               {(analytics.daily ?? []).length > 0 && (
                 <div className="mt-4">
                   <p className="text-xs text-muted-foreground mb-2">
-                    Last 30 days
+                    {t("story.last30Days")}
                   </p>
                   <div className="flex items-end gap-1 h-16">
                     {(analytics.daily ?? [])
@@ -1112,7 +1118,7 @@ export default function StoryReading() {
                             key={d.day}
                             className="flex-1 bg-primary/40 rounded-t"
                             style={{ height: `${h}%` }}
-                            title={`${d.day}: ${d.views} views`}
+                            title={t("story.dayViews", { day: d.day, count: d.views })}
                           />
                         );
                       })}
@@ -1127,7 +1133,7 @@ export default function StoryReading() {
           <div className="container mx-auto px-4 max-w-3xl mt-8">
             <div className="flex items-center gap-3 p-4 bg-primary/10 border border-primary/20 rounded-xl text-primary">
               <Loader2 className="w-5 h-5 animate-spin shrink-0" />
-              <p className="font-serif">Conjuring new prose… this may take a moment.</p>
+              <p className="font-serif">{t("story.conjuringNewProse")}</p>
             </div>
           </div>
         )}
@@ -1140,13 +1146,13 @@ export default function StoryReading() {
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
                 <Edit3 className="w-4 h-4" />
-                <span>Edit mode — change the text directly. Illustrations are preserved.</span>
+                <span>{t("story.editModeNotice")}</span>
               </div>
               <Textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 className="min-h-[600px] font-serif text-base leading-relaxed resize-y bg-card/50 border-primary/20 focus:border-primary/50"
-                placeholder="Your story text…"
+                placeholder={t("story.storyTextPlaceholder")}
               />
               <div className="flex gap-3 pt-2">
                 <Button
@@ -1159,11 +1165,11 @@ export default function StoryReading() {
                   ) : (
                     <Check className="w-4 h-4 mr-2" />
                   )}
-                  Save Changes
+                  {t("story.saveChanges")}
                 </Button>
                 <Button variant="outline" onClick={handleCancelEdit} disabled={updateMutation.isPending}>
                   <X className="w-4 h-4 mr-2" />
-                  Cancel
+                  {t("story.cancel")}
                 </Button>
               </div>
             </div>
@@ -1174,37 +1180,37 @@ export default function StoryReading() {
           {!editMode && (
             <div className="mt-24 pt-12 border-t border-border/50 text-center flex flex-col items-center">
               <div className="w-12 h-1 bg-primary/50 mb-12 rounded-full" />
-              <h3 className="font-serif text-2xl mb-4">The End</h3>
+              <h3 className="font-serif text-2xl mb-4">{t("story.theEnd")}</h3>
               <p className="text-muted-foreground mb-8">
-                Conjured using {story.artStyle} illustrations in the {story.genre} genre.
+                {t("story.conjuredUsing", { style: t(`artStyles.${story.artStyle}`, story.artStyle), genre: t(`genres.${story.genre}`, story.genre) })}
               </p>
               <div className="flex gap-3 flex-wrap justify-center">
                 <Button
                   variant="outline"
                   onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                 >
-                  Back to Top
+                  {t("story.backToTop")}
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={() => {
                     navigator.clipboard.writeText(window.location.href);
-                    toast({ title: "Link Copied", description: "Share your tale with the world." });
+                    toast({ title: t("story.linkCopied"), description: t("story.linkCopiedDesc") });
                   }}
                   data-testid="button-share"
                 >
-                  <Share2 className="w-4 h-4 mr-2" /> Share Story
+                  <Share2 className="w-4 h-4 mr-2" /> {t("story.shareStory")}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setAudioOpen((v) => !v)}
                   data-testid="button-listen"
                 >
-                  <Volume2 className="w-4 h-4 mr-2" /> {audioOpen ? "Hide Audio" : "Listen"}
+                  <Volume2 className="w-4 h-4 mr-2" /> {audioOpen ? t("story.hideAudio") : t("story.listen")}
                 </Button>
                 <Button asChild variant="outline" data-testid="button-pdf">
                   <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-                    <FileDown className="w-4 h-4 mr-2" /> Download PDF
+                    <FileDown className="w-4 h-4 mr-2" /> {t("story.downloadPdf")}
                   </a>
                 </Button>
                 {isAuthor && illustrations.length >= 2 && (
@@ -1213,7 +1219,7 @@ export default function StoryReading() {
                     onClick={() => setReorderOpen(true)}
                     data-testid="button-reorder-illustrations"
                   >
-                    <ArrowUpDown className="w-4 h-4 mr-2" /> Reorder Art
+                    <ArrowUpDown className="w-4 h-4 mr-2" /> {t("story.reorderArt")}
                   </Button>
                 )}
                 {isAuthor && (
@@ -1228,7 +1234,7 @@ export default function StoryReading() {
                     ) : (
                       <BookPlus className="w-4 h-4 mr-2" />
                     )}
-                    Add Next Chapter
+                    {t("story.addNextChapter")}
                   </Button>
                 )}
               </div>
@@ -1241,10 +1247,10 @@ export default function StoryReading() {
                     className="w-full"
                     data-testid="audio-player"
                   >
-                    Your browser does not support the audio element.
+                    {t("story.audioFallback")}
                   </audio>
                   <p className="text-xs text-muted-foreground mt-2 text-center">
-                    First play takes ~10 seconds while the narration is generated.
+                    {t("story.audioGenNotice")}
                   </p>
                 </div>
               )}

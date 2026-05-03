@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useGetStoryRepost,
   useRepostStory,
@@ -18,6 +19,7 @@ export function RepostButton({
   storyId: number;
   size?: "sm" | "default";
 }) {
+  const { t } = useTranslation();
   const { authorName } = useAuthor();
   const queryClient = useQueryClient();
   const reposter = authorName?.trim() || "";
@@ -66,7 +68,7 @@ export function RepostButton({
       size={size}
       onClick={handle}
       disabled={!reposter || isPending}
-      title={reposter ? "Repost to your profile" : "Set a pen name to repost"}
+      title={reposter ? t("repost.tooltipOn") : t("repost.tooltipOff")}
       data-testid={`button-repost-${storyId}`}
       className={cn("gap-1.5", reposted && "bg-emerald-600 hover:bg-emerald-700 text-white")}
     >
