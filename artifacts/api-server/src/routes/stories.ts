@@ -2987,15 +2987,17 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
     return;
   }
   const [story] = await db
-    .select({
-      id: storiesTable.id,
-      trailerUrl: storiesTable.trailerUrl,
-      trailerStatus: storiesTable.trailerStatus,
-    })
+    .select()
     .from(storiesTable)
     .where(eq(storiesTable.id, id))
     .limit(1);
   if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  // Trailer URL/status is only visible to the author/co-authors while a
+  // story is unpublished. Once published, anyone can read its status.
+  if (story.status !== "published" && !canEditStory(story, req.user ?? null)) {
     res.status(404).json({ error: "Not found" });
     return;
   }

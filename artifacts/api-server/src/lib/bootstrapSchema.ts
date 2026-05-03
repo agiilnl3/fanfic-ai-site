@@ -45,6 +45,24 @@ export async function bootstrapBranchingSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS chapter_id INTEGER
         REFERENCES chapters(id) ON DELETE SET NULL
     `);
+    // Sharing-pack columns (poster cover + trailer). Idempotent so
+    // fresh DBs and existing deployments both end up in the same shape.
+    await db.execute(sql`
+      ALTER TABLE stories
+      ADD COLUMN IF NOT EXISTS poster_cover_url TEXT
+    `);
+    await db.execute(sql`
+      ALTER TABLE stories
+      ADD COLUMN IF NOT EXISTS trailer_url TEXT
+    `);
+    await db.execute(sql`
+      ALTER TABLE stories
+      ADD COLUMN IF NOT EXISTS trailer_status TEXT
+    `);
+    await db.execute(sql`
+      ALTER TABLE stories
+      ADD COLUMN IF NOT EXISTS trailer_hash TEXT
+    `);
     logger.info("chapters schema bootstrap OK");
   } catch (err) {
     logger.error({ err }, "Failed to bootstrap chapters schema");
