@@ -18,11 +18,18 @@ export const StoryLengthSetting = {
   long: "long",
 } as const;
 
+/**
+ * `cancelled` is set by /stories/generate/stream when the client
+disconnects mid-generation; clients reading these rows should
+treat them as incomplete drafts.
+
+ */
 export type StoryStatus = (typeof StoryStatus)[keyof typeof StoryStatus];
 
 export const StoryStatus = {
   draft: "draft",
   published: "published",
+  cancelled: "cancelled",
 } as const;
 
 export interface Tag {
@@ -46,6 +53,10 @@ export interface Story {
   summary?: string | null;
   /** @nullable */
   characters?: string | null;
+  /** `cancelled` is set by /stories/generate/stream when the client
+disconnects mid-generation; clients reading these rows should
+treat them as incomplete drafts.
+ */
   status: StoryStatus;
   authorName: string;
   coAuthors: string[];
@@ -800,6 +811,7 @@ export type ListStoriesStatus =
 export const ListStoriesStatus = {
   draft: "draft",
   published: "published",
+  cancelled: "cancelled",
 } as const;
 
 export type GetPublicFeedParams = {

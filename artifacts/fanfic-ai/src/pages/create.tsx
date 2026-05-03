@@ -1,17 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useAuthor } from "@/hooks/use-author";
 import {
-  generateStory,
-  generateIllustration,
   useListSeries,
   useAddStoryToSeries,
   useSetStoryTags,
   getListSeriesQueryKey,
 } from "@workspace/api-client-react";
+import { streamStoryGeneration } from "@/lib/sse-generate";
 import { UsageMeter } from "@/components/usage-meter";
 import type { Story, Illustration } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Sparkles, BookOpen, PenTool, Image as ImageIcon, CheckCircle2, ArrowRight } from "lucide-react";
+import { Loader2, Sparkles, BookOpen, PenTool, Image as ImageIcon, CheckCircle2, ArrowRight, X } from "lucide-react";
 
 export const GENRES = [
   "Fantasy", "High Fantasy", "Dark Fantasy",
@@ -73,14 +72,6 @@ type Phase = "idle" | "writing" | "illustrating" | "done";
 
 const NUM_SECTIONS = 4;
 
-function splitIntoSections(fullText: string, n: number): string[] {
-  const paragraphs = fullText.split(/\n\n+/).filter((p) => p.trim());
-  const size = Math.max(1, Math.ceil(paragraphs.length / n));
-  return Array.from({ length: n }, (_, i) =>
-    paragraphs.slice(i * size, (i + 1) * size).join("\n\n"),
-  ).filter((s) => s.trim());
-}
-
 export default function CreateStory() {
   const { t } = useTranslation();
   const [, setLocation] = useLocation();
@@ -107,8 +98,24 @@ export default function CreateStory() {
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [generatedStory, setGeneratedStory] = useState<Story | null>(null);
+  const [streamingText, setStreamingText] = useState<string>("");
   const [illustrations, setIllustrations] = useState<(Illustration | null)[]>([]);
-  const [currentIllIdx, setCurrentIllIdx] = useState<number>(-1);
+  const [illTotal, setIllTotal] = useState<number>(NUM_SECTIONS);
+  const [statusLabel, setStatusLabel] = useState<string>("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleCancel = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setPhase("idle");
+    setStreamingText("");
+    setGeneratedStory(null);
+    setIllustrations([]);
+    setStatusLabel("");
+    toast({ title: t("create.cancelled", "Generation cancelled") });
+  };
 
   const handleGenerate = async () => {
     if (!authorName.trim()) {
@@ -122,89 +129,147 @@ export default function CreateStory() {
 
     setPhase("writing");
     setGeneratedStory(null);
+    setStreamingText("");
     setIllustrations([]);
-    setCurrentIllIdx(-1);
+    setStatusLabel(t("create.writingStep"));
+
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    let storyId: number | null = null;
+    let storyShell: Story | null = null;
+    let sawDone = false;
 
     try {
-      const story = await generateStory({
-        genre,
-        artStyle,
-        lengthSetting,
-        authorName: authorName.trim(),
-        seedPrompt: seedPrompt.trim() || undefined,
-        generateIllustrations: false,
-        model,
-      });
-      setGeneratedStory(story);
-
-      const tagSlugs = tagDraft
-        .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter((s) => s.length > 0)
-        .slice(0, 8);
-      if (tagSlugs.length > 0) {
-        try {
-          await setTagsMutation.mutateAsync({
-            id: story.id,
-            data: { slugs: tagSlugs, requesterAuthorName: authorName.trim() },
+      for await (const ev of streamStoryGeneration(
+        {
+          genre,
+          artStyle,
+          lengthSetting,
+          authorName: authorName.trim(),
+          seedPrompt: seedPrompt.trim() || undefined,
+          generateIllustrations: withIllustrations,
+          model,
+        },
+        ctrl.signal,
+      )) {
+        if (ev.type === "meta") {
+          storyId = ev.storyId;
+          storyShell = {
+            id: ev.storyId,
+            title: ev.title || "Untitled Story",
+            genre,
+            artStyle,
+            lengthSetting,
+            fullText: "",
+            summary: "",
+            characters: "",
+            authorName: authorName.trim(),
+            status: "draft",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            likeCount: 0,
+            commentCount: 0,
+          } as unknown as Story;
+          setGeneratedStory(storyShell);
+        } else if (ev.type === "token") {
+          setStreamingText((s) => s + ev.text);
+        } else if (ev.type === "section") {
+          if (ev.phase === "metadata") {
+            setStatusLabel(t("create.draftingPrompts", "Drafting illustration prompts…"));
+          } else if (ev.phase === "metadataDone") {
+            setGeneratedStory((s) =>
+              s
+                ? {
+                    ...s,
+                    title: ev.title ?? s.title,
+                    summary: ev.summary ?? s.summary,
+                  }
+                : s,
+            );
+            if (withIllustrations) {
+              setStatusLabel(t("create.painting", "Painting illustration"));
+            }
+          } else if (ev.phase === "illustrations") {
+            const tot = ev.total ?? NUM_SECTIONS;
+            setIllTotal(tot);
+            setIllustrations(Array.from({ length: tot }, () => null));
+            setPhase("illustrating");
+          }
+        } else if (ev.type === "illustration") {
+          setIllustrations((arr) => {
+            const next = arr.length === ev.total ? [...arr] : Array.from({ length: ev.total }, (_, i) => arr[i] ?? null);
+            next[ev.index] = ev.illustration;
+            return next;
           });
-        } catch {
-          toast({
-            title: t("create.tagsSaveFailedTitle"),
-            description: t("create.tagsSaveFailedDesc"),
-            variant: "destructive",
-          });
+          setStatusLabel(
+            t("create.paintingProgress", { done: ev.index + 1, total: ev.total }),
+          );
+        } else if (ev.type === "done") {
+          sawDone = true;
+          setPhase("done");
+        } else if (ev.type === "error") {
+          throw new Error(ev.message);
         }
       }
 
-      if (seriesId !== "none") {
-        const sid = Number(seriesId);
-        if (Number.isFinite(sid)) {
+      if (!sawDone) {
+        throw new Error(
+          t("create.streamEndedEarly", "Generation ended before completion"),
+        );
+      }
+
+      // Side effects (tags + series) after streaming completes.
+      if (storyId != null) {
+        const tagSlugs = tagDraft
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter((s) => s.length > 0)
+          .slice(0, 8);
+        if (tagSlugs.length > 0) {
           try {
-            await addToSeriesMutation.mutateAsync({
-              id: sid,
-              data: {
-                storyId: story.id,
-                requesterAuthorName: authorName.trim(),
-              },
+            await setTagsMutation.mutateAsync({
+              id: storyId,
+              data: { slugs: tagSlugs, requesterAuthorName: authorName.trim() },
             });
           } catch {
             toast({
-              title: t("create.addToSeriesFailedTitle"),
-              description: t("create.addToSeriesFailedDesc"),
+              title: t("create.tagsSaveFailedTitle"),
+              description: t("create.tagsSaveFailedDesc"),
               variant: "destructive",
             });
           }
         }
-      }
-
-      if (!withIllustrations) {
-        setPhase("done");
-        return;
-      }
-
-      setPhase("illustrating");
-      const sections = splitIntoSections(story.fullText ?? "", NUM_SECTIONS);
-      const illResults: (Illustration | null)[] = sections.map(() => null);
-      setIllustrations([...illResults]);
-
-      for (let idx = 0; idx < sections.length; idx++) {
-        setCurrentIllIdx(idx);
-        try {
-          const ill = await generateIllustration(story.id, {
-            sectionIndex: idx,
-            sectionText: sections[idx],
-          });
-          illResults[idx] = ill;
-          setIllustrations([...illResults]);
-        } catch {
-          illResults[idx] = null;
+        if (seriesId !== "none") {
+          const sid = Number(seriesId);
+          if (Number.isFinite(sid)) {
+            try {
+              await addToSeriesMutation.mutateAsync({
+                id: sid,
+                data: {
+                  storyId,
+                  requesterAuthorName: authorName.trim(),
+                },
+              });
+            } catch {
+              toast({
+                title: t("create.addToSeriesFailedTitle"),
+                description: t("create.addToSeriesFailedDesc"),
+                variant: "destructive",
+              });
+            }
+          }
         }
       }
 
-      setCurrentIllIdx(-1);
+      abortRef.current = null;
       setPhase("done");
     } catch (err) {
+      abortRef.current = null;
+      // Aborted by the user is not an error.
+      if (err instanceof Error && (err.name === "AbortError" || ctrl.signal.aborted)) {
+        return;
+      }
       setPhase("idle");
       toast({
         title: t("create.failedConjure"),
@@ -217,29 +282,35 @@ export default function CreateStory() {
   if (phase === "writing") {
     return (
       <Layout>
-        <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-10 animate-in fade-in duration-700">
-          <div className="relative w-32 h-32 flex items-center justify-center">
-            <div className="absolute inset-0 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-            <Sparkles className="w-12 h-12 text-primary animate-pulse" />
-          </div>
-          <div className="text-center space-y-3 max-w-md">
-            <h2 className="font-serif text-3xl font-bold glow-text">{t("create.writingTitle")}</h2>
-            <p className="text-muted-foreground">{t("create.writingDesc")}</p>
-            <p className="text-sm text-muted-foreground/60 italic mt-4">
-              {t("create.writingHint")}
-            </p>
-          </div>
-          <div className="flex gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span>{t("create.writingStep")}</span>
+        <div className="container mx-auto px-4 py-12 max-w-3xl animate-in fade-in duration-500">
+          <div className="text-center mb-6 space-y-2">
+            <div className="flex items-center justify-center gap-3">
+              <Sparkles className="w-6 h-6 text-primary animate-pulse" />
+              <h2 className="font-serif text-2xl font-bold glow-text">
+                {generatedStory?.title || t("create.writingTitle")}
+              </h2>
             </div>
-            {withIllustrations && (
-              <div className="flex items-center gap-2 opacity-40">
-                <ImageIcon className="w-4 h-4" />
-                <span>{t("create.illsPending")}</span>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span>{statusLabel || t("create.writingStep")}</span>
+            </div>
+          </div>
+          <Card className="bg-card/50 backdrop-blur-sm border-primary/10 mb-6">
+            <CardContent className="pt-6">
+              <div
+                className="font-serif text-base leading-relaxed whitespace-pre-wrap min-h-[200px]"
+                data-testid="streaming-text"
+              >
+                {streamingText}
+                <span className="inline-block w-2 h-5 bg-primary/70 align-middle animate-pulse ml-0.5" />
               </div>
-            )}
+            </CardContent>
+          </Card>
+          <div className="flex justify-center">
+            <Button variant="outline" onClick={handleCancel} data-testid="button-cancel-generation">
+              <X className="w-4 h-4 mr-2" />
+              {t("create.cancel", "Cancel")}
+            </Button>
           </div>
         </div>
       </Layout>
@@ -247,7 +318,7 @@ export default function CreateStory() {
   }
 
   if ((phase === "illustrating" || phase === "done") && generatedStory) {
-    const totalIlls = illustrations.length || NUM_SECTIONS;
+    const totalIlls = illustrations.length || illTotal;
     const doneCount = illustrations.filter(Boolean).length;
 
     return (
@@ -295,7 +366,7 @@ export default function CreateStory() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {Array.from({ length: totalIlls }, (_, idx) => {
                     const ill = illustrations[idx];
-                    const isActive = currentIllIdx === idx;
+                    const isActive = phase === "illustrating" && !ill;
                     return (
                       <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-muted/30 relative">
                         {ill ? (

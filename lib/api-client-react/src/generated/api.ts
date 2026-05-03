@@ -463,6 +463,100 @@ export const useGenerateStory = <
 };
 
 /**
+ * Same inputs as /stories/generate. Returns a `text/event-stream` response.
+Event types: `meta` (storyId), `token` (incremental text), `section`
+(phase markers), `illustration` (per-illustration completion),
+`done`, `error`. The story row is inserted at the start so a refresh
+can resume mid-generation. Closing the connection cancels generation
+and marks the row as `cancelled`. The non-streaming /stories/generate
+endpoint remains as a fallback.
+
+ * @summary Generate a story with AI, streaming tokens via Server-Sent Events
+ */
+export const getGenerateStoryStreamUrl = () => {
+  return `/api/stories/generate/stream`;
+};
+
+export const generateStoryStream = async (
+  generateStoryBody: GenerateStoryBody,
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getGenerateStoryStreamUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateStoryBody),
+  });
+};
+
+export const getGenerateStoryStreamMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStoryStream>>,
+    TError,
+    { data: BodyType<GenerateStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateStoryStream>>,
+  TError,
+  { data: BodyType<GenerateStoryBody> },
+  TContext
+> => {
+  const mutationKey = ["generateStoryStream"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateStoryStream>>,
+    { data: BodyType<GenerateStoryBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateStoryStream(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateStoryStreamMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateStoryStream>>
+>;
+export type GenerateStoryStreamMutationBody = BodyType<GenerateStoryBody>;
+export type GenerateStoryStreamMutationError = ErrorType<void>;
+
+/**
+ * @summary Generate a story with AI, streaming tokens via Server-Sent Events
+ */
+export const useGenerateStoryStream = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStoryStream>>,
+    TError,
+    { data: BodyType<GenerateStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateStoryStream>>,
+  TError,
+  { data: BodyType<GenerateStoryBody> },
+  TContext
+> => {
+  return useMutation(getGenerateStoryStreamMutationOptions(options));
+};
+
+/**
  * @summary Get public story feed (published only, sorted by newest)
  */
 export const getGetPublicFeedUrl = (params?: GetPublicFeedParams) => {

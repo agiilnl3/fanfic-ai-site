@@ -57,7 +57,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: [draft, published]
+            enum: [draft, published, cancelled]
         - name: genre
           in: query
           required: false
@@ -114,6 +114,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Story"
+
+  /stories/generate/stream:
+    post:
+      operationId: generateStoryStream
+      tags: [stories]
+      summary: Generate a story with AI, streaming tokens via Server-Sent Events
+      description: |
+        Same inputs as /stories/generate. Returns a `text/event-stream` response.
+        Event types: `meta` (storyId), `token` (incremental text), `section`
+        (phase markers), `illustration` (per-illustration completion),
+        `done`, `error`. The story row is inserted at the start so a refresh
+        can resume mid-generation. Closing the connection cancels generation
+        and marks the row as `cancelled`. The non-streaming /stories/generate
+        endpoint remains as a fallback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateStoryBody"
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "429":
+          description: Quota exceeded
 
   /stories/feed:
     get:
@@ -1851,7 +1880,11 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [draft, published]
+          enum: [draft, published, cancelled]
+          description: |
+            `cancelled` is set by /stories/generate/stream when the client
+            disconnects mid-generation; clients reading these rows should
+            treat them as incomplete drafts.
         authorName:
           type: string
         coAuthors:

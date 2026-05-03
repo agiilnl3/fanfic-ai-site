@@ -339,6 +339,292 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
   res.status(201).json(responseBody);
 });
 
+// Server-Sent Events streaming variant of /stories/generate.
+// Emits: meta, token, section, illustration, done, error.
+// Persists incrementally so a refresh resumes mid-generation.
+// Cancel: closing the request aborts the OpenAI stream and marks the
+// row as `cancelled`.
+router.post(
+  "/stories/generate/stream",
+  aiGenerationLimiter,
+  async (req, res): Promise<void> => {
+    const parsed = GenerateStoryBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const {
+      genre,
+      artStyle,
+      lengthSetting,
+      seedPrompt,
+      authorName,
+      generateIllustrations,
+      model,
+    } = parsed.data;
+
+    const quota = await checkAndBumpStory(authorName);
+    if (!quota.ok) {
+      res.status(429).json({
+        error: "Daily story quota reached",
+        remaining: quota.remaining,
+        limit: quota.limit,
+      });
+      return;
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    // Disable proxy buffering (nginx-style) so events flush immediately.
+    res.setHeader("X-Accel-Buffering", "no");
+    res.flushHeaders?.();
+
+    const send = (event: string, data: unknown): void => {
+      if (res.writableEnded) return;
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const abort = new AbortController();
+    let cancelled = false;
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        cancelled = true;
+        abort.abort();
+      }
+    });
+
+    const wordTarget =
+      lengthSetting === "short"
+        ? 600
+        : lengthSetting === "long"
+          ? 2500
+          : 1400;
+    const maxTokens =
+      lengthSetting === "short"
+        ? 16000
+        : lengthSetting === "long"
+          ? 65536
+          : 32000;
+
+    // Insert the story shell first so a refresh can resume / link to it.
+    const [story] = await db
+      .insert(storiesTable)
+      .values({
+        title: "Untitled Story",
+        genre,
+        artStyle,
+        lengthSetting,
+        seedPrompt: seedPrompt ?? null,
+        fullText: "",
+        summary: "",
+        characters: "",
+        authorName,
+        userId: req.user?.id ?? null,
+        status: "draft",
+      })
+      .returning();
+
+    send("meta", { storyId: story.id, title: story.title });
+
+    let fullText = "";
+    try {
+      const sysPrompt = `You are a creative fiction writer. Write an engaging, coherent ${genre} story with vivid descriptions, compelling characters, and clear paragraph breaks (blank line between paragraphs). Target approximately ${wordTarget} words. Output the story body only — no JSON, no headings, no preface.`;
+      const userPrompt = seedPrompt
+        ? `Write a ${genre} fanfiction story (~${wordTarget} words). Seed idea: "${seedPrompt}".`
+        : `Write an original ${genre} fiction story (~${wordTarget} words) with memorable characters and a satisfying arc.`;
+
+      const stream = await openai.chat.completions.create(
+        {
+          model,
+          max_completion_tokens: maxTokens,
+          stream: true,
+          messages: [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        },
+        { signal: abort.signal },
+      );
+
+      let lastPersistedLen = 0;
+      const PERSIST_EVERY = 400;
+
+      for await (const chunk of stream) {
+        if (cancelled) break;
+        const tok = chunk.choices[0]?.delta?.content ?? "";
+        if (!tok) continue;
+        fullText += tok;
+        send("token", { text: tok });
+        if (fullText.length - lastPersistedLen >= PERSIST_EVERY) {
+          lastPersistedLen = fullText.length;
+          try {
+            await db
+              .update(storiesTable)
+              .set({ fullText })
+              .where(eq(storiesTable.id, story.id));
+          } catch (err) {
+            req.log.warn({ err }, "incremental persist failed");
+          }
+        }
+      }
+
+      if (cancelled) {
+        await db
+          .update(storiesTable)
+          .set({ fullText, status: "cancelled" })
+          .where(eq(storiesTable.id, story.id));
+        if (!res.writableEnded) res.end();
+        return;
+      }
+
+      // Final flush of the body.
+      await db
+        .update(storiesTable)
+        .set({ fullText })
+        .where(eq(storiesTable.id, story.id));
+
+      send("section", { phase: "metadata" });
+
+      // Second small JSON call for title/summary/characters/section prompts.
+      const metaResp = await openai.chat.completions.create(
+        {
+          model: "gpt-5-mini",
+          max_completion_tokens: 2000,
+          messages: [
+            {
+              role: "system",
+              content: `You return concise JSON metadata describing a ${genre} story written in the user message.`,
+            },
+            {
+              role: "user",
+              content: `Story:\n\n${fullText.slice(0, 8000)}\n\nReturn JSON: { "title": string, "summary": string (2-3 sentences), "characters": string (max 200 chars), "sections": string[] (3-4 brief 1-sentence scene descriptions for illustration prompts — do NOT repeat the story text) }`,
+            },
+          ],
+          response_format: { type: "json_object" },
+        },
+        { signal: abort.signal },
+      );
+
+      const metaRaw = metaResp.choices[0]?.message?.content ?? "{}";
+      let metaParsed: Record<string, unknown> = {};
+      try {
+        metaParsed = JSON.parse(metaRaw) as Record<string, unknown>;
+      } catch {
+        /* leave empty */
+      }
+      const title =
+        typeof metaParsed.title === "string" && metaParsed.title.trim()
+          ? metaParsed.title
+          : "Untitled Story";
+      const summary =
+        typeof metaParsed.summary === "string" ? metaParsed.summary : "";
+      const characters =
+        typeof metaParsed.characters === "string" ? metaParsed.characters : "";
+      const sections = Array.isArray(metaParsed.sections)
+        ? (metaParsed.sections as unknown[])
+            .filter((s): s is string => typeof s === "string")
+            .slice(0, 4)
+        : [];
+
+      await db
+        .update(storiesTable)
+        .set({ title, summary, characters })
+        .where(eq(storiesTable.id, story.id));
+
+      send("section", {
+        phase: "metadataDone",
+        title,
+        summary,
+      });
+
+      if (
+        generateIllustrations !== false &&
+        sections.length > 0 &&
+        !cancelled
+      ) {
+        const total = sections.length;
+        send("section", { phase: "illustrations", total });
+
+        const results = await Promise.allSettled(
+          sections.map(async (section, idx) => {
+            if (cancelled) throw new Error("cancelled");
+            const prompt = buildIllustrationPrompt(
+              section,
+              genre,
+              artStyle,
+              characters,
+              summary,
+            );
+            const buffer = await generateImageBuffer(prompt, "1024x1024");
+            if (cancelled) throw new Error("cancelled");
+            const imageUrl = await uploadIllustrationBuffer(buffer);
+            const [ill] = await db
+              .insert(illustrationsTable)
+              .values({
+                storyId: story.id,
+                sectionIndex: idx,
+                prompt,
+                imageUrl,
+                caption: null,
+              })
+              .returning();
+            if (idx === 0) {
+              await db
+                .update(storiesTable)
+                .set({ coverImageUrl: imageUrl })
+                .where(eq(storiesTable.id, story.id));
+            }
+            send("illustration", {
+              index: idx,
+              total,
+              illustration: ill,
+            });
+            return idx;
+          }),
+        );
+        const failed = results
+          .map((r, i) => (r.status === "rejected" ? i : -1))
+          .filter((i) => i >= 0);
+        if (failed.length > 0) {
+          req.log.warn({ failed }, "Some illustrations failed during stream");
+          send("section", { phase: "illustrationsPartial", failed });
+        }
+      }
+
+      if (cancelled) {
+        await db
+          .update(storiesTable)
+          .set({ status: "cancelled" })
+          .where(eq(storiesTable.id, story.id));
+        if (!res.writableEnded) res.end();
+        return;
+      }
+
+      send("done", { storyId: story.id });
+      if (!res.writableEnded) res.end();
+    } catch (err) {
+      req.log.error({ err }, "SSE story generation failed");
+      if (cancelled || (err instanceof Error && err.name === "AbortError")) {
+        try {
+          await db
+            .update(storiesTable)
+            .set({ fullText, status: "cancelled" })
+            .where(eq(storiesTable.id, story.id));
+        } catch {
+          /* ignore */
+        }
+      } else {
+        send("error", {
+          message: err instanceof Error ? err.message : "Generation failed",
+          storyId: story.id,
+        });
+      }
+      if (!res.writableEnded) res.end();
+    }
+  },
+);
+
 router.get("/stories/feed", async (req, res): Promise<void> => {
   const parsed = GetPublicFeedQueryParams.safeParse(req.query);
   if (!parsed.success) {

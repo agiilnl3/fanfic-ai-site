@@ -20,7 +20,7 @@ export const HealthCheckResponse = zod.object({
  * @summary List all stories (public feed)
  */
 export const ListStoriesQueryParams = zod.object({
-  status: zod.enum(["draft", "published"]).optional(),
+  status: zod.enum(["draft", "published", "cancelled"]).optional(),
   genre: zod.coerce.string().optional(),
   authorName: zod.coerce.string().optional(),
 });
@@ -37,7 +37,11 @@ export const ListStoriesResponseItem = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -107,6 +111,37 @@ export const GenerateStoryBody = zod.object({
 });
 
 /**
+ * Same inputs as /stories/generate. Returns a `text/event-stream` response.
+Event types: `meta` (storyId), `token` (incremental text), `section`
+(phase markers), `illustration` (per-illustration completion),
+`done`, `error`. The story row is inserted at the start so a refresh
+can resume mid-generation. Closing the connection cancels generation
+and marks the row as `cancelled`. The non-streaming /stories/generate
+endpoint remains as a fallback.
+
+ * @summary Generate a story with AI, streaming tokens via Server-Sent Events
+ */
+export const generateStoryStreamBodyGenerateIllustrationsDefault = true;
+export const generateStoryStreamBodyModelDefault = `gpt-5.1`;
+
+export const GenerateStoryStreamBody = zod.object({
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().optional(),
+  authorName: zod.string(),
+  generateIllustrations: zod
+    .boolean()
+    .default(generateStoryStreamBodyGenerateIllustrationsDefault),
+  model: zod
+    .enum(["gpt-5.1", "gpt-5-mini"])
+    .default(generateStoryStreamBodyModelDefault)
+    .describe(
+      "Which AI model to use. gpt-5.1 = higher quality, slower. gpt-5-mini = faster, cheaper.",
+    ),
+});
+
+/**
  * @summary Get public story feed (published only, sorted by newest)
  */
 export const getPublicFeedQueryLimitDefault = 20;
@@ -152,7 +187,11 @@ export const GetPublicFeedResponseItem = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -220,7 +259,11 @@ export const GetStoryResponse = zod
     fullText: zod.string().nullish(),
     summary: zod.string().nullish(),
     characters: zod.string().nullish(),
-    status: zod.enum(["draft", "published"]),
+    status: zod
+      .enum(["draft", "published", "cancelled"])
+      .describe(
+        "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+      ),
     authorName: zod.string(),
     coAuthors: zod
       .array(zod.string())
@@ -295,7 +338,11 @@ export const UpdateStoryResponse = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -352,7 +399,11 @@ export const PublishStoryResponse = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -584,7 +635,11 @@ export const ContinueStoryResponse = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -656,7 +711,11 @@ export const RegenerateStoryTextResponse = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -980,7 +1039,11 @@ export const AdminUpdateStoryResponse = zod.object({
   fullText: zod.string().nullish(),
   summary: zod.string().nullish(),
   characters: zod.string().nullish(),
-  status: zod.enum(["draft", "published"]),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
   authorName: zod.string(),
   coAuthors: zod
     .array(zod.string())
@@ -1103,7 +1166,11 @@ export const GetAuthorProfileResponse = zod.object({
       fullText: zod.string().nullish(),
       summary: zod.string().nullish(),
       characters: zod.string().nullish(),
-      status: zod.enum(["draft", "published"]),
+      status: zod
+        .enum(["draft", "published", "cancelled"])
+        .describe(
+          "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+        ),
       authorName: zod.string(),
       coAuthors: zod
         .array(zod.string())
@@ -1353,7 +1420,11 @@ export const ListAuthorRepostsResponseItem = zod.object({
     fullText: zod.string().nullish(),
     summary: zod.string().nullish(),
     characters: zod.string().nullish(),
-    status: zod.enum(["draft", "published"]),
+    status: zod
+      .enum(["draft", "published", "cancelled"])
+      .describe(
+        "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+      ),
     authorName: zod.string(),
     coAuthors: zod
       .array(zod.string())
@@ -1688,7 +1759,11 @@ export const ListBookmarksResponseItem = zod.object({
       fullText: zod.string().nullish(),
       summary: zod.string().nullish(),
       characters: zod.string().nullish(),
-      status: zod.enum(["draft", "published"]),
+      status: zod
+        .enum(["draft", "published", "cancelled"])
+        .describe(
+          "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+        ),
       authorName: zod.string(),
       coAuthors: zod
         .array(zod.string())
@@ -1745,7 +1820,11 @@ export const ListReadingHistoryResponseItem = zod.object({
     fullText: zod.string().nullish(),
     summary: zod.string().nullish(),
     characters: zod.string().nullish(),
-    status: zod.enum(["draft", "published"]),
+    status: zod
+      .enum(["draft", "published", "cancelled"])
+      .describe(
+        "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+      ),
     authorName: zod.string(),
     coAuthors: zod
       .array(zod.string())
@@ -1931,7 +2010,11 @@ export const GetSeriesResponse = zod
             fullText: zod.string().nullish(),
             summary: zod.string().nullish(),
             characters: zod.string().nullish(),
-            status: zod.enum(["draft", "published"]),
+            status: zod
+              .enum(["draft", "published", "cancelled"])
+              .describe(
+                "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+              ),
             authorName: zod.string(),
             coAuthors: zod
               .array(zod.string())
@@ -2047,7 +2130,11 @@ export const AddStoryToSeriesResponse = zod
             fullText: zod.string().nullish(),
             summary: zod.string().nullish(),
             characters: zod.string().nullish(),
-            status: zod.enum(["draft", "published"]),
+            status: zod
+              .enum(["draft", "published", "cancelled"])
+              .describe(
+                "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+              ),
             authorName: zod.string(),
             coAuthors: zod
               .array(zod.string())
