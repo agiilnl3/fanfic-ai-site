@@ -216,6 +216,55 @@ export default function StoryReading() {
     },
   );
 
+  // If the reader previously chose a non-canonical branch via
+  // BranchesSidebar's "Save this branch as my reading path", we need
+  // to *render* the path through that branch instead of the canonical
+  // mirror in stories.full_text. Walk parent pointers from the saved
+  // chapter back to the root, then append the canonical descendants of
+  // that chapter so the reader doesn't run out of story at the
+  // divergence point.
+  const readerBranchText = React.useMemo<string | null>(() => {
+    if (!chapterTree) return null;
+    const savedChapterId = (savedProgress as { chapterId?: number | null } | undefined)
+      ?.chapterId;
+    if (savedChapterId == null) return null;
+    const all = chapterTree.chapters ?? [];
+    const canonicalSet = new Set(chapterTree.canonicalPath ?? []);
+    if (canonicalSet.has(savedChapterId)) return null;
+    const byId = new Map(all.map((c) => [c.id, c] as const));
+    const prefix: typeof all = [];
+    let cur = byId.get(savedChapterId);
+    while (cur) {
+      prefix.unshift(cur);
+      if (cur.parentChapterId == null) break;
+      cur = byId.get(cur.parentChapterId);
+    }
+    const childrenOf = new Map<number, typeof all>();
+    for (const c of all) {
+      if (c.parentChapterId == null) continue;
+      const arr = childrenOf.get(c.parentChapterId) ?? [];
+      arr.push(c);
+      childrenOf.set(c.parentChapterId, arr);
+    }
+    let tail = byId.get(savedChapterId);
+    const tailChain: typeof all = [];
+    while (tail) {
+      const next = (childrenOf.get(tail.id) ?? []).find((c) => c.isCanonical);
+      if (!next) break;
+      tailChain.push(next);
+      tail = next;
+    }
+    const chain = [...prefix, ...tailChain];
+    if (chain.length === 0) return null;
+    return chain
+      .map((c, i) =>
+        i === 0
+          ? c.text
+          : `\n\n## ${c.title || `Chapter ${i + 1}`}\n\n${c.text}`,
+      )
+      .join("");
+  }, [chapterTree, savedProgress]);
+
   // Resume scroll position once both the saved progress and the rendered
   // paragraphs exist. We only fire once per (storyId, authorName) so a
   // late save doesn't yank the reader back up the page.
@@ -574,7 +623,12 @@ export default function StoryReading() {
     );
   }
 
-  const paragraphs = (story.fullText || "").split(/\n\n+/).filter((p) => p.trim());
+  // Prefer the reader's saved-branch text over the canonical mirror so
+  // that "Save this branch as my reading path" actually rewires the
+  // main reader, not just the sidebar preview. Falls back to fullText
+  // for canonical readers and stories without a chapter tree yet.
+  const renderedStoryText = readerBranchText ?? story.fullText ?? "";
+  const paragraphs = renderedStoryText.split(/\n\n+/).filter((p) => p.trim());
   const illustrations = [...(story.illustrations || [])].sort(
     (a, b) => a.sectionIndex - b.sectionIndex,
   );

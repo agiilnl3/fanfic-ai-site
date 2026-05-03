@@ -23,26 +23,44 @@ import { logger } from "./logger";
  */
 export async function bootstrapBranchingSchema(): Promise<void> {
   try {
+    // Mirrors lib/db/src/schema/chapters.ts exactly. Drizzle remains
+    // the source of truth — any future schema changes go through
+    // `pnpm --filter db push`. ALTER ... ADD COLUMN IF NOT EXISTS keeps
+    // older deployments forward-compatible if they predate a column.
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS chapters (
         id SERIAL PRIMARY KEY,
         story_id INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
-        parent_chapter_id INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+        parent_chapter_id INTEGER,
         title TEXT NOT NULL DEFAULT '',
         branch_label TEXT NOT NULL DEFAULT '',
-        text TEXT NOT NULL,
+        text TEXT NOT NULL DEFAULT '',
         position INTEGER NOT NULL DEFAULT 0,
-        is_canonical BOOLEAN NOT NULL DEFAULT false,
-        author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        author_handle TEXT NOT NULL DEFAULT '',
-        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        is_canonical BOOLEAN NOT NULL DEFAULT true,
+        author_user_id INTEGER,
+        author_handle TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+    // Reconcile any pre-existing rollout that may have skipped a column.
     await db.execute(sql`
-      CREATE INDEX IF NOT EXISTS chapters_story_id_idx ON chapters(story_id)
+      ALTER TABLE chapters
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    `);
+    await db.execute(sql`
+      ALTER TABLE chapters
+      ADD COLUMN IF NOT EXISTS branch_label TEXT NOT NULL DEFAULT ''
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS chapters_story_idx ON chapters(story_id)
     `);
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS chapters_parent_idx ON chapters(parent_chapter_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS chapters_story_parent_pos_idx
+        ON chapters(story_id, parent_chapter_id, position)
     `);
     await db.execute(sql`
       ALTER TABLE reading_progress
