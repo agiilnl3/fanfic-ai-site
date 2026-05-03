@@ -9,7 +9,12 @@ import { uploadIllustrationBuffer } from "./uploadIllustration";
 import { synthesizeStoryNarration } from "./ttsCache";
 import { logger } from "./logger";
 
-export type TrailerStatus = "queued" | "rendering" | "ready" | "failed";
+export type TrailerStatus =
+  | "idle"
+  | "queued"
+  | "rendering"
+  | "ready"
+  | "failed";
 
 const MIN_TRAILER_SECONDS = 20;
 const MAX_TRAILER_SECONDS = 30;

@@ -59,6 +59,7 @@ export const ListStoriesResponseItem = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -205,6 +206,7 @@ export const GetForYouFeedResponseItem = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -372,6 +374,7 @@ export const GetPublicFeedResponseItem = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -464,6 +467,7 @@ export const GetStoryResponse = zod
       .describe("URL of the rendered video trailer mp4 (if any)."),
     trailerStatus: zod
       .union([
+        zod.literal("idle"),
         zod.literal("queued"),
         zod.literal("rendering"),
         zod.literal("ready"),
@@ -563,6 +567,7 @@ export const UpdateStoryResponse = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -644,6 +649,7 @@ export const PublishStoryResponse = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -915,6 +921,7 @@ export const ContinueStoryResponse = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -957,7 +964,7 @@ export const GenerateStoryTrailerParams = zod.object({
 
 export const GenerateStoryTrailerResponse = zod.object({
   storyId: zod.number(),
-  status: zod.enum(["queued", "rendering", "ready", "failed"]),
+  status: zod.enum(["idle", "queued", "rendering", "ready", "failed"]),
   url: zod.string().nullable(),
 });
 
@@ -970,7 +977,7 @@ export const GetStoryTrailerParams = zod.object({
 
 export const GetStoryTrailerResponse = zod.object({
   storyId: zod.number(),
-  status: zod.enum(["queued", "rendering", "ready", "failed"]),
+  status: zod.enum(["idle", "queued", "rendering", "ready", "failed"]),
   url: zod.string().nullable(),
 });
 
@@ -1044,6 +1051,7 @@ export const RegenerateStoryTextResponse = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -1501,6 +1509,7 @@ export const AdminUpdateStoryResponse = zod.object({
     .describe("URL of the rendered video trailer mp4 (if any)."),
   trailerStatus: zod
     .union([
+      zod.literal("idle"),
       zod.literal("queued"),
       zod.literal("rendering"),
       zod.literal("ready"),
@@ -1648,6 +1657,7 @@ export const GetAuthorProfileResponse = zod.object({
         .describe("URL of the rendered video trailer mp4 (if any)."),
       trailerStatus: zod
         .union([
+          zod.literal("idle"),
           zod.literal("queued"),
           zod.literal("rendering"),
           zod.literal("ready"),
@@ -1922,6 +1932,7 @@ export const ListAuthorRepostsResponseItem = zod.object({
       .describe("URL of the rendered video trailer mp4 (if any)."),
     trailerStatus: zod
       .union([
+        zod.literal("idle"),
         zod.literal("queued"),
         zod.literal("rendering"),
         zod.literal("ready"),
@@ -2281,6 +2292,7 @@ export const ListBookmarksResponseItem = zod.object({
         .describe("URL of the rendered video trailer mp4 (if any)."),
       trailerStatus: zod
         .union([
+          zod.literal("idle"),
           zod.literal("queued"),
           zod.literal("rendering"),
           zod.literal("ready"),
@@ -2362,6 +2374,7 @@ export const ListReadingHistoryResponseItem = zod.object({
       .describe("URL of the rendered video trailer mp4 (if any)."),
     trailerStatus: zod
       .union([
+        zod.literal("idle"),
         zod.literal("queued"),
         zod.literal("rendering"),
         zod.literal("ready"),
@@ -2575,6 +2588,7 @@ export const GetSeriesResponse = zod
               .describe("URL of the rendered video trailer mp4 (if any)."),
             trailerStatus: zod
               .union([
+                zod.literal("idle"),
                 zod.literal("queued"),
                 zod.literal("rendering"),
                 zod.literal("ready"),
@@ -2717,6 +2731,7 @@ export const AddStoryToSeriesResponse = zod
               .describe("URL of the rendered video trailer mp4 (if any)."),
             trailerStatus: zod
               .union([
+                zod.literal("idle"),
                 zod.literal("queued"),
                 zod.literal("rendering"),
                 zod.literal("ready"),

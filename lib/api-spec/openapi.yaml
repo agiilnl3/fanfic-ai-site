@@ -2289,7 +2289,7 @@ components:
           description: URL of the rendered video trailer mp4 (if any).
         trailerStatus:
           type: ["string", "null"]
-          enum: [queued, rendering, ready, failed, null]
+          enum: [idle, queued, rendering, ready, failed, null]
           description: Status of the most recent trailer render job.
         createdAt:
           type: string
@@ -2383,7 +2383,7 @@ components:
           type: integer
         status:
           type: string
-          enum: [queued, rendering, ready, failed]
+          enum: [idle, queued, rendering, ready, failed]
         url:
           type: ["string", "null"]
       required: [storyId, status, url]

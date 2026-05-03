@@ -2998,14 +2998,14 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
     return;
   }
   const raw = story.trailerStatus as TrailerStatus | null;
-  // If the in-process job is running but the row hasn't been flipped
-  // to `rendering` yet, surface that to the client so it can poll.
+  // "idle" means no job has ever run for this story; the UI uses that
+  // to show an enabled "Generate trailer" button.
   const status: TrailerStatus =
     raw === "ready" && story.trailerUrl
       ? "ready"
       : isTrailerJobInFlight(id)
         ? "rendering"
-        : (raw ?? "queued");
+        : (raw ?? "idle");
   res.json({ storyId: id, status, url: story.trailerUrl ?? null });
 });
 

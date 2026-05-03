@@ -41,6 +41,7 @@ export type StoryTrailerStatus =
   | null;
 
 export const StoryTrailerStatus = {
+  idle: "idle",
   queued: "queued",
   rendering: "rendering",
   ready: "ready",
