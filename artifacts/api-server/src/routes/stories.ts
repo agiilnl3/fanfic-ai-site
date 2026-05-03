@@ -2998,14 +2998,21 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
     return;
   }
   const raw = story.trailerStatus as TrailerStatus | null;
-  // "idle" means no job has ever run for this story; the UI uses that
-  // to show an enabled "Generate trailer" button.
+  const inFlight = isTrailerJobInFlight(id);
+  // If the row says queued/rendering but no job is actually running
+  // (e.g. the server restarted mid-render), surface that as "failed"
+  // so the UI re-enables the Generate button instead of polling
+  // forever.
+  const stale =
+    !inFlight && (raw === "queued" || raw === "rendering");
   const status: TrailerStatus =
     raw === "ready" && story.trailerUrl
       ? "ready"
-      : isTrailerJobInFlight(id)
+      : inFlight
         ? "rendering"
-        : (raw ?? "idle");
+        : stale
+          ? "failed"
+          : (raw ?? "idle");
   res.json({ storyId: id, status, url: story.trailerUrl ?? null });
 });
 
