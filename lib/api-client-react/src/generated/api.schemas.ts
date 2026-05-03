@@ -105,6 +105,7 @@ export interface AddCommentBody {
   parentId?: number | null;
   /**
    * Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.
+   * @minimum 0
    * @nullable
    */
   paragraphIndex?: number | null;

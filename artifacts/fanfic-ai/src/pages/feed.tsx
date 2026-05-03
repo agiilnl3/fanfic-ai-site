@@ -173,7 +173,13 @@ export default function Feed() {
   const forYouQuery = useGetForYouFeed(forYouParams, {
     query: {
       enabled: tab === "forYou",
-      queryKey: getGetForYouFeedQueryKey(forYouParams),
+      // Personalization is keyed off the server-side authenticated user;
+      // include the viewer handle so cached results don't bleed across
+      // sign-in / sign-out / account switches.
+      queryKey: [
+        ...getGetForYouFeedQueryKey(forYouParams),
+        { viewer: authorName ?? null },
+      ],
     },
   });
 

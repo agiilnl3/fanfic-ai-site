@@ -2821,6 +2821,7 @@ router.post(
     // Replies inherit the parent's paragraph anchor.
     let paragraphIndex: number | null =
       typeof body.data.paragraphIndex === "number" &&
+      Number.isInteger(body.data.paragraphIndex) &&
       body.data.paragraphIndex >= 0
         ? body.data.paragraphIndex
         : null;

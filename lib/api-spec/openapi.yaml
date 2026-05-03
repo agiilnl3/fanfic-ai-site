@@ -2285,6 +2285,7 @@ components:
           type: ["integer", "null"]
         paragraphIndex:
           type: ["integer", "null"]
+          minimum: 0
           description: Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.
       required: [authorName, body]
 

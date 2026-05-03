@@ -711,12 +711,15 @@ export const AddStoryCommentParams = zod.object({
 
 export const addStoryCommentBodyBodyMax = 2000;
 
+export const addStoryCommentBodyParagraphIndexMin = 0;
+
 export const AddStoryCommentBody = zod.object({
   authorName: zod.string().min(1),
   body: zod.string().min(1).max(addStoryCommentBodyBodyMax),
   parentId: zod.number().nullish(),
   paragraphIndex: zod
     .number()
+    .min(addStoryCommentBodyParagraphIndexMin)
     .nullish()
     .describe(
       "Zero-based paragraph index this comment anchors to. Omit or null for whole-story comments.",
