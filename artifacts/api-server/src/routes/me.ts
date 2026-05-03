@@ -1,7 +1,19 @@
 import { Router, type IRouter } from "express";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { db, usersTable } from "@workspace/db";
+import {
+  db,
+  usersTable,
+  storiesTable,
+  storyCommentsTable,
+  storyLikesTable,
+  storyRepostsTable,
+  authorFollowsTable,
+  bookmarksTable,
+  readingProgressTable,
+  seriesTable,
+  notificationPrefsTable,
+} from "@workspace/db";
 import { requireAuth, invalidateUserCache } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -40,17 +52,37 @@ router.put("/me", requireAuth, async (req, res): Promise<void> => {
   }
   const me = req.user!;
   const patch: Record<string, unknown> = { updatedAt: new Date() };
-  if (parsed.data.handle && parsed.data.handle !== me.handle) {
+  const newHandle = parsed.data.handle;
+  if (newHandle && newHandle !== me.handle) {
     const [conflict] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
-      .where(and(eq(usersTable.handle, parsed.data.handle), ne(usersTable.id, me.id)))
+      .where(and(eq(usersTable.handle, newHandle), ne(usersTable.id, me.id)))
       .limit(1);
     if (conflict) {
       res.status(409).json({ error: "Handle is already taken" });
       return;
     }
-    patch.handle = parsed.data.handle;
+    // Block claiming a handle that has any orphan legacy rows attributed to
+    // it (user_id IS NULL). Otherwise editing one's handle would silently
+    // grant edit/delete rights over another author's pre-Clerk content.
+    const [legacyStory] = await db
+      .select({ id: storiesTable.id })
+      .from(storiesTable)
+      .where(and(eq(storiesTable.authorName, newHandle), isNull(storiesTable.userId)))
+      .limit(1);
+    const [legacySeries] = await db
+      .select({ id: seriesTable.id })
+      .from(seriesTable)
+      .where(and(eq(seriesTable.authorName, newHandle), isNull(seriesTable.userId)))
+      .limit(1);
+    if (legacyStory || legacySeries) {
+      res.status(409).json({
+        error: "Handle is reserved by legacy content. Choose a different handle.",
+      });
+      return;
+    }
+    patch.handle = newHandle;
   }
   if (parsed.data.displayName !== undefined) patch.displayName = parsed.data.displayName;
   if (parsed.data.bio !== undefined) patch.bio = parsed.data.bio;
@@ -62,6 +94,58 @@ router.put("/me", requireAuth, async (req, res): Promise<void> => {
     .set(patch)
     .where(eq(usersTable.id, me.id))
     .returning();
+
+  // If the handle changed, propagate the new handle to all denormalized
+  // author_name columns owned by this user_id so that profile/library/like/
+  // repost/follow lookups keyed on author_name still find the user's rows.
+  if (patch.handle) {
+    const oldHandle = me.handle;
+    const h = updated.handle;
+    await db
+      .update(storiesTable)
+      .set({ authorName: h })
+      .where(eq(storiesTable.userId, me.id));
+    await db
+      .update(seriesTable)
+      .set({ authorName: h })
+      .where(eq(seriesTable.userId, me.id));
+    await db
+      .update(storyCommentsTable)
+      .set({ authorName: h })
+      .where(eq(storyCommentsTable.userId, me.id));
+    await db
+      .update(storyLikesTable)
+      .set({ authorName: h })
+      .where(eq(storyLikesTable.userId, me.id));
+    await db
+      .update(storyRepostsTable)
+      .set({ reposterName: h })
+      .where(eq(storyRepostsTable.userId, me.id));
+    await db
+      .update(authorFollowsTable)
+      .set({ followerName: h })
+      .where(eq(authorFollowsTable.followerUserId, me.id));
+    await db
+      .update(bookmarksTable)
+      .set({ authorName: h })
+      .where(eq(bookmarksTable.userId, me.id));
+    await db
+      .update(readingProgressTable)
+      .set({ authorName: h })
+      .where(eq(readingProgressTable.userId, me.id));
+    // Move notification prefs row from old handle to new handle if present.
+    // (Old row is keyed by author_name PK, so an UPDATE moves it.)
+    if (oldHandle !== h) {
+      await db
+        .delete(notificationPrefsTable)
+        .where(eq(notificationPrefsTable.authorName, h));
+      await db
+        .update(notificationPrefsTable)
+        .set({ authorName: h })
+        .where(eq(notificationPrefsTable.authorName, oldHandle));
+    }
+  }
+
   invalidateUserCache(me.clerkUserId);
   res.json({
     id: updated.id,
