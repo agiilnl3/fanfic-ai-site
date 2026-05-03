@@ -2338,14 +2338,16 @@ components:
         storyId: { type: integer }
         authorName: { type: string }
         progress: { type: integer }
+        paragraphIndex: { type: integer }
         updatedAt: { type: ["string", "null"] }
-      required: [storyId, authorName, progress]
+      required: [storyId, authorName, progress, paragraphIndex]
 
     UpdateReadingProgressBody:
       type: object
       properties:
         authorName: { type: string, minLength: 1 }
         progress: { type: integer, minimum: 0, maximum: 100 }
+        paragraphIndex: { type: integer, minimum: 0 }
       required: [authorName, progress]
 
     HistoryEntry:

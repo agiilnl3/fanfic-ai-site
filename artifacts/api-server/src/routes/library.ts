@@ -186,6 +186,7 @@ router.get("/stories/:id/progress", async (req, res): Promise<void> => {
     storyId: params.data.id,
     authorName: query.data.authorName.trim(),
     progress: row?.progress ?? 0,
+    paragraphIndex: row?.paragraphIndex ?? 0,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
   });
 });
@@ -199,18 +200,25 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
   }
   const author = body.data.authorName.trim();
   const progress = Math.max(0, Math.min(100, body.data.progress));
+  const paragraphIndex = Math.max(0, body.data.paragraphIndex ?? 0);
   const [row] = await db
     .insert(readingProgressTable)
     .values({
       authorName: author,
       storyId: params.data.id,
       progress,
+      paragraphIndex,
       updatedAt: new Date(),
     })
     .onConflictDoUpdate({
       target: [readingProgressTable.authorName, readingProgressTable.storyId],
       set: {
         progress: sql`GREATEST(${readingProgressTable.progress}, ${progress})`,
+        // The latest paragraph the user actually scrolled to wins,
+        // even if their percentage stays at the previous max — readers
+        // skip around (footnotes, illustrations) and we want the resume
+        // point to track their cursor, not their high-water mark.
+        paragraphIndex: paragraphIndex,
         updatedAt: new Date(),
       },
     })
@@ -219,6 +227,7 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
     storyId: params.data.id,
     authorName: author,
     progress: row?.progress ?? progress,
+    paragraphIndex: row?.paragraphIndex ?? paragraphIndex,
     updatedAt: row?.updatedAt?.toISOString() ?? new Date().toISOString(),
   });
 });

@@ -34,6 +34,12 @@ export function ensureDbExtensions(): Promise<void> {
       await client.query(
         `CREATE INDEX IF NOT EXISTS stories_seed_trgm ON stories USING gin (seed_prompt gin_trgm_ops)`,
       );
+      // reading_progress.paragraph_index was added after launch; older
+      // databases need it backfilled at boot. Defaults to 0 so existing
+      // rows resume at the top of the story.
+      await client.query(
+        `ALTER TABLE IF EXISTS reading_progress ADD COLUMN IF NOT EXISTS paragraph_index integer NOT NULL DEFAULT 0`,
+      );
     } finally {
       client.release();
     }

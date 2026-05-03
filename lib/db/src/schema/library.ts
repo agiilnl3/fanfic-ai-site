@@ -29,6 +29,7 @@ export const readingProgressTable = pgTable(
       .notNull()
       .references(() => storiesTable.id, { onDelete: "cascade" }),
     progress: integer("progress").notNull().default(0),
+    paragraphIndex: integer("paragraph_index").notNull().default(0),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({

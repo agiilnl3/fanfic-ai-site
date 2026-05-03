@@ -214,16 +214,69 @@ router.put(
 router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
 
-  const dailyStories = await db
+  // Daily stories created (kept for the trend bars).
+  const dailyStoriesRows = await db
     .select({
       day: sql<string>`to_char(${storiesTable.createdAt}, 'YYYY-MM-DD')`,
       stories: count(),
-      authors: countDistinct(storiesTable.authorName),
     })
     .from(storiesTable)
     .where(gte(storiesTable.createdAt, since))
-    .groupBy(sql`to_char(${storiesTable.createdAt}, 'YYYY-MM-DD')`)
-    .orderBy(desc(sql`to_char(${storiesTable.createdAt}, 'YYYY-MM-DD')`));
+    .groupBy(sql`to_char(${storiesTable.createdAt}, 'YYYY-MM-DD')`);
+
+  // True DAU: union of pen names that did *anything* on a given day —
+  // wrote a story, liked, commented, reposted, recorded reading
+  // progress, or appeared as a viewer in story_views. We collapse the
+  // per-table activity into (day, author) and count distinct authors
+  // per day in SQL so the work happens server-side.
+  const sinceMs = since.getTime();
+  const sinceLit = sql`to_timestamp(${sinceMs / 1000})`;
+  const dau = await db.execute<{ day: string; authors: number }>(sql`
+    WITH activity AS (
+      SELECT to_char(created_at, 'YYYY-MM-DD') AS day, author_name AS who
+        FROM stories WHERE created_at >= ${sinceLit}
+      UNION ALL
+      SELECT to_char(created_at, 'YYYY-MM-DD'), author_name
+        FROM story_likes WHERE created_at >= ${sinceLit}
+      UNION ALL
+      SELECT to_char(created_at, 'YYYY-MM-DD'), author_name
+        FROM story_comments WHERE created_at >= ${sinceLit}
+      UNION ALL
+      SELECT to_char(created_at, 'YYYY-MM-DD'), reposter_name
+        FROM story_reposts WHERE created_at >= ${sinceLit}
+      UNION ALL
+      SELECT to_char(updated_at, 'YYYY-MM-DD'), author_name
+        FROM reading_progress WHERE updated_at >= ${sinceLit}
+      UNION ALL
+      SELECT to_char(created_at, 'YYYY-MM-DD'), viewer_name
+        FROM story_views
+        WHERE created_at >= ${sinceLit} AND viewer_name IS NOT NULL
+    )
+    SELECT day, COUNT(DISTINCT who)::int AS authors
+      FROM activity
+     GROUP BY day
+     ORDER BY day DESC
+  `);
+  const dauRows = (
+    dau as unknown as { rows?: Array<{ day: string; authors: number }> }
+  ).rows ?? (dau as unknown as Array<{ day: string; authors: number }>);
+  const storiesByDay = new Map(
+    dailyStoriesRows.map((r) => [r.day, Number(r.stories)]),
+  );
+  const allDays = new Set<string>([
+    ...dauRows.map((r) => r.day),
+    ...dailyStoriesRows.map((r) => r.day),
+  ]);
+  const authorsByDay = new Map(
+    dauRows.map((r) => [r.day, Number(r.authors)]),
+  );
+  const dailyStories = Array.from(allDays)
+    .sort((a, b) => (a < b ? 1 : -1))
+    .map((day) => ({
+      day,
+      authors: authorsByDay.get(day) ?? 0,
+      stories: storiesByDay.get(day) ?? 0,
+    }));
 
   const topAuthorRows = await db
     .select({
@@ -263,58 +316,89 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
     followersPerAuthor.map((r) => [r.authorName, Number(r.followers)]),
   );
 
-  const topStoryRows = await db
-    .select({
-      id: storiesTable.id,
-      title: storiesTable.title,
-      authorName: storiesTable.authorName,
-    })
-    .from(storiesTable)
-    .where(eq(storiesTable.status, "published"))
-    .orderBy(desc(storiesTable.createdAt))
-    .limit(50);
-  const topIds = topStoryRows.map((r) => r.id);
-  const likesByStory = topIds.length
-    ? await db
-        .select({ storyId: storyLikesTable.storyId, c: count() })
-        .from(storyLikesTable)
-        .where(inArray(storyLikesTable.storyId, topIds))
-        .groupBy(storyLikesTable.storyId)
-    : [];
-  const repostsByStory = topIds.length
-    ? await db
-        .select({ storyId: storyRepostsTable.storyId, c: count() })
-        .from(storyRepostsTable)
-        .where(inArray(storyRepostsTable.storyId, topIds))
-        .groupBy(storyRepostsTable.storyId)
-    : [];
-  const commentsByStory = topIds.length
-    ? await db
-        .select({ storyId: storyCommentsTable.storyId, c: count() })
-        .from(storyCommentsTable)
-        .where(inArray(storyCommentsTable.storyId, topIds))
-        .groupBy(storyCommentsTable.storyId)
-    : [];
-  const lkMap = new Map(likesByStory.map((r) => [r.storyId, Number(r.c)]));
-  const rpMap = new Map(repostsByStory.map((r) => [r.storyId, Number(r.c)]));
-  const cmMap = new Map(commentsByStory.map((r) => [r.storyId, Number(r.c)]));
-  const topStories = topStoryRows
-    .map((r) => ({
-      id: r.id,
-      title: r.title,
-      authorName: r.authorName,
-      likeCount: lkMap.get(r.id) ?? 0,
-      repostCount: rpMap.get(r.id) ?? 0,
-      commentCount: cmMap.get(r.id) ?? 0,
-    }))
-    .sort(
-      (a, b) =>
-        b.likeCount * 3 +
-        b.repostCount * 5 +
-        b.commentCount * 2 -
-        (a.likeCount * 3 + a.repostCount * 5 + a.commentCount * 2),
+  // Top stories: rank globally over the engagement event tables, not over
+  // a fixed "newest 50" sample. We aggregate per-storyId scores in SQL
+  // (likes*3 + reposts*5 + comments*2), keep only the published top 10,
+  // then hydrate titles/authors.
+  const scored = await db.execute<{
+    storyId: number;
+    likes: number;
+    reposts: number;
+    comments: number;
+    score: number;
+  }>(sql`
+    WITH agg AS (
+      SELECT story_id,
+             COUNT(*) FILTER (WHERE src = 'l') AS likes,
+             COUNT(*) FILTER (WHERE src = 'r') AS reposts,
+             COUNT(*) FILTER (WHERE src = 'c') AS comments
+        FROM (
+          SELECT story_id, 'l' AS src FROM story_likes
+          UNION ALL
+          SELECT story_id, 'r' FROM story_reposts
+          UNION ALL
+          SELECT story_id, 'c' FROM story_comments
+        ) ev
+       GROUP BY story_id
     )
-    .slice(0, 10);
+    SELECT story_id      AS "storyId",
+           likes::int    AS likes,
+           reposts::int  AS reposts,
+           comments::int AS comments,
+           (likes * 3 + reposts * 5 + comments * 2)::int AS score
+      FROM agg
+     ORDER BY score DESC
+     LIMIT 200
+  `);
+  const scoredRows = (
+    scored as unknown as {
+      rows?: Array<{
+        storyId: number;
+        likes: number;
+        reposts: number;
+        comments: number;
+        score: number;
+      }>;
+    }
+  ).rows ??
+    (scored as unknown as Array<{
+      storyId: number;
+      likes: number;
+      reposts: number;
+      comments: number;
+      score: number;
+    }>);
+  const candidateIds = scoredRows.map((r) => r.storyId);
+  const publishedTopRows = candidateIds.length
+    ? await db
+        .select({
+          id: storiesTable.id,
+          title: storiesTable.title,
+          authorName: storiesTable.authorName,
+        })
+        .from(storiesTable)
+        .where(
+          and(
+            inArray(storiesTable.id, candidateIds),
+            eq(storiesTable.status, "published"),
+          ),
+        )
+    : [];
+  const pubMap = new Map(publishedTopRows.map((r) => [r.id, r]));
+  const topStories = scoredRows
+    .filter((r) => pubMap.has(r.storyId))
+    .slice(0, 10)
+    .map((r) => {
+      const meta = pubMap.get(r.storyId)!;
+      return {
+        id: meta.id,
+        title: meta.title,
+        authorName: meta.authorName,
+        likeCount: r.likes,
+        repostCount: r.reposts,
+        commentCount: r.comments,
+      };
+    });
 
   res.json({
     dailyActive: dailyStories.map((r) => ({
