@@ -4,7 +4,7 @@ import { Story, getGetStoryQueryOptions } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen } from "lucide-react";
+import { BookOpen, MessageCircle } from "lucide-react";
 import { LikeButton } from "@/components/like-button";
 
 export function StoryCard({ story }: { story: Story }) {
@@ -64,6 +64,14 @@ export function StoryCard({ story }: { story: Story }) {
           <div className="flex items-center gap-2">
             <span>{story.lengthSetting}</span>
             <LikeButton storyId={story.id} />
+            <span
+              className="inline-flex items-center gap-1 text-muted-foreground tabular-nums"
+              data-testid={`comment-count-${story.id}`}
+              title={`${story.commentCount} comment${story.commentCount === 1 ? "" : "s"}`}
+            >
+              <MessageCircle className="w-3.5 h-3.5" />
+              {story.commentCount}
+            </span>
           </div>
           <span>{format(new Date(story.createdAt), "MMM d, yyyy")}</span>
         </CardFooter>

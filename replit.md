@@ -44,6 +44,7 @@ lib/
 - **Publishing** — Stories start as drafts; POST /api/stories/:id/publish makes them public
 - **Public Feed** — GET /api/stories/feed returns published stories
 - **Stats** — GET /api/stories/stats returns counts and genre breakdown
+- **Likes & Comments** — Readers can like a story (`/api/stories/:id/like`) and post short comments (`/api/stories/:id/comments`); like/comment counts are embedded on every Story response and shown on cards in the feed and on the story page header
 
 ## Frontend Pages
 

@@ -18,6 +18,10 @@ tags:
     description: Co-author management for collaborative editing
   - name: admin
     description: Site administration (password-protected)
+  - name: likes
+    description: Story likes
+  - name: comments
+    description: Story reader comments
 paths:
   /healthz:
     get:
@@ -399,6 +403,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/StoryLikeInfo"
 
+  /stories/{id}/comments:
+    get:
+      operationId: getStoryComments
+      tags: [comments]
+      summary: List comments for a story (newest first)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoryComment"
+        "404":
+          description: Story not found
+    post:
+      operationId: addStoryComment
+      tags: [comments]
+      summary: Add a comment to a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddCommentBody"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryComment"
+        "404":
+          description: Story not found
+
+  /stories/{id}/comments/{commentId}:
+    delete:
+      operationId: deleteStoryComment
+      tags: [comments]
+      summary: Delete a comment (only the comment's author may delete it)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: authorName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "403":
+          description: Not the author of the comment
+        "404":
+          description: Not found
+
   /stories/{id}/continue:
     post:
       operationId: continueStory
@@ -776,6 +857,10 @@ components:
           type: string
         updatedAt:
           type: string
+        likeCount:
+          type: integer
+        commentCount:
+          type: integer
       required:
         - id
         - title
@@ -787,6 +872,40 @@ components:
         - authorName
         - createdAt
         - updatedAt
+        - likeCount
+        - commentCount
+
+    StoryComment:
+      type: object
+      properties:
+        id:
+          type: integer
+        storyId:
+          type: integer
+        authorName:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - storyId
+        - authorName
+        - body
+        - createdAt
+
+    AddCommentBody:
+      type: object
+      properties:
+        authorName:
+          type: string
+          minLength: 1
+        body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [authorName, body]
 
     StoryWithIllustrations:
       allOf:

@@ -45,6 +45,8 @@ export const ListStoriesResponseItem = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 export const ListStoriesResponse = zod.array(ListStoriesResponseItem);
 
@@ -115,6 +117,8 @@ export const GetPublicFeedResponseItem = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 export const GetPublicFeedResponse = zod.array(GetPublicFeedResponseItem);
 
@@ -162,6 +166,8 @@ export const GetStoryResponse = zod
     coverImageUrl: zod.string().nullish(),
     createdAt: zod.string(),
     updatedAt: zod.string(),
+    likeCount: zod.number(),
+    commentCount: zod.number(),
   })
   .and(
     zod.object({
@@ -217,6 +223,8 @@ export const UpdateStoryResponse = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 
 /**
@@ -253,6 +261,8 @@ export const PublishStoryResponse = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 
 /**
@@ -373,6 +383,48 @@ export const UnlikeStoryResponse = zod.object({
 });
 
 /**
+ * @summary List comments for a story (newest first)
+ */
+export const GetStoryCommentsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryCommentsResponseItem = zod.object({
+  id: zod.number(),
+  storyId: zod.number(),
+  authorName: zod.string(),
+  body: zod.string(),
+  createdAt: zod.string(),
+});
+export const GetStoryCommentsResponse = zod.array(GetStoryCommentsResponseItem);
+
+/**
+ * @summary Add a comment to a story
+ */
+export const AddStoryCommentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const addStoryCommentBodyBodyMax = 2000;
+
+export const AddStoryCommentBody = zod.object({
+  authorName: zod.string().min(1),
+  body: zod.string().min(1).max(addStoryCommentBodyBodyMax),
+});
+
+/**
+ * @summary Delete a comment (only the comment's author may delete it)
+ */
+export const DeleteStoryCommentParams = zod.object({
+  id: zod.coerce.number(),
+  commentId: zod.coerce.number(),
+});
+
+export const DeleteStoryCommentQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+/**
  * @summary Append a new chapter to an existing story
  */
 export const ContinueStoryParams = zod.object({
@@ -415,6 +467,8 @@ export const ContinueStoryResponse = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 
 /**
@@ -466,6 +520,8 @@ export const RegenerateStoryTextResponse = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 
 /**

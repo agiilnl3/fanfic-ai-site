@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AddCommentBody,
   AdminLoginBody,
   AdminLoginResponse,
   AdminStats,
@@ -27,6 +28,7 @@ import type {
   CoAuthorRemoveBody,
   ContinueStoryBody,
   CreateStoryBody,
+  DeleteStoryCommentParams,
   GenerateIllustrationBody,
   GenerateStoryBody,
   GetPublicFeedParams,
@@ -40,6 +42,7 @@ import type {
   RegenerateSectionBody,
   RegenerateSectionResponse,
   Story,
+  StoryComment,
   StoryLikeInfo,
   StoryStats,
   StoryWithIllustrations,
@@ -1575,6 +1578,282 @@ export const useUnlikeStory = <
   TContext
 > => {
   return useMutation(getUnlikeStoryMutationOptions(options));
+};
+
+/**
+ * @summary List comments for a story (newest first)
+ */
+export const getGetStoryCommentsUrl = (id: number) => {
+  return `/api/stories/${id}/comments`;
+};
+
+export const getStoryComments = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StoryComment[]> => {
+  return customFetch<StoryComment[]>(getGetStoryCommentsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryCommentsQueryKey = (id: number) => {
+  return [`/api/stories/${id}/comments`] as const;
+};
+
+export const getGetStoryCommentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryComments>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStoryCommentsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStoryComments>>
+  > = ({ signal }) => getStoryComments(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryComments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryCommentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryComments>>
+>;
+export type GetStoryCommentsQueryError = ErrorType<void>;
+
+/**
+ * @summary List comments for a story (newest first)
+ */
+
+export function useGetStoryComments<
+  TData = Awaited<ReturnType<typeof getStoryComments>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryComments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryCommentsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a comment to a story
+ */
+export const getAddStoryCommentUrl = (id: number) => {
+  return `/api/stories/${id}/comments`;
+};
+
+export const addStoryComment = async (
+  id: number,
+  addCommentBody: AddCommentBody,
+  options?: RequestInit,
+): Promise<StoryComment> => {
+  return customFetch<StoryComment>(getAddStoryCommentUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addCommentBody),
+  });
+};
+
+export const getAddStoryCommentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addStoryComment>>,
+    TError,
+    { id: number; data: BodyType<AddCommentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addStoryComment>>,
+  TError,
+  { id: number; data: BodyType<AddCommentBody> },
+  TContext
+> => {
+  const mutationKey = ["addStoryComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addStoryComment>>,
+    { id: number; data: BodyType<AddCommentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return addStoryComment(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddStoryCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addStoryComment>>
+>;
+export type AddStoryCommentMutationBody = BodyType<AddCommentBody>;
+export type AddStoryCommentMutationError = ErrorType<void>;
+
+/**
+ * @summary Add a comment to a story
+ */
+export const useAddStoryComment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addStoryComment>>,
+    TError,
+    { id: number; data: BodyType<AddCommentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addStoryComment>>,
+  TError,
+  { id: number; data: BodyType<AddCommentBody> },
+  TContext
+> => {
+  return useMutation(getAddStoryCommentMutationOptions(options));
+};
+
+/**
+ * @summary Delete a comment (only the comment's author may delete it)
+ */
+export const getDeleteStoryCommentUrl = (
+  id: number,
+  commentId: number,
+  params: DeleteStoryCommentParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/comments/${commentId}?${stringifiedParams}`
+    : `/api/stories/${id}/comments/${commentId}`;
+};
+
+export const deleteStoryComment = async (
+  id: number,
+  commentId: number,
+  params: DeleteStoryCommentParams,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteStoryCommentUrl(id, commentId, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteStoryCommentMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStoryComment>>,
+    TError,
+    { id: number; commentId: number; params: DeleteStoryCommentParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteStoryComment>>,
+  TError,
+  { id: number; commentId: number; params: DeleteStoryCommentParams },
+  TContext
+> => {
+  const mutationKey = ["deleteStoryComment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteStoryComment>>,
+    { id: number; commentId: number; params: DeleteStoryCommentParams }
+  > = (props) => {
+    const { id, commentId, params } = props ?? {};
+
+    return deleteStoryComment(id, commentId, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteStoryCommentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteStoryComment>>
+>;
+
+export type DeleteStoryCommentMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a comment (only the comment's author may delete it)
+ */
+export const useDeleteStoryComment = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteStoryComment>>,
+    TError,
+    { id: number; commentId: number; params: DeleteStoryCommentParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteStoryComment>>,
+  TError,
+  { id: number; commentId: number; params: DeleteStoryCommentParams },
+  TContext
+> => {
+  return useMutation(getDeleteStoryCommentMutationOptions(options));
 };
 
 /**

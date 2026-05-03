@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, count, and, sql } from "drizzle-orm";
-import { db, storiesTable, illustrationsTable, storyLikesTable } from "@workspace/db";
+import { eq, desc, count, and, sql, inArray } from "drizzle-orm";
+import { db, storiesTable, illustrationsTable, storyLikesTable, storyCommentsTable } from "@workspace/db";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -36,6 +36,11 @@ import {
   GetStoryAudioParams,
   GetStoryAudioQueryParams,
   ExportStoryPdfParams,
+  GetStoryCommentsParams,
+  AddStoryCommentParams,
+  AddStoryCommentBody,
+  DeleteStoryCommentParams,
+  DeleteStoryCommentQueryParams,
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
@@ -108,6 +113,46 @@ Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 
   };
 }
 
+type StoryRow = typeof storiesTable.$inferSelect;
+
+async function attachCounts<T extends StoryRow>(
+  rows: T[],
+): Promise<(T & { likeCount: number; commentCount: number })[]> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const likeRows = await db
+    .select({ storyId: storyLikesTable.storyId, value: count() })
+    .from(storyLikesTable)
+    .where(inArray(storyLikesTable.storyId, ids))
+    .groupBy(storyLikesTable.storyId);
+  const commentRows = await db
+    .select({ storyId: storyCommentsTable.storyId, value: count() })
+    .from(storyCommentsTable)
+    .where(inArray(storyCommentsTable.storyId, ids))
+    .groupBy(storyCommentsTable.storyId);
+  const likeMap = new Map(likeRows.map((r) => [r.storyId, Number(r.value)]));
+  const commentMap = new Map(commentRows.map((r) => [r.storyId, Number(r.value)]));
+  return rows.map((r) => ({
+    ...r,
+    likeCount: likeMap.get(r.id) ?? 0,
+    commentCount: commentMap.get(r.id) ?? 0,
+  }));
+}
+
+async function singleCounts(
+  storyId: number,
+): Promise<{ likeCount: number; commentCount: number }> {
+  const [{ value: likeCount }] = await db
+    .select({ value: count() })
+    .from(storyLikesTable)
+    .where(eq(storyLikesTable.storyId, storyId));
+  const [{ value: commentCount }] = await db
+    .select({ value: count() })
+    .from(storyCommentsTable)
+    .where(eq(storyCommentsTable.storyId, storyId));
+  return { likeCount: Number(likeCount), commentCount: Number(commentCount) };
+}
+
 router.get("/stories", async (req, res): Promise<void> => {
   const parsed = ListStoriesQueryParams.safeParse(req.query);
   if (!parsed.success) {
@@ -133,7 +178,7 @@ router.get("/stories", async (req, res): Promise<void> => {
           .from(storiesTable)
           .orderBy(desc(storiesTable.createdAt));
 
-  res.json(stories);
+  res.json(await attachCounts(stories));
 });
 
 router.post("/stories", writeLimiter, async (req, res): Promise<void> => {
@@ -269,7 +314,7 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     .orderBy(desc(storiesTable.createdAt))
     .limit(limit ?? 20);
 
-  res.json(stories);
+  res.json(await attachCounts(stories));
 });
 
 router.get("/stories/stats", async (_req, res): Promise<void> => {
@@ -328,7 +373,8 @@ router.get("/stories/:id", async (req, res): Promise<void> => {
     .where(eq(illustrationsTable.storyId, story.id))
     .orderBy(illustrationsTable.sectionIndex);
 
-  res.json({ ...story, illustrations });
+  const counts = await singleCounts(story.id);
+  res.json({ ...story, ...counts, illustrations });
 });
 
 router.patch("/stories/:id", async (req, res): Promise<void> => {
@@ -1159,5 +1205,101 @@ router.post("/stories/:id/co-authors/remove", writeLimiter, async (req, res): Pr
     coAuthors: updated.coAuthors ?? [],
   });
 });
+
+// ---------- Comments ----------
+
+router.get("/stories/:id/comments", async (req, res): Promise<void> => {
+  const params = GetStoryCommentsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [story] = await db
+    .select({ id: storiesTable.id })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  const comments = await db
+    .select()
+    .from(storyCommentsTable)
+    .where(eq(storyCommentsTable.storyId, params.data.id))
+    .orderBy(desc(storyCommentsTable.createdAt));
+  res.json(comments);
+});
+
+router.post(
+  "/stories/:id/comments",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = AddStoryCommentParams.safeParse(req.params);
+    const body = AddStoryCommentBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid parameters" });
+      return;
+    }
+    const authorName = body.data.authorName.trim();
+    const text = body.data.body.trim();
+    if (!authorName || !text) {
+      res.status(400).json({ error: "authorName and body required" });
+      return;
+    }
+    const [story] = await db
+      .select({ id: storiesTable.id })
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+    const [comment] = await db
+      .insert(storyCommentsTable)
+      .values({ storyId: params.data.id, authorName, body: text })
+      .returning();
+    res.status(201).json(comment);
+  },
+);
+
+router.delete(
+  "/stories/:id/comments/:commentId",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = DeleteStoryCommentParams.safeParse(req.params);
+    const query = DeleteStoryCommentQueryParams.safeParse(req.query);
+    if (!params.success || !query.success) {
+      res.status(400).json({ error: "Invalid parameters" });
+      return;
+    }
+    const authorName = query.data.authorName.trim();
+    if (!authorName) {
+      res.status(400).json({ error: "authorName required" });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(storyCommentsTable)
+      .where(
+        and(
+          eq(storyCommentsTable.id, params.data.commentId),
+          eq(storyCommentsTable.storyId, params.data.id),
+        ),
+      )
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Comment not found" });
+      return;
+    }
+    if (existing.authorName !== authorName) {
+      res.status(403).json({ error: "Only the comment's author may delete it" });
+      return;
+    }
+    await db.delete(storyCommentsTable).where(eq(storyCommentsTable.id, existing.id));
+    res.sendStatus(204);
+  },
+);
 
 export default router;

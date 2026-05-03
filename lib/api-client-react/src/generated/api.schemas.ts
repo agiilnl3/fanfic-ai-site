@@ -46,6 +46,26 @@ export interface Story {
   coverImageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+  likeCount: number;
+  commentCount: number;
+}
+
+export interface StoryComment {
+  id: number;
+  storyId: number;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface AddCommentBody {
+  /** @minLength 1 */
+  authorName: string;
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  body: string;
 }
 
 export interface Illustration {
@@ -298,6 +318,10 @@ export type GetStoryLikeParams = {
 };
 
 export type UnlikeStoryParams = {
+  authorName: string;
+};
+
+export type DeleteStoryCommentParams = {
   authorName: string;
 };
 

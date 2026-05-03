@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { LikeButton } from "@/components/like-button";
+import { CommentsSection } from "@/components/comments-section";
 import {
   useGetStory,
   useUpdateStory,
@@ -30,7 +31,7 @@ import { useAuthor } from "@/hooks/use-author";
 import { format } from "date-fns";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -554,8 +555,16 @@ export default function StoryReading() {
             <p className="text-sm text-white/50 mt-4 uppercase tracking-widest">
               {format(new Date(story.createdAt), "MMMM do, yyyy")}
             </p>
-            <div className="mt-6 flex justify-center">
+            <div className="mt-6 flex justify-center items-center gap-3">
               <LikeButton storyId={story.id} size="lg" variant="outline" className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 hover:text-rose-400 px-4" />
+              <a
+                href="#comments-section"
+                className="inline-flex items-center gap-2 px-4 h-10 rounded-md bg-background/30 backdrop-blur-md border border-white/20 text-white hover:bg-background/50 transition-colors text-sm"
+                data-testid="link-comments"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="tabular-nums">{story.commentCount}</span>
+              </a>
             </div>
           </div>
         </header>
@@ -823,6 +832,9 @@ export default function StoryReading() {
               )}
             </div>
           )}
+        </div>
+        <div id="comments-section">
+          <CommentsSection storyId={story.id} />
         </div>
       </article>
     </Layout>
