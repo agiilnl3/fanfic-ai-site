@@ -5,8 +5,8 @@ import { join } from "path";
 import { createHash } from "crypto";
 import { db, storiesTable, illustrationsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
 import { uploadIllustrationBuffer } from "./uploadIllustration";
+import { synthesizeStoryNarration } from "./ttsCache";
 import { logger } from "./logger";
 
 export type TrailerStatus = "queued" | "rendering" | "ready" | "failed";
@@ -60,16 +60,12 @@ async function renderNarration(
   text: string,
   outPath: string,
 ): Promise<number> {
+  // Reuse the shared TTS cache so the trailer narration is persisted
+  // and dedup'd with /stories/:id/audio for identical input text.
   const trimmed = text.slice(0, 4000);
-  const resp = await openai.audio.speech.create({
-    model: "tts-1",
-    voice: "nova",
-    input: trimmed,
-    response_format: "mp3",
-  });
-  const buf = Buffer.from(await resp.arrayBuffer());
-  await writeFile(outPath, buf);
-  return buf.length;
+  const { buffer } = await synthesizeStoryNarration(trimmed, "nova");
+  await writeFile(outPath, buffer);
+  return buffer.length;
 }
 
 interface RenderOptions {
@@ -208,7 +204,11 @@ export async function runTrailerJob(storyId: number): Promise<void> {
     await renderTrailer({ imagePaths, audioPath, outPath });
 
     const mp4 = await readFile(outPath);
-    const url = await uploadIllustrationBuffer(mp4, "video/mp4");
+    // Deterministic object key keyed by storyId + content hash so
+    // identical inputs upload to the same path (idempotent).
+    const url = await uploadIllustrationBuffer(mp4, "video/mp4", {
+      key: `trailers/${storyId}-${hash}.mp4`,
+    });
 
     await db
       .update(storiesTable)

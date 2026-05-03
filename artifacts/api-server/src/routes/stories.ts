@@ -95,6 +95,7 @@ import {
 } from "../middlewares/rate-limit";
 import { embedStoryInBackground, toVectorLiteral } from "../lib/embeddings";
 import { generatePosterCoverInBackground } from "../lib/posterCover";
+import { synthesizeStoryNarration } from "../lib/ttsCache";
 import {
   startTrailerJobInBackground,
   isTrailerJobInFlight,
@@ -2010,14 +2011,9 @@ router.get("/stories/:id/audio", aiGenerationLimiter, async (req, res): Promise<
   const voice = query.data.voice ?? "nova";
   const text = story.fullText.slice(0, 4000);
 
-  const response = await openai.audio.speech.create({
-    model: "tts-1",
-    voice,
-    input: text,
-    response_format: "mp3",
-  });
-
-  const buffer = Buffer.from(await response.arrayBuffer());
+  // Shared TTS cache: dedup'd with the trailer narration path so
+  // identical (text, voice) inputs reuse the same MP3 in Object Storage.
+  const { buffer } = await synthesizeStoryNarration(text, voice);
   res.setHeader("Content-Type", "audio/mpeg");
   res.setHeader("Cache-Control", "public, max-age=3600");
   res.setHeader("Content-Length", buffer.length.toString());

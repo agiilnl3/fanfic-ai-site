@@ -70,9 +70,13 @@ export async function generatePosterCover(storyId: number): Promise<string | nul
     const square = await generateImageBuffer(prompt, "1024x1024");
     const buffer = await expandTo16x9(square);
     const url = await uploadIllustrationBuffer(buffer);
+    // Promote the poster to the story's canonical cover so feed cards,
+    // share previews, and SEO fallbacks all show the dedicated cover
+    // (not the first body illustration). `posterCoverUrl` is also kept
+    // for callers that specifically need the poster artifact.
     await db
       .update(storiesTable)
-      .set({ posterCoverUrl: url })
+      .set({ posterCoverUrl: url, coverImageUrl: url })
       .where(eq(storiesTable.id, storyId));
     return url;
   } catch (err) {

@@ -12,10 +12,13 @@ function parseObjectPath(path: string): { bucketName: string; objectName: string
 export async function uploadIllustrationBuffer(
   buffer: Buffer,
   contentType = "image/png",
+  options: { key?: string } = {},
 ): Promise<string> {
   const dir = process.env.PRIVATE_OBJECT_DIR;
   if (!dir) throw new Error("PRIVATE_OBJECT_DIR not set");
-  const id = randomUUID();
+  // Allow callers to supply a deterministic key (e.g. trailers/{id}-{hash}.mp4)
+  // so re-uploads of the same content reuse the same object URL.
+  const id = options.key ?? randomUUID();
   const fullPath = `${dir.replace(/\/$/, "")}/uploads/${id}`;
   const { bucketName, objectName } = parseObjectPath(fullPath);
   const file = objectStorageClient.bucket(bucketName).file(objectName);
