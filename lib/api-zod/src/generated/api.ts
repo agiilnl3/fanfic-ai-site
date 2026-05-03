@@ -94,6 +94,16 @@ export const getPublicFeedQueryLimitDefault = 20;
 
 export const GetPublicFeedQueryParams = zod.object({
   genre: zod.coerce.string().optional(),
+  q: zod.coerce
+    .string()
+    .optional()
+    .describe("Free-text search across title, summary, and seed prompt."),
+  followerName: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "When set, only return stories from authors followed by this pen name.",
+    ),
   limit: zod.coerce.number().default(getPublicFeedQueryLimitDefault),
 });
 
@@ -688,6 +698,8 @@ export const AdminUpdateStoryResponse = zod.object({
   coverImageUrl: zod.string().nullish(),
   createdAt: zod.string(),
   updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
 });
 
 /**
@@ -704,4 +716,146 @@ export const AdminGetStatsResponse = zod.object({
   totalIllustrations: zod.number(),
   totalLikes: zod.number(),
   totalAuthors: zod.number(),
+});
+
+/**
+ * @summary Public profile of an author with their published stories and counters
+ */
+export const GetAuthorProfileParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const getAuthorProfileResponseStoriesItemCoAuthorsDefault = [];
+
+export const GetAuthorProfileResponse = zod.object({
+  authorName: zod.string(),
+  storyCount: zod.number(),
+  publishedCount: zod.number(),
+  followerCount: zod.number(),
+  followingCount: zod.number(),
+  totalLikes: zod.number(),
+  firstSeenAt: zod.string().nullish(),
+  stories: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      genre: zod.string(),
+      artStyle: zod.string(),
+      lengthSetting: zod.enum(["short", "medium", "long"]),
+      seedPrompt: zod.string().nullish(),
+      fullText: zod.string().nullish(),
+      summary: zod.string().nullish(),
+      characters: zod.string().nullish(),
+      status: zod.enum(["draft", "published"]),
+      authorName: zod.string(),
+      coAuthors: zod
+        .array(zod.string())
+        .default(getAuthorProfileResponseStoriesItemCoAuthorsDefault),
+      coverImageUrl: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      likeCount: zod.number(),
+      commentCount: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get follower count and whether the requester follows this author
+ */
+export const GetAuthorFollowParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const GetAuthorFollowQueryParams = zod.object({
+  followerName: zod.coerce.string().optional(),
+});
+
+export const GetAuthorFollowResponse = zod.object({
+  authorName: zod.string(),
+  followerCount: zod.number(),
+  isFollowing: zod.boolean(),
+});
+
+/**
+ * @summary Follow an author
+ */
+export const FollowAuthorParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const FollowAuthorBody = zod.object({
+  followerName: zod.string().min(1),
+});
+
+export const FollowAuthorResponse = zod.object({
+  authorName: zod.string(),
+  followerCount: zod.number(),
+  isFollowing: zod.boolean(),
+});
+
+/**
+ * @summary Unfollow an author
+ */
+export const UnfollowAuthorParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const UnfollowAuthorQueryParams = zod.object({
+  followerName: zod.coerce.string(),
+});
+
+export const UnfollowAuthorResponse = zod.object({
+  authorName: zod.string(),
+  followerCount: zod.number(),
+  isFollowing: zod.boolean(),
+});
+
+/**
+ * @summary List notifications for a recipient (newest first)
+ */
+export const listNotificationsQueryLimitDefault = 30;
+
+export const ListNotificationsQueryParams = zod.object({
+  recipientName: zod.coerce.string(),
+  limit: zod.coerce.number().default(listNotificationsQueryLimitDefault),
+});
+
+export const ListNotificationsResponseItem = zod.object({
+  id: zod.number(),
+  recipientName: zod.string(),
+  type: zod.enum(["comment", "co_author_chapter", "follow", "like"]),
+  actorName: zod.string(),
+  storyId: zod.number().nullish(),
+  payload: zod.record(zod.string(), zod.unknown()).nullish(),
+  readAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ListNotificationsResponse = zod.array(
+  ListNotificationsResponseItem,
+);
+
+/**
+ * @summary Count unread notifications for a recipient
+ */
+export const GetUnreadNotificationCountQueryParams = zod.object({
+  recipientName: zod.coerce.string(),
+});
+
+export const GetUnreadNotificationCountResponse = zod.object({
+  recipientName: zod.string(),
+  unread: zod.number(),
+});
+
+/**
+ * @summary Mark all notifications as read for a recipient
+ */
+
+export const MarkNotificationsReadBody = zod.object({
+  recipientName: zod.string().min(1),
+});
+
+export const MarkNotificationsReadResponse = zod.object({
+  recipientName: zod.string(),
+  unread: zod.number(),
 });

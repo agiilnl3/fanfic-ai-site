@@ -23,21 +23,29 @@ import type {
   AdminStats,
   AdminStoryRow,
   AdminUpdateStoryBody,
+  AuthorProfile,
   CoAuthorList,
   CoAuthorMutationBody,
   CoAuthorRemoveBody,
   ContinueStoryBody,
   CreateStoryBody,
   DeleteStoryCommentParams,
+  FollowBody,
+  FollowInfo,
   GenerateIllustrationBody,
   GenerateStoryBody,
+  GetAuthorFollowParams,
   GetPublicFeedParams,
   GetStoryAudioParams,
   GetStoryLikeParams,
+  GetUnreadNotificationCountParams,
   HealthStatus,
   Illustration,
   LikeBody,
+  ListNotificationsParams,
   ListStoriesParams,
+  MarkReadBody,
+  Notification,
   RegenerateIllustrationBody,
   RegenerateSectionBody,
   RegenerateSectionResponse,
@@ -46,7 +54,9 @@ import type {
   StoryLikeInfo,
   StoryStats,
   StoryWithIllustrations,
+  UnfollowAuthorParams,
   UnlikeStoryParams,
+  UnreadCount,
   UpdateStoryBody,
 } from "./api.schemas";
 
@@ -2985,3 +2995,675 @@ export function useAdminGetStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Public profile of an author with their published stories and counters
+ */
+export const getGetAuthorProfileUrl = (name: string) => {
+  return `/api/authors/${name}`;
+};
+
+export const getAuthorProfile = async (
+  name: string,
+  options?: RequestInit,
+): Promise<AuthorProfile> => {
+  return customFetch<AuthorProfile>(getGetAuthorProfileUrl(name), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorProfileQueryKey = (name: string) => {
+  return [`/api/authors/${name}`] as const;
+};
+
+export const getGetAuthorProfileQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorProfile>>,
+  TError = ErrorType<void>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorProfile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAuthorProfileQueryKey(name);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAuthorProfile>>
+  > = ({ signal }) => getAuthorProfile(name, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!name,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorProfile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorProfileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorProfile>>
+>;
+export type GetAuthorProfileQueryError = ErrorType<void>;
+
+/**
+ * @summary Public profile of an author with their published stories and counters
+ */
+
+export function useGetAuthorProfile<
+  TData = Awaited<ReturnType<typeof getAuthorProfile>>,
+  TError = ErrorType<void>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorProfile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorProfileQueryOptions(name, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get follower count and whether the requester follows this author
+ */
+export const getGetAuthorFollowUrl = (
+  name: string,
+  params?: GetAuthorFollowParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/authors/${name}/follow?${stringifiedParams}`
+    : `/api/authors/${name}/follow`;
+};
+
+export const getAuthorFollow = async (
+  name: string,
+  params?: GetAuthorFollowParams,
+  options?: RequestInit,
+): Promise<FollowInfo> => {
+  return customFetch<FollowInfo>(getGetAuthorFollowUrl(name, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAuthorFollowQueryKey = (
+  name: string,
+  params?: GetAuthorFollowParams,
+) => {
+  return [`/api/authors/${name}/follow`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAuthorFollowQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAuthorFollow>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  params?: GetAuthorFollowParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorFollow>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAuthorFollowQueryKey(name, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAuthorFollow>>> = ({
+    signal,
+  }) => getAuthorFollow(name, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!name,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAuthorFollow>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAuthorFollowQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAuthorFollow>>
+>;
+export type GetAuthorFollowQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get follower count and whether the requester follows this author
+ */
+
+export function useGetAuthorFollow<
+  TData = Awaited<ReturnType<typeof getAuthorFollow>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  params?: GetAuthorFollowParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAuthorFollow>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAuthorFollowQueryOptions(name, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Follow an author
+ */
+export const getFollowAuthorUrl = (name: string) => {
+  return `/api/authors/${name}/follow`;
+};
+
+export const followAuthor = async (
+  name: string,
+  followBody: FollowBody,
+  options?: RequestInit,
+): Promise<FollowInfo> => {
+  return customFetch<FollowInfo>(getFollowAuthorUrl(name), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(followBody),
+  });
+};
+
+export const getFollowAuthorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof followAuthor>>,
+    TError,
+    { name: string; data: BodyType<FollowBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof followAuthor>>,
+  TError,
+  { name: string; data: BodyType<FollowBody> },
+  TContext
+> => {
+  const mutationKey = ["followAuthor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof followAuthor>>,
+    { name: string; data: BodyType<FollowBody> }
+  > = (props) => {
+    const { name, data } = props ?? {};
+
+    return followAuthor(name, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FollowAuthorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof followAuthor>>
+>;
+export type FollowAuthorMutationBody = BodyType<FollowBody>;
+export type FollowAuthorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Follow an author
+ */
+export const useFollowAuthor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof followAuthor>>,
+    TError,
+    { name: string; data: BodyType<FollowBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof followAuthor>>,
+  TError,
+  { name: string; data: BodyType<FollowBody> },
+  TContext
+> => {
+  return useMutation(getFollowAuthorMutationOptions(options));
+};
+
+/**
+ * @summary Unfollow an author
+ */
+export const getUnfollowAuthorUrl = (
+  name: string,
+  params: UnfollowAuthorParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/authors/${name}/follow?${stringifiedParams}`
+    : `/api/authors/${name}/follow`;
+};
+
+export const unfollowAuthor = async (
+  name: string,
+  params: UnfollowAuthorParams,
+  options?: RequestInit,
+): Promise<FollowInfo> => {
+  return customFetch<FollowInfo>(getUnfollowAuthorUrl(name, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnfollowAuthorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unfollowAuthor>>,
+    TError,
+    { name: string; params: UnfollowAuthorParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unfollowAuthor>>,
+  TError,
+  { name: string; params: UnfollowAuthorParams },
+  TContext
+> => {
+  const mutationKey = ["unfollowAuthor"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unfollowAuthor>>,
+    { name: string; params: UnfollowAuthorParams }
+  > = (props) => {
+    const { name, params } = props ?? {};
+
+    return unfollowAuthor(name, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnfollowAuthorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unfollowAuthor>>
+>;
+
+export type UnfollowAuthorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Unfollow an author
+ */
+export const useUnfollowAuthor = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unfollowAuthor>>,
+    TError,
+    { name: string; params: UnfollowAuthorParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unfollowAuthor>>,
+  TError,
+  { name: string; params: UnfollowAuthorParams },
+  TContext
+> => {
+  return useMutation(getUnfollowAuthorMutationOptions(options));
+};
+
+/**
+ * @summary List notifications for a recipient (newest first)
+ */
+export const getListNotificationsUrl = (params: ListNotificationsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/notifications?${stringifiedParams}`
+    : `/api/notifications`;
+};
+
+export const listNotifications = async (
+  params: ListNotificationsParams,
+  options?: RequestInit,
+): Promise<Notification[]> => {
+  return customFetch<Notification[]>(getListNotificationsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListNotificationsQueryKey = (
+  params?: ListNotificationsParams,
+) => {
+  return [`/api/notifications`, ...(params ? [params] : [])] as const;
+};
+
+export const getListNotificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listNotifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListNotificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listNotifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListNotificationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listNotifications>>
+  > = ({ signal }) => listNotifications(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listNotifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListNotificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listNotifications>>
+>;
+export type ListNotificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List notifications for a recipient (newest first)
+ */
+
+export function useListNotifications<
+  TData = Awaited<ReturnType<typeof listNotifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params: ListNotificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listNotifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListNotificationsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Count unread notifications for a recipient
+ */
+export const getGetUnreadNotificationCountUrl = (
+  params: GetUnreadNotificationCountParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/notifications/unread-count?${stringifiedParams}`
+    : `/api/notifications/unread-count`;
+};
+
+export const getUnreadNotificationCount = async (
+  params: GetUnreadNotificationCountParams,
+  options?: RequestInit,
+): Promise<UnreadCount> => {
+  return customFetch<UnreadCount>(getGetUnreadNotificationCountUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUnreadNotificationCountQueryKey = (
+  params?: GetUnreadNotificationCountParams,
+) => {
+  return [
+    `/api/notifications/unread-count`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetUnreadNotificationCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUnreadNotificationCount>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetUnreadNotificationCountParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUnreadNotificationCount>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetUnreadNotificationCountQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUnreadNotificationCount>>
+  > = ({ signal }) =>
+    getUnreadNotificationCount(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUnreadNotificationCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUnreadNotificationCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUnreadNotificationCount>>
+>;
+export type GetUnreadNotificationCountQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Count unread notifications for a recipient
+ */
+
+export function useGetUnreadNotificationCount<
+  TData = Awaited<ReturnType<typeof getUnreadNotificationCount>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetUnreadNotificationCountParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUnreadNotificationCount>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUnreadNotificationCountQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Mark all notifications as read for a recipient
+ */
+export const getMarkNotificationsReadUrl = () => {
+  return `/api/notifications/mark-read`;
+};
+
+export const markNotificationsRead = async (
+  markReadBody: MarkReadBody,
+  options?: RequestInit,
+): Promise<UnreadCount> => {
+  return customFetch<UnreadCount>(getMarkNotificationsReadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(markReadBody),
+  });
+};
+
+export const getMarkNotificationsReadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    { data: BodyType<MarkReadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  { data: BodyType<MarkReadBody> },
+  TContext
+> => {
+  const mutationKey = ["markNotificationsRead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    { data: BodyType<MarkReadBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return markNotificationsRead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkNotificationsReadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markNotificationsRead>>
+>;
+export type MarkNotificationsReadMutationBody = BodyType<MarkReadBody>;
+export type MarkNotificationsReadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark all notifications as read for a recipient
+ */
+export const useMarkNotificationsRead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markNotificationsRead>>,
+    TError,
+    { data: BodyType<MarkReadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markNotificationsRead>>,
+  TError,
+  { data: BodyType<MarkReadBody> },
+  TContext
+> => {
+  return useMutation(getMarkNotificationsReadMutationOptions(options));
+};

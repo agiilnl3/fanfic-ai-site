@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
+import { FollowButton } from "@/components/follow-button";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { LikeButton } from "@/components/like-button";
@@ -547,11 +548,26 @@ export default function StoryReading() {
               {story.title}
             </h1>
             <p className="text-xl text-white/80 italic font-serif">
-              By {story.authorName}
+              By{" "}
+              <Link
+                href={`/author/${encodeURIComponent(story.authorName)}`}
+                className="hover:text-primary hover:underline transition-colors"
+              >
+                {story.authorName}
+              </Link>
               {coAuthors.length > 0 && (
                 <span className="text-white/60"> &amp; {coAuthors.join(", ")}</span>
               )}
             </p>
+            <div className="mt-3 flex justify-center">
+              <FollowButton
+                authorName={story.authorName}
+                size="sm"
+                variant="outline"
+                className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50"
+                showCount
+              />
+            </div>
             <p className="text-sm text-white/50 mt-4 uppercase tracking-widest">
               {format(new Date(story.createdAt), "MMMM do, yyyy")}
             </p>

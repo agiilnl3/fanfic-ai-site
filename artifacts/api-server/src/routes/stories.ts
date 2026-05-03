@@ -1,6 +1,15 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, count, and, sql, inArray } from "drizzle-orm";
-import { db, storiesTable, illustrationsTable, storyLikesTable, storyCommentsTable } from "@workspace/db";
+import {
+  db,
+  storiesTable,
+  illustrationsTable,
+  storyLikesTable,
+  storyCommentsTable,
+  authorFollowsTable,
+  notificationsTable,
+} from "@workspace/db";
+import { ilike, or } from "drizzle-orm";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -303,9 +312,31 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     return;
   }
 
-  const { genre, limit } = parsed.data;
+  const { genre, limit, q, followerName } = parsed.data;
   const conditions = [eq(storiesTable.status, "published")];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
+  if (q && q.trim()) {
+    const needle = `%${q.trim()}%`;
+    const search = or(
+      ilike(storiesTable.title, needle),
+      ilike(storiesTable.summary, needle),
+      ilike(storiesTable.seedPrompt, needle),
+    );
+    if (search) conditions.push(search);
+  }
+
+  if (followerName && followerName.trim()) {
+    const follows = await db
+      .select({ authorName: authorFollowsTable.authorName })
+      .from(authorFollowsTable)
+      .where(eq(authorFollowsTable.followerName, followerName.trim()));
+    const authors = follows.map((f) => f.authorName);
+    if (authors.length === 0) {
+      res.json([]);
+      return;
+    }
+    conditions.push(inArray(storiesTable.authorName, authors));
+  }
 
   const stories = await db
     .select()
@@ -1248,7 +1279,11 @@ router.post(
       return;
     }
     const [story] = await db
-      .select({ id: storiesTable.id })
+      .select({
+        id: storiesTable.id,
+        authorName: storiesTable.authorName,
+        title: storiesTable.title,
+      })
       .from(storiesTable)
       .where(eq(storiesTable.id, params.data.id))
       .limit(1);
@@ -1260,6 +1295,20 @@ router.post(
       .insert(storyCommentsTable)
       .values({ storyId: params.data.id, authorName, body: text })
       .returning();
+
+    if (story.authorName && story.authorName !== authorName) {
+      try {
+        await db.insert(notificationsTable).values({
+          recipientName: story.authorName,
+          type: "comment",
+          actorName: authorName,
+          storyId: story.id,
+          payload: { storyTitle: story.title, preview: text.slice(0, 140) },
+        });
+      } catch (err) {
+        logger.warn({ err }, "failed to insert comment notification");
+      }
+    }
     res.status(201).json(comment);
   },
 );

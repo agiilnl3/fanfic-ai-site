@@ -22,6 +22,10 @@ tags:
     description: Story likes
   - name: comments
     description: Story reader comments
+  - name: authors
+    description: Author profiles, follows, subscription feed
+  - name: notifications
+    description: In-app notifications
 paths:
   /healthz:
     get:
@@ -116,6 +120,18 @@ paths:
         - name: genre
           in: query
           required: false
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: false
+          description: Free-text search across title, summary, and seed prompt.
+          schema:
+            type: string
+        - name: followerName
+          in: query
+          required: false
+          description: When set, only return stories from authors followed by this pen name.
           schema:
             type: string
         - name: limit
@@ -809,6 +825,161 @@ paths:
         "401":
           description: Missing or invalid admin token
 
+  /authors/{name}:
+    get:
+      operationId: getAuthorProfile
+      tags: [authors]
+      summary: Public profile of an author with their published stories and counters
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Author profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthorProfile"
+        "404":
+          description: Not found
+
+  /authors/{name}/follow:
+    get:
+      operationId: getAuthorFollow
+      tags: [authors]
+      summary: Get follower count and whether the requester follows this author
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: followerName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Follow info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowInfo"
+    post:
+      operationId: followAuthor
+      tags: [authors]
+      summary: Follow an author
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FollowBody"
+      responses:
+        "200":
+          description: Follow info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowInfo"
+    delete:
+      operationId: unfollowAuthor
+      tags: [authors]
+      summary: Unfollow an author
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: followerName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Follow info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowInfo"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications for a recipient (newest first)
+      parameters:
+        - name: recipientName
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      tags: [notifications]
+      summary: Count unread notifications for a recipient
+      parameters:
+        - name: recipientName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+
+  /notifications/mark-read:
+    post:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read for a recipient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkReadBody"
+      responses:
+        "200":
+          description: Updated unread count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+
 components:
   schemas:
     HealthStatus:
@@ -1222,3 +1393,85 @@ components:
         totalAuthors:
           type: integer
       required: [totalStories, publishedStories, draftStories, totalIllustrations, totalLikes, totalAuthors]
+
+    AuthorProfile:
+      type: object
+      properties:
+        authorName:
+          type: string
+        storyCount:
+          type: integer
+        publishedCount:
+          type: integer
+        followerCount:
+          type: integer
+        followingCount:
+          type: integer
+        totalLikes:
+          type: integer
+        firstSeenAt:
+          type: ["string", "null"]
+        stories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Story"
+      required: [authorName, storyCount, publishedCount, followerCount, followingCount, totalLikes, stories]
+
+    FollowInfo:
+      type: object
+      properties:
+        authorName:
+          type: string
+        followerCount:
+          type: integer
+        isFollowing:
+          type: boolean
+      required: [authorName, followerCount, isFollowing]
+
+    FollowBody:
+      type: object
+      properties:
+        followerName:
+          type: string
+          minLength: 1
+      required: [followerName]
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        recipientName:
+          type: string
+        type:
+          type: string
+          enum: [comment, co_author_chapter, follow, like]
+        actorName:
+          type: string
+        storyId:
+          type: ["integer", "null"]
+        payload:
+          type: ["object", "null"]
+          additionalProperties: true
+        readAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required: [id, recipientName, type, actorName, createdAt]
+
+    UnreadCount:
+      type: object
+      properties:
+        recipientName:
+          type: string
+        unread:
+          type: integer
+      required: [recipientName, unread]
+
+    MarkReadBody:
+      type: object
+      properties:
+        recipientName:
+          type: string
+          minLength: 1
+      required: [recipientName]

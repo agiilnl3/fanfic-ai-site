@@ -289,6 +289,68 @@ export interface AdminStats {
   totalAuthors: number;
 }
 
+export interface AuthorProfile {
+  authorName: string;
+  storyCount: number;
+  publishedCount: number;
+  followerCount: number;
+  followingCount: number;
+  totalLikes: number;
+  /** @nullable */
+  firstSeenAt?: string | null;
+  stories: Story[];
+}
+
+export interface FollowInfo {
+  authorName: string;
+  followerCount: number;
+  isFollowing: boolean;
+}
+
+export interface FollowBody {
+  /** @minLength 1 */
+  followerName: string;
+}
+
+export type NotificationType =
+  (typeof NotificationType)[keyof typeof NotificationType];
+
+export const NotificationType = {
+  comment: "comment",
+  co_author_chapter: "co_author_chapter",
+  follow: "follow",
+  like: "like",
+} as const;
+
+/**
+ * @nullable
+ */
+export type NotificationPayload = { [key: string]: unknown } | null;
+
+export interface Notification {
+  id: number;
+  recipientName: string;
+  type: NotificationType;
+  actorName: string;
+  /** @nullable */
+  storyId?: number | null;
+  /** @nullable */
+  payload?: NotificationPayload;
+  /** @nullable */
+  readAt?: string | null;
+  createdAt: string;
+}
+
+export interface UnreadCount {
+  recipientName: string;
+  unread: number;
+}
+
+export interface MarkReadBody {
+  /** @minLength 1 */
+  recipientName: string;
+}
+
 export type ListStoriesParams = {
   status?: ListStoriesStatus;
   genre?: string;
@@ -305,6 +367,14 @@ export const ListStoriesStatus = {
 
 export type GetPublicFeedParams = {
   genre?: string;
+  /**
+   * Free-text search across title, summary, and seed prompt.
+   */
+  q?: string;
+  /**
+   * When set, only return stories from authors followed by this pen name.
+   */
+  followerName?: string;
   limit?: number;
 };
 
@@ -340,3 +410,20 @@ export const GetStoryAudioVoice = {
   nova: "nova",
   shimmer: "shimmer",
 } as const;
+
+export type GetAuthorFollowParams = {
+  followerName?: string;
+};
+
+export type UnfollowAuthorParams = {
+  followerName: string;
+};
+
+export type ListNotificationsParams = {
+  recipientName: string;
+  limit?: number;
+};
+
+export type GetUnreadNotificationCountParams = {
+  recipientName: string;
+};

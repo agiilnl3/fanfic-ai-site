@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { BookOpen, Home, Library, PenTool, Sparkles, User } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { NotificationsBell } from "@/components/notifications-bell";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -45,10 +46,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="hidden md:flex items-center gap-2">
+            <NotificationsBell />
             <LanguageSwitcher />
           </div>
 
           <div className="md:hidden flex items-center gap-2">
+            <NotificationsBell />
             <LanguageSwitcher />
             <Link href="/create" className="text-primary flex items-center justify-center p-2">
               <Sparkles className="w-5 h-5" />

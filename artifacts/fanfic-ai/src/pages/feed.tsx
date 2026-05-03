@@ -4,10 +4,21 @@ import { Seo } from "@/components/seo";
 import { useGetPublicFeed, type Story } from "@workspace/api-client-react";
 import { StoryCard } from "@/components/story-card";
 import { Input } from "@/components/ui/input";
-import { Search, BookOpen } from "lucide-react";
+import { Search, BookOpen, Users, Globe } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useAuthor } from "@/hooks/use-author";
+
+function useDebounced<T>(value: T, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
 
 const GENRES = [
   "All Genres",
@@ -98,16 +109,19 @@ function VirtualGrid({ stories }: { stories: Story[] }) {
 export default function Feed() {
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All Genres");
+  const [tab, setTab] = useState<"all" | "following">("all");
+  const debouncedSearch = useDebounced(search, 300);
+  const { authorName } = useAuthor();
+
+  const followingEnabled = tab === "following" && !!authorName?.trim();
 
   const { data: feed, isLoading } = useGetPublicFeed({
     genre: genre === "All Genres" ? undefined : genre,
+    q: debouncedSearch.trim() || undefined,
+    followerName: followingEnabled ? authorName : undefined,
   });
 
-  const filteredFeed = feed?.filter((story) =>
-    story.title.toLowerCase().includes(search.toLowerCase()) ||
-    story.authorName.toLowerCase().includes(search.toLowerCase()) ||
-    (story.summary && story.summary.toLowerCase().includes(search.toLowerCase())),
-  );
+  const filteredFeed = feed;
 
   return (
     <Layout>
@@ -123,14 +137,26 @@ export default function Feed() {
           </p>
         </div>
 
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "all" | "following")} className="max-w-3xl mx-auto mb-6">
+          <TabsList className="grid grid-cols-2 w-full md:w-auto md:inline-flex">
+            <TabsTrigger value="all" className="gap-2" data-testid="tab-feed-all">
+              <Globe className="w-4 h-4" /> All Stories
+            </TabsTrigger>
+            <TabsTrigger value="following" className="gap-2" data-testid="tab-feed-following">
+              <Users className="w-4 h-4" /> Following
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="flex flex-col md:flex-row gap-4 mb-12 max-w-3xl mx-auto">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
-              placeholder="Search by title, author, or keyword..."
+              placeholder="Search by title, summary, or seed prompt..."
               className="pl-10 h-12 bg-card/50 backdrop-blur-sm border-primary/20 text-lg"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-feed-search"
             />
           </div>
           <Select value={genre} onValueChange={setGenre}>
@@ -145,7 +171,15 @@ export default function Feed() {
           </Select>
         </div>
 
-        {isLoading ? (
+        {tab === "following" && !authorName?.trim() ? (
+          <div className="text-center py-32 border border-dashed border-border/50 rounded-2xl bg-card/10">
+            <Users className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+            <h3 className="font-serif text-2xl mb-2">Set a pen name to follow authors</h3>
+            <p className="text-muted-foreground">
+              Open the New Story page to choose your pen name, then follow authors from their profile.
+            </p>
+          </div>
+        ) : isLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
               <div key={i} className="space-y-3">
@@ -168,8 +202,14 @@ export default function Feed() {
         ) : (
           <div className="text-center py-32 border border-dashed border-border/50 rounded-2xl bg-card/10">
             <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="font-serif text-2xl mb-2">No tales found</h3>
-            <p className="text-muted-foreground">Try adjusting your search or filter.</p>
+            <h3 className="font-serif text-2xl mb-2">
+              {tab === "following" ? "No stories from authors you follow yet" : "No tales found"}
+            </h3>
+            <p className="text-muted-foreground">
+              {tab === "following"
+                ? "Visit an author's profile and tap Follow to see their stories here."
+                : "Try adjusting your search or filter."}
+            </p>
           </div>
         )}
       </div>

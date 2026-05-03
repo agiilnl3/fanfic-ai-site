@@ -53,7 +53,28 @@ export function StoryCard({ story }: { story: Story }) {
           </h3>
         </CardHeader>
         <CardContent className="p-4 pt-0 flex-1">
-          <p className="text-muted-foreground text-sm italic">by {story.authorName}</p>
+          <p className="text-muted-foreground text-sm italic">
+            by{" "}
+            <span
+              role="link"
+              tabIndex={0}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.location.href = `${import.meta.env.BASE_URL}author/${encodeURIComponent(story.authorName)}`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.location.href = `${import.meta.env.BASE_URL}author/${encodeURIComponent(story.authorName)}`;
+                }
+              }}
+              className="hover:text-primary hover:underline cursor-pointer"
+            >
+              {story.authorName}
+            </span>
+          </p>
           {story.summary && (
             <p className="text-sm text-foreground/70 mt-3 line-clamp-3 leading-relaxed">
               {story.summary}
