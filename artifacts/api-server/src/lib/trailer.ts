@@ -108,10 +108,12 @@ interface RenderOptions {
 }
 
 async function renderTrailer(opts: RenderOptions): Promise<void> {
-  const totalFrames = opts.perImageSeconds * FPS;
-  // Each image becomes a `lavfi`-like still that pans/zooms via zoompan,
-  // then they're concatenated and muxed with the narration. We trim to
-  // the audio length so the trailer is exactly `min(image-budget, audio)`.
+  const framesPerImage = opts.perImageSeconds * FPS;
+  const totalSeconds = opts.imagePaths.length * opts.perImageSeconds;
+  // Each input is a single still frame (-framerate 1 -t 1). zoompan
+  // then synthesises framesPerImage output frames at FPS, giving each
+  // image exactly perImageSeconds of video. Without this each input's
+  // frames get re-expanded by zoompan and durations explode.
   const filterComplex = opts.imagePaths
     .map((_, i) => {
       const z = `'min(zoom+0.0008,${ZOOM_END})'`;
@@ -120,7 +122,8 @@ async function renderTrailer(opts: RenderOptions): Promise<void> {
       return (
         `[${i}:v]scale=1920:1080:force_original_aspect_ratio=increase,` +
         `crop=1920:1080,setsar=1,` +
-        `zoompan=z=${z}:x=${x}:y=${y}:d=${totalFrames}:s=1920x1080:fps=${FPS},` +
+        `zoompan=z=${z}:x=${x}:y=${y}:d=${framesPerImage}:s=1920x1080:fps=${FPS},` +
+        `trim=duration=${opts.perImageSeconds},setpts=PTS-STARTPTS,` +
         `format=yuv420p[v${i}]`
       );
     })
@@ -130,7 +133,7 @@ async function renderTrailer(opts: RenderOptions): Promise<void> {
 
   const args: string[] = [];
   for (const p of opts.imagePaths) {
-    args.push("-loop", "1", "-t", String(opts.perImageSeconds), "-i", p);
+    args.push("-framerate", "1", "-loop", "1", "-t", "1", "-i", p);
   }
   args.push("-i", opts.audioPath);
   args.push(
@@ -152,13 +155,50 @@ async function renderTrailer(opts: RenderOptions): Promise<void> {
     "aac",
     "-b:a",
     "128k",
-    "-shortest",
+    "-t",
+    String(totalSeconds),
     "-movflags",
     "+faststart",
     "-y",
     opts.outPath,
   );
   await run(ffmpegBin(), args);
+}
+
+async function probeDurationSeconds(path: string): Promise<number> {
+  const ffprobeBin = process.env.FFPROBE_PATH ?? "ffprobe";
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffprobeBin, [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      path,
+    ]);
+    let out = "";
+    let err = "";
+    child.stdout.on("data", (d) => {
+      out += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+      err += d.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffprobe exited ${code}: ${err.slice(-500)}`));
+        return;
+      }
+      const n = parseFloat(out.trim());
+      if (!Number.isFinite(n)) {
+        reject(new Error(`ffprobe parse failed: ${out}`));
+        return;
+      }
+      resolve(n);
+    });
+  });
 }
 
 const inFlight = new Set<number>();
@@ -249,6 +289,13 @@ export async function runTrailerJob(storyId: number): Promise<void> {
       outPath,
       perImageSeconds: timing.perImage,
     });
+
+    const duration = await probeDurationSeconds(outPath);
+    if (duration < MIN_TRAILER_SECONDS - 1 || duration > MAX_TRAILER_SECONDS + 1) {
+      throw new Error(
+        `trailer duration ${duration.toFixed(2)}s outside ${MIN_TRAILER_SECONDS}-${MAX_TRAILER_SECONDS}s window`,
+      );
+    }
 
     const mp4 = await readFile(outPath);
     const url = await uploadIllustrationBuffer(mp4, "video/mp4", {
