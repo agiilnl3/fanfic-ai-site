@@ -77,6 +77,8 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { uploadIllustrationBuffer } from "../lib/uploadIllustration";
 import { canEditStory } from "../lib/storyAuthz";
+import { backfillStoryToChapters, lockStoryChapters } from "../lib/chapters";
+import { chaptersTable } from "@workspace/db";
 import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
 import { buildIllustrationPrompt } from "../lib/prompt";
@@ -1545,15 +1547,49 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
       return;
     }
 
-    const appended = `${story.fullText ?? ""}\n\n## ${chapterTitle}\n\n${chapterText}`;
-    // Chapter index = number of `## ` headings already present (zero-indexed
-    // for chapters BEYOND the original first chapter, which has no heading).
-    const existingChapterCount = ((story.fullText ?? "").match(/^## /gm) || []).length;
-    const newChapterIndex = existingChapterCount + 1; // index 0 = original story body
+    // Backfill chapter rows from legacy fullText (no-op if already
+    // backfilled) before grabbing the per-story lock.
+    await backfillStoryToChapters(story.id);
 
-    // Append the chapter and record authorship in a single transaction so a
-    // chapter cannot exist without a matching authorship row.
+    // Append the chapter, record authorship, and insert the new
+    // chapters tree row in a single transaction guarded by the
+    // per-story advisory lock so concurrent /continue or /branch calls
+    // can't both pick the same canonical leaf or stomp `fullText`.
     const [updated] = await db.transaction(async (tx) => {
+      await lockStoryChapters(tx, story.id);
+
+      // Re-read the story inside the lock so we use the latest
+      // fullText for both the append and the chapter-index counter.
+      const [fresh] = await tx
+        .select()
+        .from(storiesTable)
+        .where(eq(storiesTable.id, story.id))
+        .limit(1);
+      const baseText = fresh?.fullText ?? "";
+      const appended = `${baseText}\n\n## ${chapterTitle}\n\n${chapterText}`;
+      const existingChapterCount = (baseText.match(/^## /gm) || []).length;
+      const newChapterIndex = existingChapterCount + 1;
+
+      // Find the canonical leaf inside the lock so a racing /branch
+      // can't insert a new canonical sibling between our read and write.
+      const existingChapters = await tx
+        .select()
+        .from(chaptersTable)
+        .where(eq(chaptersTable.storyId, story.id));
+      let canonicalLeafId: number | null = null;
+      if (existingChapters.length > 0) {
+        const childByParent = new Map<number, boolean>();
+        for (const c of existingChapters) {
+          if (c.parentChapterId != null && c.isCanonical) {
+            childByParent.set(c.parentChapterId, true);
+          }
+        }
+        const canonicalLeaf = existingChapters.find(
+          (c) => c.isCanonical && !childByParent.get(c.id),
+        );
+        canonicalLeafId = canonicalLeaf?.id ?? null;
+      }
+
       const [row] = await tx
         .update(storiesTable)
         .set({ fullText: appended, updatedAt: new Date() })
@@ -1570,6 +1606,17 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
           })
           .onConflictDoNothing();
       }
+      await tx.insert(chaptersTable).values({
+        storyId: story.id,
+        parentChapterId: canonicalLeafId,
+        title: chapterTitle,
+        branchLabel: "",
+        text: chapterText,
+        position: 0,
+        isCanonical: true,
+        authorUserId: req.user?.id ?? null,
+        authorHandle: req.user?.handle ?? story.authorName,
+      });
       return [row];
     });
 

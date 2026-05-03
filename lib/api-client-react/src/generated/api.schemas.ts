@@ -343,6 +343,44 @@ export interface ChapterAuthorRecord {
   handle: string;
 }
 
+export interface Chapter {
+  id: number;
+  storyId: number;
+  parentChapterId: number | null;
+  title: string;
+  branchLabel: string;
+  text: string;
+  position: number;
+  isCanonical: boolean;
+  authorHandle?: string | null;
+  createdAt: string;
+}
+
+export interface ChapterTree {
+  storyId: number;
+  chapters: Chapter[];
+  /** Ordered list of chapter ids forming the canonical chain (root → leaf). */
+  canonicalPath: number[];
+}
+
+export interface BranchChapterBody {
+  /** @minLength 1 */
+  authorName: string;
+  /** Optional "what if?" hint guiding the alternate continuations. */
+  seedPrompt?: string;
+  /**
+   * How many alternative branches to generate.
+   * @minimum 2
+   * @maximum 3
+   */
+  count?: number;
+}
+
+export interface BranchChapterResponse {
+  parentChapterId: number | null;
+  branches: Chapter[];
+}
+
 export interface ChapterAuthorList {
   storyId: number;
   primaryAuthor: string;
@@ -612,6 +650,8 @@ export interface ReadingProgressInfo {
   progress: number;
   paragraphIndex: number;
   /** @nullable */
+  chapterId?: number | null;
+  /** @nullable */
   updatedAt?: string | null;
 }
 
@@ -625,6 +665,8 @@ export interface UpdateReadingProgressBody {
   progress: number;
   /** @minimum 0 */
   paragraphIndex?: number;
+  /** @nullable */
+  chapterId?: number | null;
 }
 
 export interface HistoryEntry {

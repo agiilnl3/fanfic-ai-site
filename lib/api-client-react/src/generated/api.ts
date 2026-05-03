@@ -33,7 +33,10 @@ import type {
   Bookmark,
   BookmarkBody,
   BookmarkInfo,
+  BranchChapterBody,
+  BranchChapterResponse,
   ChapterAuthorList,
+  ChapterTree,
   Character,
   CoAuthorList,
   CoAuthorMutationBody,
@@ -3175,6 +3178,266 @@ export function useListStoryChapters<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Read the full branching chapter tree for a story
+ */
+export const getGetChapterTreeUrl = (id: number) => {
+  return `/api/stories/${id}/chapter-tree`;
+};
+
+export const getChapterTree = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ChapterTree> => {
+  return customFetch<ChapterTree>(getGetChapterTreeUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetChapterTreeQueryKey = (id: number) => {
+  return [`/api/stories/${id}/chapter-tree`] as const;
+};
+
+export const getGetChapterTreeQueryOptions = <
+  TData = Awaited<ReturnType<typeof getChapterTree>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getChapterTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetChapterTreeQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getChapterTree>>> = ({
+    signal,
+  }) => getChapterTree(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getChapterTree>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetChapterTreeQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getChapterTree>>
+>;
+export type GetChapterTreeQueryError = ErrorType<void>;
+
+/**
+ * @summary Read the full branching chapter tree for a story
+ */
+
+export function useGetChapterTree<
+  TData = Awaited<ReturnType<typeof getChapterTree>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getChapterTree>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetChapterTreeQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate 2-3 alternate "What if?" continuations branching off a chapter
+ */
+export const getBranchChapterUrl = (id: number, parentId: number) => {
+  return `/api/stories/${id}/chapters/${parentId}/branch`;
+};
+
+export const branchChapter = async (
+  id: number,
+  parentId: number,
+  branchChapterBody: BranchChapterBody,
+  options?: RequestInit,
+): Promise<BranchChapterResponse> => {
+  return customFetch<BranchChapterResponse>(getBranchChapterUrl(id, parentId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(branchChapterBody),
+  });
+};
+
+export const getBranchChapterMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof branchChapter>>,
+    TError,
+    { id: number; parentId: number; data: BodyType<BranchChapterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof branchChapter>>,
+  TError,
+  { id: number; parentId: number; data: BodyType<BranchChapterBody> },
+  TContext
+> => {
+  const mutationKey = ["branchChapter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof branchChapter>>,
+    { id: number; parentId: number; data: BodyType<BranchChapterBody> }
+  > = (props) => {
+    const { id, parentId, data } = props ?? {};
+
+    return branchChapter(id, parentId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BranchChapterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof branchChapter>>
+>;
+export type BranchChapterMutationBody = BodyType<BranchChapterBody>;
+export type BranchChapterMutationError = ErrorType<void>;
+
+/**
+ * @summary Generate 2-3 alternate "What if?" continuations branching off a chapter
+ */
+export const useBranchChapter = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof branchChapter>>,
+    TError,
+    { id: number; parentId: number; data: BodyType<BranchChapterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof branchChapter>>,
+  TError,
+  { id: number; parentId: number; data: BodyType<BranchChapterBody> },
+  TContext
+> => {
+  return useMutation(getBranchChapterMutationOptions(options));
+};
+
+/**
+ * @summary Mark a chapter as the canonical pick among its siblings
+ */
+export const getSetCanonicalChapterUrl = (id: number, chapterId: number) => {
+  return `/api/stories/${id}/chapters/${chapterId}/canonical`;
+};
+
+export const setCanonicalChapter = async (
+  id: number,
+  chapterId: number,
+  options?: RequestInit,
+): Promise<ChapterTree> => {
+  return customFetch<ChapterTree>(getSetCanonicalChapterUrl(id, chapterId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSetCanonicalChapterMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setCanonicalChapter>>,
+    TError,
+    { id: number; chapterId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setCanonicalChapter>>,
+  TError,
+  { id: number; chapterId: number },
+  TContext
+> => {
+  const mutationKey = ["setCanonicalChapter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setCanonicalChapter>>,
+    { id: number; chapterId: number }
+  > = (props) => {
+    const { id, chapterId } = props ?? {};
+
+    return setCanonicalChapter(id, chapterId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetCanonicalChapterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setCanonicalChapter>>
+>;
+
+export type SetCanonicalChapterMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark a chapter as the canonical pick among its siblings
+ */
+export const useSetCanonicalChapter = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setCanonicalChapter>>,
+    TError,
+    { id: number; chapterId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setCanonicalChapter>>,
+  TError,
+  { id: number; chapterId: number },
+  TContext
+> => {
+  return useMutation(getSetCanonicalChapterMutationOptions(options));
+};
 
 /**
  * @summary Verify admin password and return a session token (currently equal to the password)

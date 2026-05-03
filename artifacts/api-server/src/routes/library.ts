@@ -195,6 +195,7 @@ router.get("/stories/:id/progress", async (req, res): Promise<void> => {
     authorName: query.data.authorName.trim(),
     progress: row?.progress ?? 0,
     paragraphIndex: row?.paragraphIndex ?? 0,
+    chapterId: row?.chapterId ?? null,
     updatedAt: row?.updatedAt?.toISOString() ?? null,
   });
 });
@@ -209,6 +210,7 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
   const author = body.data.authorName.trim();
   const progress = Math.max(0, Math.min(100, body.data.progress));
   const paragraphIndex = Math.max(0, body.data.paragraphIndex ?? 0);
+  const chapterId = body.data.chapterId ?? null;
   const [row] = await db
     .insert(readingProgressTable)
     .values({
@@ -217,6 +219,7 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
       storyId: params.data.id,
       progress,
       paragraphIndex,
+      chapterId,
       updatedAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -228,6 +231,10 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
         // skip around (footnotes, illustrations) and we want the resume
         // point to track their cursor, not their high-water mark.
         paragraphIndex: paragraphIndex,
+        // chapterId may be null when the client doesn't know which
+        // branch a paragraph came from (e.g. legacy stories pre-backfill).
+        // COALESCE keeps the previously-saved value rather than wiping it.
+        chapterId: sql`COALESCE(${chapterId}, ${readingProgressTable.chapterId})`,
         updatedAt: new Date(),
       },
     })
@@ -237,6 +244,7 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
     authorName: author,
     progress: row?.progress ?? progress,
     paragraphIndex: row?.paragraphIndex ?? paragraphIndex,
+    chapterId: row?.chapterId ?? chapterId,
     updatedAt: row?.updatedAt?.toISOString() ?? new Date().toISOString(),
   });
 });

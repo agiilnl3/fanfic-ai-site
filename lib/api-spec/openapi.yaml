@@ -896,6 +896,98 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/chapter-tree:
+    get:
+      operationId: getChapterTree
+      tags: [stories]
+      summary: Read the full branching chapter tree for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chapter tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChapterTree"
+        "404":
+          description: Not found
+
+  /stories/{id}/chapters/{parentId}/branch:
+    post:
+      operationId: branchChapter
+      tags: [stories]
+      summary: Generate 2-3 alternate "What if?" continuations branching off a chapter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: parentId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Chapter to branch from. The new chapters become its children.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchChapterBody"
+      responses:
+        "200":
+          description: Newly created branch chapters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchChapterResponse"
+        "401":
+          description: Authentication required
+        "403":
+          description: Not authorized to edit this story
+        "404":
+          description: Story or parent chapter not found
+        "429":
+          description: Daily story quota reached
+        "502":
+          description: AI returned malformed output
+
+  /stories/{id}/chapters/{chapterId}/canonical:
+    post:
+      operationId: setCanonicalChapter
+      tags: [stories]
+      summary: Mark a chapter as the canonical pick among its siblings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated chapter tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChapterTree"
+        "401":
+          description: Authentication required
+        "403":
+          description: Not authorized to edit this story
+        "404":
+          description: Story or chapter not found
+
   /admin/login:
     post:
       operationId: adminLogin
@@ -2434,6 +2526,79 @@ components:
           type: string
       required: [chapterIndex, userId, handle]
 
+    Chapter:
+      type: object
+      properties:
+        id:
+          type: integer
+        storyId:
+          type: integer
+        parentChapterId:
+          type: integer
+          nullable: true
+        title:
+          type: string
+        branchLabel:
+          type: string
+        text:
+          type: string
+        position:
+          type: integer
+        isCanonical:
+          type: boolean
+        authorHandle:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, storyId, parentChapterId, title, branchLabel, text, position, isCanonical, createdAt]
+
+    ChapterTree:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        chapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/Chapter"
+        canonicalPath:
+          type: array
+          items:
+            type: integer
+          description: Ordered list of chapter ids forming the canonical chain (root → leaf).
+      required: [storyId, chapters, canonicalPath]
+
+    BranchChapterBody:
+      type: object
+      required: [authorName]
+      properties:
+        authorName:
+          type: string
+          minLength: 1
+        seedPrompt:
+          type: string
+          description: Optional "what if?" hint guiding the alternate continuations.
+        count:
+          type: integer
+          minimum: 2
+          maximum: 3
+          default: 2
+          description: How many alternative branches to generate.
+
+    BranchChapterResponse:
+      type: object
+      properties:
+        parentChapterId:
+          type: integer
+          nullable: true
+        branches:
+          type: array
+          items:
+            $ref: "#/components/schemas/Chapter"
+      required: [parentChapterId, branches]
+
     ChapterAuthorList:
       type: object
       properties:
@@ -2801,6 +2966,7 @@ components:
         authorName: { type: string }
         progress: { type: integer }
         paragraphIndex: { type: integer }
+        chapterId: { type: ["integer", "null"] }
         updatedAt: { type: ["string", "null"] }
       required: [storyId, authorName, progress, paragraphIndex]
 
@@ -2810,6 +2976,7 @@ components:
         authorName: { type: string, minLength: 1 }
         progress: { type: integer, minimum: 0, maximum: 100 }
         paragraphIndex: { type: integer, minimum: 0 }
+        chapterId: { type: ["integer", "null"] }
       required: [authorName, progress]
 
     HistoryEntry:

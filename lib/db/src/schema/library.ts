@@ -32,6 +32,9 @@ export const readingProgressTable = pgTable(
       .references(() => storiesTable.id, { onDelete: "cascade" }),
     progress: integer("progress").notNull().default(0),
     paragraphIndex: integer("paragraph_index").notNull().default(0),
+    // Tracks which chapter (and therefore which branch path) the reader
+    // last cursored to. Nullable so legacy progress rows still work.
+    chapterId: integer("chapter_id"),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({

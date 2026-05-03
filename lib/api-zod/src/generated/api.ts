@@ -969,6 +969,115 @@ export const ListStoryChaptersResponse = zod.object({
 });
 
 /**
+ * @summary Read the full branching chapter tree for a story
+ */
+export const GetChapterTreeParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetChapterTreeResponse = zod.object({
+  storyId: zod.number(),
+  chapters: zod.array(
+    zod.object({
+      id: zod.number(),
+      storyId: zod.number(),
+      parentChapterId: zod.number().nullable(),
+      title: zod.string(),
+      branchLabel: zod.string(),
+      text: zod.string(),
+      position: zod.number(),
+      isCanonical: zod.boolean(),
+      authorHandle: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  canonicalPath: zod
+    .array(zod.number())
+    .describe(
+      "Ordered list of chapter ids forming the canonical chain (root → leaf).",
+    ),
+});
+
+/**
+ * @summary Generate 2-3 alternate "What if?" continuations branching off a chapter
+ */
+export const BranchChapterParams = zod.object({
+  id: zod.coerce.number(),
+  parentId: zod.coerce
+    .number()
+    .describe("Chapter to branch from. The new chapters become its children."),
+});
+
+export const branchChapterBodyCountDefault = 2;
+export const branchChapterBodyCountMin = 2;
+export const branchChapterBodyCountMax = 3;
+
+export const BranchChapterBody = zod.object({
+  authorName: zod.string().min(1),
+  seedPrompt: zod
+    .string()
+    .optional()
+    .describe(
+      'Optional \"what if?\" hint guiding the alternate continuations.',
+    ),
+  count: zod
+    .number()
+    .min(branchChapterBodyCountMin)
+    .max(branchChapterBodyCountMax)
+    .default(branchChapterBodyCountDefault)
+    .describe("How many alternative branches to generate."),
+});
+
+export const BranchChapterResponse = zod.object({
+  parentChapterId: zod.number().nullable(),
+  branches: zod.array(
+    zod.object({
+      id: zod.number(),
+      storyId: zod.number(),
+      parentChapterId: zod.number().nullable(),
+      title: zod.string(),
+      branchLabel: zod.string(),
+      text: zod.string(),
+      position: zod.number(),
+      isCanonical: zod.boolean(),
+      authorHandle: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Mark a chapter as the canonical pick among its siblings
+ */
+export const SetCanonicalChapterParams = zod.object({
+  id: zod.coerce.number(),
+  chapterId: zod.coerce.number(),
+});
+
+export const SetCanonicalChapterResponse = zod.object({
+  storyId: zod.number(),
+  chapters: zod.array(
+    zod.object({
+      id: zod.number(),
+      storyId: zod.number(),
+      parentChapterId: zod.number().nullable(),
+      title: zod.string(),
+      branchLabel: zod.string(),
+      text: zod.string(),
+      position: zod.number(),
+      isCanonical: zod.boolean(),
+      authorHandle: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  canonicalPath: zod
+    .array(zod.number())
+    .describe(
+      "Ordered list of chapter ids forming the canonical chain (root → leaf).",
+    ),
+});
+
+/**
  * @summary Verify admin password and return a session token (currently equal to the password)
  */
 
@@ -1875,6 +1984,7 @@ export const GetReadingProgressResponse = zod.object({
   authorName: zod.string(),
   progress: zod.number(),
   paragraphIndex: zod.number(),
+  chapterId: zod.number().nullish(),
   updatedAt: zod.string().nullish(),
 });
 
@@ -1900,6 +2010,7 @@ export const SetReadingProgressBody = zod.object({
     .number()
     .min(setReadingProgressBodyParagraphIndexMin)
     .optional(),
+  chapterId: zod.number().nullish(),
 });
 
 export const SetReadingProgressResponse = zod.object({
@@ -1907,6 +2018,7 @@ export const SetReadingProgressResponse = zod.object({
   authorName: zod.string(),
   progress: zod.number(),
   paragraphIndex: zod.number(),
+  chapterId: zod.number().nullish(),
   updatedAt: zod.string().nullish(),
 });
 

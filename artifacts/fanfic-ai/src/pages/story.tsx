@@ -9,6 +9,7 @@ import { IllustrationReorderDialog } from "@/components/illustration-reorder-dia
 import { CommentsSection } from "@/components/comments-section";
 import { ManageCollaboratorsDialog } from "@/components/manage-collaborators-dialog";
 import { CharactersDialog } from "@/components/characters-dialog";
+import { BranchesSidebar } from "@/components/branches-sidebar";
 import {
   useGetStory,
   useUpdateStory,
@@ -24,6 +25,7 @@ import {
   getGetIllustrationsQueryKey,
   getListCoAuthorsQueryKey,
   getListStoryChaptersQueryKey,
+  getGetChapterTreeQueryKey,
   getGetStoryAudioUrl,
   getExportStoryPdfUrl,
   useRecordStoryView,
@@ -92,6 +94,7 @@ export default function StoryReading() {
         queryClient.invalidateQueries({ queryKey: getGetStoryQueryKey(storyId) });
         queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(storyId) });
         queryClient.invalidateQueries({ queryKey: getListStoryChaptersQueryKey(storyId) });
+        queryClient.invalidateQueries({ queryKey: getGetChapterTreeQueryKey(storyId) });
         toast({ title: t("story.newChapterAdded"), description: t("story.newChapterDesc") });
       },
       onError: () => toast({ title: t("story.failedContinue"), variant: "destructive" }),
@@ -1196,6 +1199,16 @@ export default function StoryReading() {
             </div>
           ) : (
             <div className="story-prose">{elements}</div>
+          )}
+
+          {!editMode && (
+            <div className="mt-16">
+              <BranchesSidebar
+                storyId={storyId}
+                authorName={authorName ?? ""}
+                canEdit={isAuthor}
+              />
+            </div>
           )}
 
           {!editMode && (
