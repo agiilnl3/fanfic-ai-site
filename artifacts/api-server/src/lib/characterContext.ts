@@ -9,7 +9,9 @@ import {
   generateImageBuffer,
   editImagesFromBuffers,
 } from "@workspace/integrations-openai-ai-server/image";
+import { openai } from "@workspace/integrations-openai-ai-server";
 import { objectStorageClient } from "./objectStorage";
+import { logger } from "./logger";
 import type { CharacterRef } from "./prompt";
 
 // Load all characters linked to a story (via story_characters join).
@@ -28,6 +30,52 @@ export async function loadStoryCharacters(
     .select()
     .from(charactersTable)
     .where(inArray(charactersTable.id, ids));
+}
+
+// Filter the linked-character list down to just the ones who actually
+// appear in this section of prose. We use a tiny LLM classification
+// pass: cheap, deterministic, and fails open (returns the full list)
+// so a transient OpenAI hiccup never blocks an illustration.
+export async function filterCharactersInSection(
+  sectionText: string,
+  characters: Character[],
+): Promise<Character[]> {
+  if (characters.length <= 1) return characters;
+  const trimmed = sectionText.trim();
+  if (!trimmed) return characters;
+  const namesList = characters.map((c) => c.name);
+  try {
+    const resp = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a literary assistant. Given a story passage and a list of character names, decide which of those exact characters appear, are referenced by name, or are clearly the speaker/POV in the passage. Reply with strict JSON of the form {\"present\":[\"Name1\",\"Name2\"]}. Use the exact names from the input list. If none match, return an empty array.",
+        },
+        {
+          role: "user",
+          content: `Characters: ${JSON.stringify(namesList)}\n\nPassage:\n${trimmed.slice(0, 4000)}`,
+        },
+      ],
+    });
+    const raw = resp.choices[0]?.message?.content ?? "";
+    const parsed = JSON.parse(raw) as { present?: unknown };
+    if (!Array.isArray(parsed.present)) return characters;
+    const present = new Set(
+      parsed.present.filter((n): n is string => typeof n === "string"),
+    );
+    const filtered = characters.filter((c) => present.has(c.name));
+    return filtered.length > 0 ? filtered : characters;
+  } catch (err) {
+    logger.warn(
+      { err },
+      "filterCharactersInSection failed; falling back to all linked characters",
+    );
+    return characters;
+  }
 }
 
 export function toCharacterRefs(rows: Character[]): CharacterRef[] {

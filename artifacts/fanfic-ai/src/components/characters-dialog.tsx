@@ -146,9 +146,20 @@ export function CharactersDialog({
 
   const create = useCreateCharacter({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (newChar) => {
         setName("");
         setDescription("");
+        // In story mode, auto-link the freshly-created character to the
+        // current story so the author doesn't have to tick a box and
+        // hit "Save selection" — they came from the story page expecting
+        // this character to participate in this story.
+        if (mode === "story" && newChar?.id) {
+          setLinked((prev) => {
+            const next = new Set(prev);
+            next.add(newChar.id);
+            return next;
+          });
+        }
         invalidate();
       },
       onError: () =>

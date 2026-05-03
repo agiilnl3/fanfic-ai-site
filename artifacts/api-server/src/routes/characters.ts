@@ -131,6 +131,28 @@ router.patch(
       res.status(403).json({ error: "Not the character owner" });
       return;
     }
+    // If the caller is reassigning the character to a (different) series,
+    // verify they can edit that target series. Otherwise an author could
+    // dump their character into another author's series and pollute it.
+    if (
+      body.data.seriesId !== undefined &&
+      body.data.seriesId !== existing.seriesId
+    ) {
+      if (body.data.seriesId !== null) {
+        const [series] = await db
+          .select()
+          .from(seriesTable)
+          .where(eq(seriesTable.id, body.data.seriesId));
+        if (!series) {
+          res.status(404).json({ error: "Series not found" });
+          return;
+        }
+        if (!canEditSeries(series, req.user ?? null)) {
+          res.status(403).json({ error: "Not the series owner" });
+          return;
+        }
+      }
+    }
     const patch: Partial<typeof charactersTable.$inferInsert> = {
       updatedAt: new Date(),
     };

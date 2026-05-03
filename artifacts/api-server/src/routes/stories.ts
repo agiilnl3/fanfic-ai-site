@@ -84,6 +84,7 @@ import {
   loadStoryCharacters,
   toCharacterRefs,
   generateIllustrationForCharacters,
+  filterCharactersInSection,
 } from "../lib/characterContext";
 import {
   aiGenerationLimiter,
@@ -1075,7 +1076,11 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
     return;
   }
 
-  const linkedChars = await loadStoryCharacters(story.id);
+  const allLinked = await loadStoryCharacters(story.id);
+  const linkedChars = await filterCharactersInSection(
+    parsed.data.sectionText,
+    allLinked,
+  );
   const prompt = buildIllustrationPrompt(
     parsed.data.sectionText,
     story.genre,
@@ -1086,7 +1091,11 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
   );
 
   req.log.info(
-    { storyId: story.id, characterCount: linkedChars.length },
+    {
+      storyId: story.id,
+      linkedCount: allLinked.length,
+      presentCount: linkedChars.length,
+    },
     "Generating illustration",
   );
   const buffer = await generateIllustrationForCharacters(
@@ -1396,7 +1405,11 @@ router.post(
       .set({ fullText: newFullText, updatedAt: new Date() })
       .where(eq(storiesTable.id, story.id));
 
-    const linkedChars = await loadStoryCharacters(story.id);
+    const allLinked = await loadStoryCharacters(story.id);
+    const linkedChars = await filterCharactersInSection(
+      rewrittenText,
+      allLinked,
+    );
     const illustrationPrompt = buildIllustrationPrompt(
       rewrittenText,
       story.genre,
@@ -1583,7 +1596,11 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
           .from(illustrationsTable)
           .where(eq(illustrationsTable.storyId, story.id));
         const sectionIndex = existingCount;
-        const linkedChars = await loadStoryCharacters(story.id);
+        const allLinked = await loadStoryCharacters(story.id);
+        const linkedChars = await filterCharactersInSection(
+          newSection,
+          allLinked,
+        );
         const prompt = buildIllustrationPrompt(
           newSection,
           story.genre,
