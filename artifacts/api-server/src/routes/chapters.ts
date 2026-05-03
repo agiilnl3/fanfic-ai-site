@@ -68,9 +68,16 @@ router.get("/stories/:id/chapter-tree", async (req, res): Promise<void> => {
     return;
   }
 
-  // Drafts are owner-only; published stories are public-readable.
+  // Drafts are owner-only; published stories are public-readable…
   if (story.status !== "published" && !canEditStory(story, req.user ?? null)) {
     res.status(403).json({ error: "Not authorized" });
+    return;
+  }
+  // …unless the story is marked private (Conjurer-only): even when
+  // "published", the chapter content (which is the protected asset) is
+  // hidden from non-owners/non-coauthors. 404 to avoid id enumeration.
+  if (story.isPrivate && !canEditStory(story, req.user ?? null)) {
+    res.status(404).json({ error: "Not found" });
     return;
   }
 

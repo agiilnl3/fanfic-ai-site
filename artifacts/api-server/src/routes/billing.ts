@@ -170,7 +170,7 @@ router.post(
       const stripe = await getUncachableStripeClient();
       const safeOrigin = resolveAppOrigin(req);
       const successUrl = `${safeOrigin}/settings?billing=success`;
-      const cancelUrl = `${safeOrigin}/pricing?billing=cancelled`;
+      const cancelUrl = `${safeOrigin}/pricing?checkout=cancelled`;
 
       const session = await stripe.checkout.sessions.create({
         mode: "subscription",

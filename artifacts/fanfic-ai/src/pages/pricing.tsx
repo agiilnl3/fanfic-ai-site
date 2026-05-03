@@ -47,20 +47,11 @@ export default function PricingPage() {
     staleTime: 30_000,
   });
 
-  // If we're returned to /pricing?checkout=success after Stripe, prompt a refresh
-  // of the billing state. The webhook is the source of truth, but it can take a
-  // beat to land — toast keeps the user oriented either way.
+  // Stripe success_url goes to /settings (BillingCard surfaces the new
+  // plan there). Only the cancel branch lands back on /pricing.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("checkout") === "success") {
-      toast({
-        title: t("pricing.thanks", "Thanks for subscribing!"),
-        description: t(
-          "pricing.thanksDesc",
-          "Your Conjurer perks unlock as soon as Stripe confirms — usually a few seconds.",
-        ),
-      });
-    } else if (params.get("checkout") === "cancelled") {
+    if (params.get("checkout") === "cancelled") {
       toast({
         title: t("pricing.cancelled", "Checkout cancelled"),
         variant: "destructive",
