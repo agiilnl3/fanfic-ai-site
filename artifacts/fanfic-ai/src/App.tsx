@@ -15,6 +15,10 @@ const Feed = lazy(() => import("@/pages/feed"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Admin = lazy(() => import("@/pages/admin"));
 const AuthorPage = lazy(() => import("@/pages/author"));
+const Library = lazy(() => import("@/pages/library"));
+const Series = lazy(() => import("@/pages/series"));
+const SeriesDetail = lazy(() => import("@/pages/series-detail"));
+const Settings = lazy(() => import("@/pages/settings"));
 
 const queryClient = new QueryClient();
 
@@ -34,6 +38,10 @@ function Router() {
         <Route path="/create" component={CreateStory} />
         <Route path="/story/:id" component={StoryReading} />
         <Route path="/feed" component={Feed} />
+        <Route path="/library" component={Library} />
+        <Route path="/series" component={Series} />
+        <Route path="/series/:id" component={SeriesDetail} />
+        <Route path="/settings" component={Settings} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/admin" component={Admin} />
         <Route path="/author/:name" component={AuthorPage} />

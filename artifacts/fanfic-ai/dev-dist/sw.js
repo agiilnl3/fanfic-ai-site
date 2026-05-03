@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-07cf4948'], (function (workbox) { 'use strict';
+define(['./workbox-e12c70bb'], (function (workbox) { 'use strict';
 
   self.addEventListener('message', event => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -82,31 +82,13 @@ define(['./workbox-07cf4948'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.mv1orcuaojo"
+    "revision": "0.msppp3mer4k"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
     denylist: [/^\/api\//]
   }));
-  workbox.registerRoute(({
-    url
-  }) => url.pathname.startsWith("/api/stories") && url.pathname.match(/\/stories\/\d+$/) !== null, new workbox.StaleWhileRevalidate({
-    "cacheName": "fanfic-stories",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 50,
-      maxAgeSeconds: 604800
-    })]
-  }), 'GET');
-  workbox.registerRoute(({
-    url
-  }) => url.pathname.startsWith("/api/stories") && url.pathname.includes("/illustrations"), new workbox.CacheFirst({
-    "cacheName": "fanfic-illustrations",
-    plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 200,
-      maxAgeSeconds: 2592000
-    })]
-  }), 'GET');
   workbox.registerRoute(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, new workbox.CacheFirst({
     "cacheName": "google-fonts",
     plugins: [new workbox.ExpirationPlugin({

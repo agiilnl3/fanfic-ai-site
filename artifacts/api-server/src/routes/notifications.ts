@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, count, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, inArray } from "drizzle-orm";
 import { db, notificationsTable } from "@workspace/db";
 import {
   ListNotificationsQueryParams,
@@ -7,20 +7,35 @@ import {
   MarkNotificationsReadBody,
 } from "@workspace/api-zod";
 import { writeLimiter } from "../middlewares/rate-limit";
+import { getPrefsFor } from "../lib/notification-prefs";
 
 const router: IRouter = Router();
 
+function allowedTypes(prefs: Awaited<ReturnType<typeof getPrefsFor>>): string[] {
+  const list: string[] = [];
+  if (prefs.comment) list.push("comment");
+  if (prefs.follow) list.push("follow");
+  if (prefs.like) list.push("like");
+  if (prefs.repost) list.push("repost");
+  if (prefs.coAuthorChapter) list.push("co_author_chapter");
+  return list;
+}
+
 async function unreadCount(recipientName: string) {
-  const [row] = await db
-    .select({ value: count() })
+  const prefs = await getPrefsFor(recipientName);
+  const types = allowedTypes(prefs);
+  if (types.length === 0) return { recipientName, unread: 0 };
+  const rows = await db
+    .select({ id: notificationsTable.id })
     .from(notificationsTable)
     .where(
       and(
         eq(notificationsTable.recipientName, recipientName),
         isNull(notificationsTable.readAt),
+        inArray(notificationsTable.type, types),
       ),
     );
-  return { recipientName, unread: row?.value ?? 0 };
+  return { recipientName, unread: rows.length };
 }
 
 router.get("/notifications", async (req, res): Promise<void> => {
@@ -30,10 +45,21 @@ router.get("/notifications", async (req, res): Promise<void> => {
     return;
   }
   const { recipientName, limit } = parsed.data;
+  const prefs = await getPrefsFor(recipientName);
+  const types = allowedTypes(prefs);
+  if (types.length === 0) {
+    res.json([]);
+    return;
+  }
   const rows = await db
     .select()
     .from(notificationsTable)
-    .where(eq(notificationsTable.recipientName, recipientName))
+    .where(
+      and(
+        eq(notificationsTable.recipientName, recipientName),
+        inArray(notificationsTable.type, types),
+      ),
+    )
     .orderBy(desc(notificationsTable.createdAt))
     .limit(limit ?? 30);
   res.json(rows);

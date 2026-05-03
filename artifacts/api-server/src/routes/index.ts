@@ -9,6 +9,12 @@ import notificationsRouter from "./notifications";
 import repostsRouter from "./reposts";
 import usageRouter from "./usage";
 import notificationsStreamRouter from "./notifications-stream";
+import libraryRouter from "./library";
+import seriesRouter from "./series";
+import tagsRouter from "./tags";
+import settingsRouter from "./settings";
+import analyticsRouter from "./analytics";
+import moderationRouter from "./moderation";
 
 const router: IRouter = Router();
 
@@ -22,5 +28,11 @@ router.use(notificationsRouter);
 router.use(notificationsStreamRouter);
 router.use(repostsRouter);
 router.use(usageRouter);
+router.use(libraryRouter);
+router.use(seriesRouter);
+router.use(tagsRouter);
+router.use(settingsRouter);
+router.use(analyticsRouter);
+router.use(moderationRouter);
 
 export default router;

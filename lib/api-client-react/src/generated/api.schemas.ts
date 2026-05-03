@@ -66,6 +66,8 @@ export interface AddCommentBody {
    * @maxLength 2000
    */
   body: string;
+  /** @nullable */
+  parentId?: number | null;
 }
 
 export interface Illustration {
@@ -320,6 +322,7 @@ export const NotificationType = {
   co_author_chapter: "co_author_chapter",
   follow: "follow",
   like: "like",
+  repost: "repost",
 } as const;
 
 /**
@@ -397,6 +400,257 @@ export interface UsageInfo {
   illustrationsRemaining: number;
 }
 
+export interface Tariff {
+  tier: string;
+  storyDailyLimit: number;
+  illustrationDailyLimit: number;
+  updatedAt: string;
+}
+
+export interface UpdateTariffBody {
+  /**
+   * @minimum 0
+   * @maximum 1000
+   */
+  storyDailyLimit?: number;
+  /**
+   * @minimum 0
+   * @maximum 5000
+   */
+  illustrationDailyLimit?: number;
+}
+
+export type AdminMetricsDailyActiveItem = {
+  day: string;
+  authors: number;
+  stories: number;
+};
+
+export type AdminMetricsTopAuthorsItem = {
+  authorName: string;
+  storyCount: number;
+  likeCount: number;
+  followerCount: number;
+};
+
+export type AdminMetricsTopStoriesItem = {
+  id: number;
+  title: string;
+  authorName: string;
+  likeCount: number;
+  repostCount: number;
+  commentCount: number;
+};
+
+export interface AdminMetrics {
+  dailyActive: AdminMetricsDailyActiveItem[];
+  topAuthors: AdminMetricsTopAuthorsItem[];
+  topStories: AdminMetricsTopStoriesItem[];
+}
+
+export interface Tag {
+  id: number;
+  slug: string;
+  label: string;
+  storyCount: number;
+}
+
+export interface UpdateStoryTagsBody {
+  slugs: string[];
+  /** @minLength 1 */
+  requesterAuthorName: string;
+}
+
+export interface Bookmark {
+  id: number;
+  authorName: string;
+  storyId: number;
+  createdAt: string;
+  story?: Story;
+}
+
+export interface BookmarkBody {
+  /** @minLength 1 */
+  authorName: string;
+}
+
+export interface BookmarkInfo {
+  storyId: number;
+  bookmarked: boolean;
+}
+
+export interface ReadingProgressInfo {
+  storyId: number;
+  authorName: string;
+  progress: number;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export interface UpdateReadingProgressBody {
+  /** @minLength 1 */
+  authorName: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  progress: number;
+}
+
+export interface HistoryEntry {
+  storyId: number;
+  progress: number;
+  updatedAt: string;
+  story: Story;
+}
+
+export interface Series {
+  id: number;
+  title: string;
+  /** @nullable */
+  summary?: string | null;
+  authorName: string;
+  storyCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SeriesWithStoriesStoriesItem = Story & {
+  position: number;
+};
+
+export type SeriesWithStories = Series & {
+  stories: SeriesWithStoriesStoriesItem[];
+};
+
+export interface CreateSeriesBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  title: string;
+  /** @nullable */
+  summary?: string | null;
+  /** @minLength 1 */
+  authorName: string;
+}
+
+export interface UpdateSeriesBody {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  title?: string;
+  /** @nullable */
+  summary?: string | null;
+  /** @minLength 1 */
+  requesterAuthorName: string;
+}
+
+export interface AddStoryToSeriesBody {
+  storyId: number;
+  position?: number;
+  /** @minLength 1 */
+  requesterAuthorName: string;
+}
+
+export interface NotificationPrefs {
+  authorName: string;
+  comment: boolean;
+  follow: boolean;
+  like: boolean;
+  repost: boolean;
+  coAuthorChapter: boolean;
+}
+
+export interface UpdateNotificationPrefsBody {
+  comment?: boolean;
+  follow?: boolean;
+  like?: boolean;
+  repost?: boolean;
+  coAuthorChapter?: boolean;
+}
+
+export type ReportTargetType =
+  (typeof ReportTargetType)[keyof typeof ReportTargetType];
+
+export const ReportTargetType = {
+  story: "story",
+  comment: "comment",
+} as const;
+
+export type ReportStatus = (typeof ReportStatus)[keyof typeof ReportStatus];
+
+export const ReportStatus = {
+  open: "open",
+  hidden: "hidden",
+  dismissed: "dismissed",
+} as const;
+
+export interface Report {
+  id: number;
+  targetType: ReportTargetType;
+  targetId: number;
+  reporterName: string;
+  reason: string;
+  status: ReportStatus;
+  createdAt: string;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  targetPreview?: string | null;
+}
+
+export type CreateReportBodyTargetType =
+  (typeof CreateReportBodyTargetType)[keyof typeof CreateReportBodyTargetType];
+
+export const CreateReportBodyTargetType = {
+  story: "story",
+  comment: "comment",
+} as const;
+
+export interface CreateReportBody {
+  targetType: CreateReportBodyTargetType;
+  targetId: number;
+  /** @minLength 1 */
+  reporterName: string;
+  /** @maxLength 500 */
+  reason?: string;
+}
+
+export type ResolveReportBodyAction =
+  (typeof ResolveReportBodyAction)[keyof typeof ResolveReportBodyAction];
+
+export const ResolveReportBodyAction = {
+  hide: "hide",
+  dismiss: "dismiss",
+} as const;
+
+export interface ResolveReportBody {
+  action: ResolveReportBodyAction;
+}
+
+export type StoryAnalyticsDailyItem = {
+  day: string;
+  views: number;
+  completed: number;
+};
+
+export interface StoryAnalytics {
+  storyId: number;
+  totalViews: number;
+  totalCompleted: number;
+  totalLikes: number;
+  totalComments: number;
+  daily: StoryAnalyticsDailyItem[];
+}
+
+export interface StoryViewBody {
+  /** @nullable */
+  viewerName?: string | null;
+  completed?: boolean;
+}
+
 export type ListStoriesParams = {
   status?: ListStoriesStatus;
   genre?: string;
@@ -422,7 +676,25 @@ export type GetPublicFeedParams = {
    */
   followerName?: string;
   limit?: number;
+  /**
+   * Sort order. "new" = newest first, "today"/"week"/"all" rank by likes+reposts+comments inside the window.
+   */
+  sort?: GetPublicFeedSort;
+  /**
+   * Filter by a single tag slug.
+   */
+  tag?: string;
 };
+
+export type GetPublicFeedSort =
+  (typeof GetPublicFeedSort)[keyof typeof GetPublicFeedSort];
+
+export const GetPublicFeedSort = {
+  new: "new",
+  today: "today",
+  week: "week",
+  all: "all",
+} as const;
 
 export type RegenerateIllustrationBody = {
   /** If provided, replaces the stored prompt for this regeneration and persists. */
@@ -489,4 +761,45 @@ export type UnrepostStoryParams = {
 
 export type GetMyUsageParams = {
   authorName: string;
+};
+
+export type AdminListReportsParams = {
+  status?: AdminListReportsStatus;
+};
+
+export type AdminListReportsStatus =
+  (typeof AdminListReportsStatus)[keyof typeof AdminListReportsStatus];
+
+export const AdminListReportsStatus = {
+  open: "open",
+  hidden: "hidden",
+  dismissed: "dismissed",
+} as const;
+
+export type GetBookmarkInfoParams = {
+  authorName?: string;
+};
+
+export type RemoveBookmarkParams = {
+  authorName: string;
+};
+
+export type GetReadingProgressParams = {
+  authorName: string;
+};
+
+export type GetStoryAnalyticsParams = {
+  authorName: string;
+};
+
+export type ListSeriesParams = {
+  authorName?: string;
+};
+
+export type DeleteSeriesParams = {
+  requesterAuthorName: string;
+};
+
+export type RemoveStoryFromSeriesParams = {
+  requesterAuthorName: string;
 };

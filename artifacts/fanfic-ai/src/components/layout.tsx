@@ -1,5 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { BookOpen, Home, Library, PenTool, Sparkles, User } from "lucide-react";
+import {
+  BookOpen,
+  Home,
+  Library,
+  PenTool,
+  Sparkles,
+  User,
+  Bookmark,
+  Settings,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationsBell } from "@/components/notifications-bell";
@@ -11,8 +20,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", label: t("nav.home"), icon: Home },
     { href: "/feed", label: t("nav.library"), icon: Library },
+    { href: "/library", label: t("nav.myLibrary", "My Library"), icon: Bookmark },
     { href: "/create", label: t("nav.create"), icon: Sparkles },
     { href: "/dashboard", label: t("nav.dashboard"), icon: PenTool },
+    { href: "/settings", label: t("nav.settings", "Settings"), icon: Settings },
   ];
 
   return (

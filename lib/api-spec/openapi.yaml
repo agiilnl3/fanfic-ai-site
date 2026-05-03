@@ -144,6 +144,20 @@ paths:
           schema:
             type: integer
             default: 20
+        - name: sort
+          in: query
+          required: false
+          description: Sort order. "new" = newest first, "today"/"week"/"all" rank by likes+reposts+comments inside the window.
+          schema:
+            type: string
+            enum: [new, today, week, all]
+            default: new
+        - name: tag
+          in: query
+          required: false
+          description: Filter by a single tag slug.
+          schema:
+            type: string
       responses:
         "200":
           description: Published stories feed
@@ -1147,6 +1161,452 @@ paths:
               schema:
                 $ref: "#/components/schemas/UsageInfo"
 
+  /admin/tariffs/{tier}:
+    get:
+      operationId: adminGetTariff
+      tags: [admin]
+      summary: Get a tariff (free)
+      parameters:
+        - name: tier
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Tariff, content: { application/json: { schema: { $ref: "#/components/schemas/Tariff" } } } }
+    put:
+      operationId: adminUpdateTariff
+      tags: [admin]
+      summary: Update a tariff's daily limits
+      parameters:
+        - name: tier
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateTariffBody" }
+      responses:
+        "200": { description: Updated tariff, content: { application/json: { schema: { $ref: "#/components/schemas/Tariff" } } } }
+
+  /admin/metrics:
+    get:
+      operationId: adminGetMetrics
+      tags: [admin]
+      summary: Platform analytics for the admin dashboard (last 30 days)
+      responses:
+        "200":
+          description: Metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminMetrics" }
+
+  /admin/reports:
+    get:
+      operationId: adminListReports
+      tags: [admin]
+      summary: List moderation reports (newest first)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [open, hidden, dismissed] }
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Report" }
+
+  /admin/reports/{id}:
+    post:
+      operationId: adminResolveReport
+      tags: [admin]
+      summary: Resolve a report (hide content or dismiss)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResolveReportBody" }
+      responses:
+        "200": { description: Updated report, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
+
+  /reports:
+    post:
+      operationId: createReport
+      tags: [admin]
+      summary: Submit a moderation report (any pen name)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateReportBody" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
+
+  /tags:
+    get:
+      operationId: listTags
+      tags: [stories]
+      summary: List all tags with story counts
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Tag" }
+
+  /stories/{id}/tags:
+    get:
+      operationId: getStoryTags
+      tags: [stories]
+      summary: Get tags attached to a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Story tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Tag" }
+    put:
+      operationId: setStoryTags
+      tags: [stories]
+      summary: Replace the tag set of a story (author only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateStoryTagsBody" }
+      responses:
+        "200":
+          description: Updated tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Tag" }
+
+  /stories/{id}/bookmark:
+    get:
+      operationId: getBookmarkInfo
+      tags: [stories]
+      summary: Whether the author has bookmarked the story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: authorName
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200": { description: Bookmark info, content: { application/json: { schema: { $ref: "#/components/schemas/BookmarkInfo" } } } }
+    post:
+      operationId: addBookmark
+      tags: [stories]
+      summary: Add a bookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookmarkBody" }
+      responses:
+        "200": { description: Bookmark info, content: { application/json: { schema: { $ref: "#/components/schemas/BookmarkInfo" } } } }
+    delete:
+      operationId: removeBookmark
+      tags: [stories]
+      summary: Remove a bookmark
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: authorName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Bookmark info, content: { application/json: { schema: { $ref: "#/components/schemas/BookmarkInfo" } } } }
+
+  /authors/{name}/bookmarks:
+    get:
+      operationId: listBookmarks
+      tags: [stories]
+      summary: List an author's bookmarks (with story details)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Bookmarks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Bookmark" }
+
+  /authors/{name}/history:
+    get:
+      operationId: listReadingHistory
+      tags: [stories]
+      summary: Reading history for an author (most recent first)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: History
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HistoryEntry" }
+
+  /stories/{id}/progress:
+    get:
+      operationId: getReadingProgress
+      tags: [stories]
+      summary: Get a reader's progress on a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: authorName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Progress, content: { application/json: { schema: { $ref: "#/components/schemas/ReadingProgressInfo" } } } }
+    post:
+      operationId: setReadingProgress
+      tags: [stories]
+      summary: Save a reader's progress on a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateReadingProgressBody" }
+      responses:
+        "200": { description: Updated progress, content: { application/json: { schema: { $ref: "#/components/schemas/ReadingProgressInfo" } } } }
+
+  /stories/{id}/view:
+    post:
+      operationId: recordStoryView
+      tags: [stories]
+      summary: Record a story view (analytics)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StoryViewBody" }
+      responses:
+        "204": { description: Recorded }
+
+  /stories/{id}/analytics:
+    get:
+      operationId: getStoryAnalytics
+      tags: [stories]
+      summary: Author analytics for a story (last 30 days)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: authorName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Analytics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StoryAnalytics" }
+
+  /series:
+    get:
+      operationId: listSeries
+      tags: [stories]
+      summary: List series, optionally filtered by author
+      parameters:
+        - name: authorName
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Series
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Series" }
+    post:
+      operationId: createSeries
+      tags: [stories]
+      summary: Create a series
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateSeriesBody" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Series" } } } }
+
+  /series/{id}:
+    get:
+      operationId: getSeries
+      tags: [stories]
+      summary: Get a series with its stories
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Series, content: { application/json: { schema: { $ref: "#/components/schemas/SeriesWithStories" } } } }
+    patch:
+      operationId: updateSeries
+      tags: [stories]
+      summary: Update title/summary
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateSeriesBody" }
+      responses:
+        "200": { description: Series, content: { application/json: { schema: { $ref: "#/components/schemas/Series" } } } }
+    delete:
+      operationId: deleteSeries
+      tags: [stories]
+      summary: Delete a series
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: requesterAuthorName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  /series/{id}/stories:
+    post:
+      operationId: addStoryToSeries
+      tags: [stories]
+      summary: Add a story to a series (author only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddStoryToSeriesBody" }
+      responses:
+        "200": { description: Series, content: { application/json: { schema: { $ref: "#/components/schemas/SeriesWithStories" } } } }
+
+  /series/{id}/stories/{storyId}:
+    delete:
+      operationId: removeStoryFromSeries
+      tags: [stories]
+      summary: Remove a story from a series
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: storyId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: requesterAuthorName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Removed }
+
+  /authors/{name}/notification-prefs:
+    get:
+      operationId: getNotificationPrefs
+      tags: [notifications]
+      summary: Get an author's notification preferences
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Prefs, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPrefs" } } } }
+    put:
+      operationId: updateNotificationPrefs
+      tags: [notifications]
+      summary: Update an author's notification preferences
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateNotificationPrefsBody" }
+      responses:
+        "200": { description: Prefs, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPrefs" } } } }
+
 components:
   schemas:
     HealthStatus:
@@ -1243,6 +1703,8 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
+        parentId:
+          type: ["integer", "null"]
       required: [authorName, body]
 
     StoryWithIllustrations:
@@ -1612,7 +2074,7 @@ components:
           type: string
         type:
           type: string
-          enum: [comment, co_author_chapter, follow, like]
+          enum: [comment, co_author_chapter, follow, like, repost]
         actorName:
           type: string
         storyId:
@@ -1723,3 +2185,249 @@ components:
         illustrationsRemaining:
           type: integer
       required: [authorName, day, storyCount, illustrationCount, storyLimit, illustrationLimit, storiesRemaining, illustrationsRemaining]
+
+    Tariff:
+      type: object
+      properties:
+        tier: { type: string }
+        storyDailyLimit: { type: integer }
+        illustrationDailyLimit: { type: integer }
+        updatedAt: { type: string }
+      required: [tier, storyDailyLimit, illustrationDailyLimit, updatedAt]
+
+    UpdateTariffBody:
+      type: object
+      properties:
+        storyDailyLimit: { type: integer, minimum: 0, maximum: 1000 }
+        illustrationDailyLimit: { type: integer, minimum: 0, maximum: 5000 }
+      additionalProperties: false
+
+    AdminMetrics:
+      type: object
+      properties:
+        dailyActive:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: string }
+              authors: { type: integer }
+              stories: { type: integer }
+            required: [day, authors, stories]
+        topAuthors:
+          type: array
+          items:
+            type: object
+            properties:
+              authorName: { type: string }
+              storyCount: { type: integer }
+              likeCount: { type: integer }
+              followerCount: { type: integer }
+            required: [authorName, storyCount, likeCount, followerCount]
+        topStories:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              title: { type: string }
+              authorName: { type: string }
+              likeCount: { type: integer }
+              repostCount: { type: integer }
+              commentCount: { type: integer }
+            required: [id, title, authorName, likeCount, repostCount, commentCount]
+      required: [dailyActive, topAuthors, topStories]
+
+    Tag:
+      type: object
+      properties:
+        id: { type: integer }
+        slug: { type: string }
+        label: { type: string }
+        storyCount: { type: integer }
+      required: [id, slug, label, storyCount]
+
+    UpdateStoryTagsBody:
+      type: object
+      properties:
+        slugs:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 30 }
+        requesterAuthorName: { type: string, minLength: 1 }
+      required: [slugs, requesterAuthorName]
+
+    Bookmark:
+      type: object
+      properties:
+        id: { type: integer }
+        authorName: { type: string }
+        storyId: { type: integer }
+        createdAt: { type: string }
+        story: { $ref: "#/components/schemas/Story" }
+      required: [id, authorName, storyId, createdAt]
+
+    BookmarkBody:
+      type: object
+      properties:
+        authorName: { type: string, minLength: 1 }
+      required: [authorName]
+
+    BookmarkInfo:
+      type: object
+      properties:
+        storyId: { type: integer }
+        bookmarked: { type: boolean }
+      required: [storyId, bookmarked]
+
+    ReadingProgressInfo:
+      type: object
+      properties:
+        storyId: { type: integer }
+        authorName: { type: string }
+        progress: { type: integer }
+        updatedAt: { type: ["string", "null"] }
+      required: [storyId, authorName, progress]
+
+    UpdateReadingProgressBody:
+      type: object
+      properties:
+        authorName: { type: string, minLength: 1 }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+      required: [authorName, progress]
+
+    HistoryEntry:
+      type: object
+      properties:
+        storyId: { type: integer }
+        progress: { type: integer }
+        updatedAt: { type: string }
+        story: { $ref: "#/components/schemas/Story" }
+      required: [storyId, progress, updatedAt, story]
+
+    Series:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        summary: { type: ["string", "null"] }
+        authorName: { type: string }
+        storyCount: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+      required: [id, title, authorName, storyCount, createdAt, updatedAt]
+
+    SeriesWithStories:
+      allOf:
+        - $ref: "#/components/schemas/Series"
+        - type: object
+          properties:
+            stories:
+              type: array
+              items:
+                allOf:
+                  - $ref: "#/components/schemas/Story"
+                  - type: object
+                    properties:
+                      position: { type: integer }
+                    required: [position]
+          required: [stories]
+
+    CreateSeriesBody:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        summary: { type: ["string", "null"] }
+        authorName: { type: string, minLength: 1 }
+      required: [title, authorName]
+
+    UpdateSeriesBody:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        summary: { type: ["string", "null"] }
+        requesterAuthorName: { type: string, minLength: 1 }
+      required: [requesterAuthorName]
+
+    AddStoryToSeriesBody:
+      type: object
+      properties:
+        storyId: { type: integer }
+        position: { type: integer, default: 0 }
+        requesterAuthorName: { type: string, minLength: 1 }
+      required: [storyId, requesterAuthorName]
+
+    NotificationPrefs:
+      type: object
+      properties:
+        authorName: { type: string }
+        comment: { type: boolean }
+        follow: { type: boolean }
+        like: { type: boolean }
+        repost: { type: boolean }
+        coAuthorChapter: { type: boolean }
+      required: [authorName, comment, follow, like, repost, coAuthorChapter]
+
+    UpdateNotificationPrefsBody:
+      type: object
+      properties:
+        comment: { type: boolean }
+        follow: { type: boolean }
+        like: { type: boolean }
+        repost: { type: boolean }
+        coAuthorChapter: { type: boolean }
+      additionalProperties: false
+
+    Report:
+      type: object
+      properties:
+        id: { type: integer }
+        targetType: { type: string, enum: [story, comment] }
+        targetId: { type: integer }
+        reporterName: { type: string }
+        reason: { type: string }
+        status: { type: string, enum: [open, hidden, dismissed] }
+        createdAt: { type: string }
+        resolvedAt: { type: ["string", "null"] }
+        targetPreview: { type: ["string", "null"] }
+      required: [id, targetType, targetId, reporterName, reason, status, createdAt]
+
+    CreateReportBody:
+      type: object
+      properties:
+        targetType: { type: string, enum: [story, comment] }
+        targetId: { type: integer }
+        reporterName: { type: string, minLength: 1 }
+        reason: { type: string, maxLength: 500 }
+      required: [targetType, targetId, reporterName]
+
+    ResolveReportBody:
+      type: object
+      properties:
+        action: { type: string, enum: [hide, dismiss] }
+      required: [action]
+
+    StoryAnalytics:
+      type: object
+      properties:
+        storyId: { type: integer }
+        totalViews: { type: integer }
+        totalCompleted: { type: integer }
+        totalLikes: { type: integer }
+        totalComments: { type: integer }
+        daily:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: string }
+              views: { type: integer }
+              completed: { type: integer }
+            required: [day, views, completed]
+      required: [storyId, totalViews, totalCompleted, totalLikes, totalComments, daily]
+
+    StoryViewBody:
+      type: object
+      properties:
+        viewerName: { type: ["string", "null"] }
+        completed: { type: boolean }
+      additionalProperties: false

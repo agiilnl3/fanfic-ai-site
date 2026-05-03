@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
-import { useGetPublicFeed, type Story } from "@workspace/api-client-react";
+import {
+  useGetPublicFeed,
+  useListTags,
+  getListTagsQueryKey,
+  type Story,
+  type GetPublicFeedParams,
+} from "@workspace/api-client-react";
+import { Badge } from "@/components/ui/badge";
 import { StoryCard } from "@/components/story-card";
 import { AuthorSearch } from "@/components/author-search";
 import { Input } from "@/components/ui/input";
@@ -107,19 +114,34 @@ function VirtualGrid({ stories }: { stories: Story[] }) {
   );
 }
 
+type SortMode = NonNullable<GetPublicFeedParams["sort"]>;
+
+function readQueryParam(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
 export default function Feed() {
   const [search, setSearch] = useState("");
   const [genre, setGenre] = useState("All Genres");
   const [tab, setTab] = useState<"all" | "following">("all");
+  const [sort, setSort] = useState<SortMode>("new");
+  const [tag, setTag] = useState<string | null>(() => readQueryParam("tag"));
   const debouncedSearch = useDebounced(search, 300);
   const { authorName } = useAuthor();
 
   const followingEnabled = tab === "following" && !!authorName?.trim();
 
+  const { data: tagsData } = useListTags({
+    query: { queryKey: getListTagsQueryKey(), staleTime: 60_000 },
+  });
+
   const { data: feed, isLoading } = useGetPublicFeed({
     genre: genre === "All Genres" ? undefined : genre,
     q: debouncedSearch.trim() || undefined,
     followerName: followingEnabled ? authorName : undefined,
+    sort,
+    tag: tag ?? undefined,
   });
 
   const filteredFeed = feed;
@@ -171,6 +193,73 @@ export default function Feed() {
             </SelectContent>
           </Select>
         </div>
+
+        <div className="max-w-3xl mx-auto mb-6 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">Sort:</span>
+          <Select value={sort} onValueChange={(v) => setSort(v as SortMode)}>
+            <SelectTrigger
+              className="w-[170px] h-9 bg-card/50 border-primary/20"
+              data-testid="select-feed-sort"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="new">Newest</SelectItem>
+              <SelectItem value="today">Trending today</SelectItem>
+              <SelectItem value="week">Trending this week</SelectItem>
+              <SelectItem value="all">All-time top</SelectItem>
+            </SelectContent>
+          </Select>
+          {tag && (
+            <Badge
+              variant="outline"
+              role="button"
+              tabIndex={0}
+              aria-label={`Clear tag filter ${tag}`}
+              className="cursor-pointer gap-2"
+              onClick={() => setTag(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setTag(null);
+                }
+              }}
+              data-testid="badge-active-tag"
+            >
+              #{tag}
+              <span aria-hidden>×</span>
+            </Badge>
+          )}
+        </div>
+
+        {(tagsData ?? []).length > 0 && (
+          <div className="max-w-3xl mx-auto mb-8 flex flex-wrap gap-2">
+            {(tagsData ?? []).slice(0, 24).map((t) => {
+              const active = tag === t.slug;
+              return (
+                <Badge
+                  key={t.id}
+                  variant={active ? "default" : "secondary"}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={active}
+                  aria-label={`Filter by tag ${t.label}`}
+                  className="cursor-pointer hover:bg-primary/30"
+                  onClick={() => setTag(active ? null : t.slug)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setTag(active ? null : t.slug);
+                    }
+                  }}
+                  data-testid={`tag-chip-${t.slug}`}
+                >
+                  #{t.label}
+                </Badge>
+              );
+            })}
+          </div>
+        )}
 
         <AuthorSearch query={debouncedSearch} />
 

@@ -10,6 +10,7 @@ import {
   notificationsTable,
 } from "@workspace/db";
 import { ilike, or } from "drizzle-orm";
+import { hiddenStoriesTable, storyTagsTable, tagsTable } from "@workspace/db";
 import {
   ListStoriesQueryParams,
   CreateStoryBody,
@@ -326,7 +327,7 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     return;
   }
 
-  const { genre, limit, q, followerName } = parsed.data;
+  const { genre, limit, q, followerName, sort, tag } = parsed.data;
   const conditions = [eq(storiesTable.status, "published")];
   if (genre) conditions.push(eq(storiesTable.genre, genre));
   if (q && q.trim()) {
@@ -352,14 +353,59 @@ router.get("/stories/feed", async (req, res): Promise<void> => {
     conditions.push(inArray(storiesTable.authorName, authors));
   }
 
+  if (tag && tag.trim()) {
+    const tagged = await db
+      .select({ storyId: storyTagsTable.storyId })
+      .from(storyTagsTable)
+      .innerJoin(tagsTable, eq(tagsTable.id, storyTagsTable.tagId))
+      .where(eq(tagsTable.slug, tag.trim().toLowerCase()));
+    const ids = tagged.map((r) => r.storyId);
+    if (ids.length === 0) {
+      res.json([]);
+      return;
+    }
+    conditions.push(inArray(storiesTable.id, ids));
+  }
+
+  // Hide moderated stories from the public feed.
+  const hidden = await db.select({ id: hiddenStoriesTable.storyId }).from(hiddenStoriesTable);
+  if (hidden.length > 0) {
+    const hiddenIds = hidden.map((h) => h.id);
+    conditions.push(sql`${storiesTable.id} NOT IN (${sql.join(hiddenIds.map((id) => sql`${id}`), sql`, `)})`);
+  }
+
   const stories = await db
     .select()
     .from(storiesTable)
     .where(and(...conditions))
     .orderBy(desc(storiesTable.createdAt))
-    .limit(limit ?? 20);
+    .limit((limit ?? 20) * 4);
 
-  res.json(await attachCounts(stories));
+  const decorated = await attachCounts(stories);
+
+  // For trending sorts, rank by engagement score within a recent window.
+  const sortMode = sort ?? "new";
+  let windowMs: number | null = null;
+  if (sortMode === "today") windowMs = 24 * 3600 * 1000;
+  else if (sortMode === "week") windowMs = 7 * 24 * 3600 * 1000;
+  else if (sortMode === "all") windowMs = null;
+  let result = decorated;
+  if (sortMode !== "new") {
+    const cutoff = windowMs ? Date.now() - windowMs : 0;
+    result = decorated
+      .filter((s) =>
+        cutoff ? new Date(s.createdAt).getTime() >= cutoff : true,
+      )
+      .map((s) => ({
+        ...s,
+        _score:
+          (Number(s.likeCount) || 0) * 3 +
+          (Number(s.commentCount) || 0) * 2,
+      }))
+      .sort((a, b) => b._score - a._score)
+      .map(({ _score: _drop, ...rest }) => rest);
+  }
+  res.json(result.slice(0, limit ?? 20));
 });
 
 router.get("/stories/stats", async (_req, res): Promise<void> => {
@@ -1427,9 +1473,20 @@ router.post(
       res.status(404).json({ error: "Story not found" });
       return;
     }
+    let parentId: number | null = null;
+    if (typeof body.data.parentId === "number") {
+      const [parent] = await db
+        .select({ id: storyCommentsTable.id, storyId: storyCommentsTable.storyId })
+        .from(storyCommentsTable)
+        .where(eq(storyCommentsTable.id, body.data.parentId))
+        .limit(1);
+      if (parent && parent.storyId === params.data.id) {
+        parentId = parent.id;
+      }
+    }
     const [comment] = await db
       .insert(storyCommentsTable)
-      .values({ storyId: params.data.id, authorName, body: text })
+      .values({ storyId: params.data.id, authorName, body: text, parentId })
       .returning();
 
     if (story.authorName && story.authorName !== authorName) {

@@ -24,7 +24,16 @@ import {
   getListCoAuthorsQueryKey,
   getGetStoryAudioUrl,
   getExportStoryPdfUrl,
+  useRecordStoryView,
+  useSetReadingProgress,
+  useGetStoryAnalytics,
+  useGetStoryTags,
+  useSetStoryTags,
+  getGetStoryAnalyticsQueryKey,
+  getGetStoryTagsQueryKey,
 } from "@workspace/api-client-react";
+import { BookmarkButton } from "@/components/bookmark-button";
+import { ReportButton } from "@/components/report-button";
 import type { Illustration } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -113,6 +122,100 @@ export default function StoryReading() {
       setEditText(story.fullText);
     }
   }, [editMode, story?.fullText]);
+
+  // Record a single view per story per session.
+  const recordView = useRecordStoryView();
+  useEffect(() => {
+    if (!storyId) return;
+    const sessionKey = `viewed:${storyId}`;
+    if (typeof sessionStorage !== "undefined" && sessionStorage.getItem(sessionKey)) {
+      return;
+    }
+    recordView.mutate(
+      {
+        id: storyId,
+        data: { viewerName: authorName?.trim() || null, completed: false },
+      },
+      {
+        onSuccess: () => {
+          try {
+            sessionStorage.setItem(sessionKey, "1");
+          } catch {
+            /* ignore */
+          }
+        },
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyId]);
+
+  // Throttle reading-progress writes while the user scrolls.
+  const setProgress = useSetReadingProgress();
+  useEffect(() => {
+    if (!storyId || !authorName?.trim()) return;
+    let lastSent = 0;
+    let completedSent = false;
+    const onScroll = () => {
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop;
+      const max = doc.scrollHeight - window.innerHeight;
+      if (max <= 0) return;
+      const pct = Math.max(0, Math.min(100, Math.round((scrollTop / max) * 100)));
+      const now = Date.now();
+      if (Math.abs(pct - lastSent) >= 10 || (pct >= 95 && !completedSent)) {
+        lastSent = pct;
+        setProgress.mutate({
+          id: storyId,
+          data: { authorName, progress: pct },
+        });
+        if (pct >= 95 && !completedSent) {
+          completedSent = true;
+          recordView.mutate({
+            id: storyId,
+            data: { viewerName: authorName, completed: true },
+          });
+        }
+      }
+      void now;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyId, authorName]);
+
+  const { data: analytics } = useGetStoryAnalytics(
+    storyId,
+    { authorName: authorName || "" },
+    {
+      query: {
+        enabled: !!storyId && isAuthor,
+        queryKey: getGetStoryAnalyticsQueryKey(storyId, {
+          authorName: authorName || "",
+        }),
+      },
+    },
+  );
+
+  const { data: storyTags } = useGetStoryTags(storyId, {
+    query: { enabled: !!storyId, queryKey: getGetStoryTagsQueryKey(storyId) },
+  });
+  const [tagDraft, setTagDraft] = useState("");
+  useEffect(() => {
+    if (storyTags) {
+      setTagDraft(storyTags.map((t) => t.label).join(", "));
+    }
+  }, [storyTags]);
+  const setTagsMutation = useSetStoryTags({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: getGetStoryTagsQueryKey(storyId),
+        });
+        toast({ title: "Tags saved" });
+      },
+      onError: () => toast({ title: "Failed to save tags", variant: "destructive" }),
+    },
+  });
 
   const handleEnterEdit = () => setEditMode(true);
   const handleCancelEdit = () => setEditMode(false);
@@ -585,7 +688,28 @@ export default function StoryReading() {
                 <MessageCircle className="w-4 h-4" />
                 <span className="tabular-nums">{story.commentCount}</span>
               </a>
+              <BookmarkButton storyId={story.id} />
+              {!isAuthor && (
+                <ReportButton targetType="story" targetId={story.id} />
+              )}
             </div>
+            {(storyTags ?? []).length > 0 && (
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                {(storyTags ?? []).map((t) => (
+                  <Link
+                    key={t.id}
+                    href={`/feed?tag=${encodeURIComponent(t.slug)}`}
+                  >
+                    <Badge
+                      variant="outline"
+                      className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
+                    >
+                      #{t.label}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </header>
 
@@ -731,6 +855,108 @@ export default function StoryReading() {
                 </Button>
               </>
             )}
+          </div>
+        )}
+
+        {isAuthor && (
+          <div className="container mx-auto px-4 max-w-4xl mt-6 relative z-20">
+            <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4 space-y-3">
+              <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground">
+                Tags
+              </h3>
+              <Textarea
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                rows={2}
+                placeholder="Comma-separated tags (max 8): e.g. magic, slow-burn, found-family"
+                data-testid="textarea-story-tags"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  disabled={setTagsMutation.isPending}
+                  onClick={() => {
+                    const slugs = tagDraft
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean);
+                    setTagsMutation.mutate({
+                      id: storyId,
+                      data: { slugs, requesterAuthorName: authorName },
+                    });
+                  }}
+                  data-testid="button-save-tags"
+                >
+                  {setTagsMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : null}
+                  Save tags
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isAuthor && analytics && (
+          <div className="container mx-auto px-4 max-w-4xl mt-4 relative z-20">
+            <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4">
+              <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground mb-3">
+                Author analytics
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <div className="font-serif text-2xl font-bold tabular-nums">
+                    {analytics.totalViews}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Views</div>
+                </div>
+                <div>
+                  <div className="font-serif text-2xl font-bold tabular-nums">
+                    {analytics.totalCompleted}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Finished</div>
+                </div>
+                <div>
+                  <div className="font-serif text-2xl font-bold tabular-nums">
+                    {analytics.totalLikes}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Likes</div>
+                </div>
+                <div>
+                  <div className="font-serif text-2xl font-bold tabular-nums">
+                    {analytics.totalComments}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Comments</div>
+                </div>
+              </div>
+              {(analytics.daily ?? []).length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Last 30 days
+                  </p>
+                  <div className="flex items-end gap-1 h-16">
+                    {(analytics.daily ?? [])
+                      .slice(0, 30)
+                      .reverse()
+                      .map((d) => {
+                        const max = Math.max(
+                          ...analytics.daily!.map((x) => x.views),
+                          1,
+                        );
+                        const h = Math.max(2, (d.views / max) * 100);
+                        return (
+                          <div
+                            key={d.day}
+                            className="flex-1 bg-primary/40 rounded-t"
+                            style={{ height: `${h}%` }}
+                            title={`${d.day}: ${d.views} views`}
+                          />
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

@@ -6,6 +6,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, MessageCircle } from "lucide-react";
 import { LikeButton } from "@/components/like-button";
+import { BookmarkButton } from "@/components/bookmark-button";
 
 export function StoryCard({ story }: { story: Story }) {
   const queryClient = useQueryClient();
@@ -93,6 +94,7 @@ export function StoryCard({ story }: { story: Story }) {
               <MessageCircle className="w-3.5 h-3.5" />
               {story.commentCount}
             </span>
+            <BookmarkButton storyId={story.id} variant="compact" />
           </div>
           <span>{format(new Date(story.createdAt), "MMM d, yyyy")}</span>
         </CardFooter>

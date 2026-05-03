@@ -91,6 +91,7 @@ export const GenerateStoryBody = zod.object({
  * @summary Get public story feed (published only, sorted by newest)
  */
 export const getPublicFeedQueryLimitDefault = 20;
+export const getPublicFeedQuerySortDefault = `new`;
 
 export const GetPublicFeedQueryParams = zod.object({
   genre: zod.coerce.string().optional(),
@@ -105,6 +106,13 @@ export const GetPublicFeedQueryParams = zod.object({
       "When set, only return stories from authors followed by this pen name.",
     ),
   limit: zod.coerce.number().default(getPublicFeedQueryLimitDefault),
+  sort: zod
+    .enum(["new", "today", "week", "all"])
+    .default(getPublicFeedQuerySortDefault)
+    .describe(
+      'Sort order. \"new\" = newest first, \"today\"\/\"week\"\/\"all\" rank by likes+reposts+comments inside the window.',
+    ),
+  tag: zod.coerce.string().optional().describe("Filter by a single tag slug."),
 });
 
 export const getPublicFeedResponseCoAuthorsDefault = [];
@@ -420,6 +428,7 @@ export const addStoryCommentBodyBodyMax = 2000;
 export const AddStoryCommentBody = zod.object({
   authorName: zod.string().min(1),
   body: zod.string().min(1).max(addStoryCommentBodyBodyMax),
+  parentId: zod.number().nullish(),
 });
 
 /**
@@ -824,7 +833,7 @@ export const ListNotificationsQueryParams = zod.object({
 export const ListNotificationsResponseItem = zod.object({
   id: zod.number(),
   recipientName: zod.string(),
-  type: zod.enum(["comment", "co_author_chapter", "follow", "like"]),
+  type: zod.enum(["comment", "co_author_chapter", "follow", "like", "repost"]),
   actorName: zod.string(),
   storyId: zod.number().nullish(),
   payload: zod.record(zod.string(), zod.unknown()).nullish(),
@@ -1012,4 +1021,627 @@ export const GetMyUsageResponse = zod.object({
   illustrationLimit: zod.number(),
   storiesRemaining: zod.number(),
   illustrationsRemaining: zod.number(),
+});
+
+/**
+ * @summary Get a tariff (free)
+ */
+export const AdminGetTariffParams = zod.object({
+  tier: zod.coerce.string(),
+});
+
+export const AdminGetTariffResponse = zod.object({
+  tier: zod.string(),
+  storyDailyLimit: zod.number(),
+  illustrationDailyLimit: zod.number(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update a tariff's daily limits
+ */
+export const AdminUpdateTariffParams = zod.object({
+  tier: zod.coerce.string(),
+});
+
+export const adminUpdateTariffBodyStoryDailyLimitMin = 0;
+export const adminUpdateTariffBodyStoryDailyLimitMax = 1000;
+
+export const adminUpdateTariffBodyIllustrationDailyLimitMin = 0;
+export const adminUpdateTariffBodyIllustrationDailyLimitMax = 5000;
+
+export const AdminUpdateTariffBody = zod.object({
+  storyDailyLimit: zod
+    .number()
+    .min(adminUpdateTariffBodyStoryDailyLimitMin)
+    .max(adminUpdateTariffBodyStoryDailyLimitMax)
+    .optional(),
+  illustrationDailyLimit: zod
+    .number()
+    .min(adminUpdateTariffBodyIllustrationDailyLimitMin)
+    .max(adminUpdateTariffBodyIllustrationDailyLimitMax)
+    .optional(),
+});
+
+export const AdminUpdateTariffResponse = zod.object({
+  tier: zod.string(),
+  storyDailyLimit: zod.number(),
+  illustrationDailyLimit: zod.number(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Platform analytics for the admin dashboard (last 30 days)
+ */
+export const AdminGetMetricsResponse = zod.object({
+  dailyActive: zod.array(
+    zod.object({
+      day: zod.string(),
+      authors: zod.number(),
+      stories: zod.number(),
+    }),
+  ),
+  topAuthors: zod.array(
+    zod.object({
+      authorName: zod.string(),
+      storyCount: zod.number(),
+      likeCount: zod.number(),
+      followerCount: zod.number(),
+    }),
+  ),
+  topStories: zod.array(
+    zod.object({
+      id: zod.number(),
+      title: zod.string(),
+      authorName: zod.string(),
+      likeCount: zod.number(),
+      repostCount: zod.number(),
+      commentCount: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary List moderation reports (newest first)
+ */
+export const AdminListReportsQueryParams = zod.object({
+  status: zod.enum(["open", "hidden", "dismissed"]).optional(),
+});
+
+export const AdminListReportsResponseItem = zod.object({
+  id: zod.number(),
+  targetType: zod.enum(["story", "comment"]),
+  targetId: zod.number(),
+  reporterName: zod.string(),
+  reason: zod.string(),
+  status: zod.enum(["open", "hidden", "dismissed"]),
+  createdAt: zod.string(),
+  resolvedAt: zod.string().nullish(),
+  targetPreview: zod.string().nullish(),
+});
+export const AdminListReportsResponse = zod.array(AdminListReportsResponseItem);
+
+/**
+ * @summary Resolve a report (hide content or dismiss)
+ */
+export const AdminResolveReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminResolveReportBody = zod.object({
+  action: zod.enum(["hide", "dismiss"]),
+});
+
+export const AdminResolveReportResponse = zod.object({
+  id: zod.number(),
+  targetType: zod.enum(["story", "comment"]),
+  targetId: zod.number(),
+  reporterName: zod.string(),
+  reason: zod.string(),
+  status: zod.enum(["open", "hidden", "dismissed"]),
+  createdAt: zod.string(),
+  resolvedAt: zod.string().nullish(),
+  targetPreview: zod.string().nullish(),
+});
+
+/**
+ * @summary Submit a moderation report (any pen name)
+ */
+
+export const createReportBodyReasonMax = 500;
+
+export const CreateReportBody = zod.object({
+  targetType: zod.enum(["story", "comment"]),
+  targetId: zod.number(),
+  reporterName: zod.string().min(1),
+  reason: zod.string().max(createReportBodyReasonMax).optional(),
+});
+
+/**
+ * @summary List all tags with story counts
+ */
+export const ListTagsResponseItem = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  label: zod.string(),
+  storyCount: zod.number(),
+});
+export const ListTagsResponse = zod.array(ListTagsResponseItem);
+
+/**
+ * @summary Get tags attached to a story
+ */
+export const GetStoryTagsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryTagsResponseItem = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  label: zod.string(),
+  storyCount: zod.number(),
+});
+export const GetStoryTagsResponse = zod.array(GetStoryTagsResponseItem);
+
+/**
+ * @summary Replace the tag set of a story (author only)
+ */
+export const SetStoryTagsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const setStoryTagsBodySlugsItemMax = 30;
+
+export const SetStoryTagsBody = zod.object({
+  slugs: zod.array(zod.string().min(1).max(setStoryTagsBodySlugsItemMax)),
+  requesterAuthorName: zod.string().min(1),
+});
+
+export const SetStoryTagsResponseItem = zod.object({
+  id: zod.number(),
+  slug: zod.string(),
+  label: zod.string(),
+  storyCount: zod.number(),
+});
+export const SetStoryTagsResponse = zod.array(SetStoryTagsResponseItem);
+
+/**
+ * @summary Whether the author has bookmarked the story
+ */
+export const GetBookmarkInfoParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBookmarkInfoQueryParams = zod.object({
+  authorName: zod.coerce.string().optional(),
+});
+
+export const GetBookmarkInfoResponse = zod.object({
+  storyId: zod.number(),
+  bookmarked: zod.boolean(),
+});
+
+/**
+ * @summary Add a bookmark
+ */
+export const AddBookmarkParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AddBookmarkBody = zod.object({
+  authorName: zod.string().min(1),
+});
+
+export const AddBookmarkResponse = zod.object({
+  storyId: zod.number(),
+  bookmarked: zod.boolean(),
+});
+
+/**
+ * @summary Remove a bookmark
+ */
+export const RemoveBookmarkParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RemoveBookmarkQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+export const RemoveBookmarkResponse = zod.object({
+  storyId: zod.number(),
+  bookmarked: zod.boolean(),
+});
+
+/**
+ * @summary List an author's bookmarks (with story details)
+ */
+export const ListBookmarksParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const listBookmarksResponseStoryCoAuthorsDefault = [];
+
+export const ListBookmarksResponseItem = zod.object({
+  id: zod.number(),
+  authorName: zod.string(),
+  storyId: zod.number(),
+  createdAt: zod.string(),
+  story: zod
+    .object({
+      id: zod.number(),
+      title: zod.string(),
+      genre: zod.string(),
+      artStyle: zod.string(),
+      lengthSetting: zod.enum(["short", "medium", "long"]),
+      seedPrompt: zod.string().nullish(),
+      fullText: zod.string().nullish(),
+      summary: zod.string().nullish(),
+      characters: zod.string().nullish(),
+      status: zod.enum(["draft", "published"]),
+      authorName: zod.string(),
+      coAuthors: zod
+        .array(zod.string())
+        .default(listBookmarksResponseStoryCoAuthorsDefault),
+      coverImageUrl: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      likeCount: zod.number(),
+      commentCount: zod.number(),
+    })
+    .optional(),
+});
+export const ListBookmarksResponse = zod.array(ListBookmarksResponseItem);
+
+/**
+ * @summary Reading history for an author (most recent first)
+ */
+export const ListReadingHistoryParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const listReadingHistoryResponseStoryCoAuthorsDefault = [];
+
+export const ListReadingHistoryResponseItem = zod.object({
+  storyId: zod.number(),
+  progress: zod.number(),
+  updatedAt: zod.string(),
+  story: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    genre: zod.string(),
+    artStyle: zod.string(),
+    lengthSetting: zod.enum(["short", "medium", "long"]),
+    seedPrompt: zod.string().nullish(),
+    fullText: zod.string().nullish(),
+    summary: zod.string().nullish(),
+    characters: zod.string().nullish(),
+    status: zod.enum(["draft", "published"]),
+    authorName: zod.string(),
+    coAuthors: zod
+      .array(zod.string())
+      .default(listReadingHistoryResponseStoryCoAuthorsDefault),
+    coverImageUrl: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    likeCount: zod.number(),
+    commentCount: zod.number(),
+  }),
+});
+export const ListReadingHistoryResponse = zod.array(
+  ListReadingHistoryResponseItem,
+);
+
+/**
+ * @summary Get a reader's progress on a story
+ */
+export const GetReadingProgressParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetReadingProgressQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+export const GetReadingProgressResponse = zod.object({
+  storyId: zod.number(),
+  authorName: zod.string(),
+  progress: zod.number(),
+  updatedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Save a reader's progress on a story
+ */
+export const SetReadingProgressParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const setReadingProgressBodyProgressMin = 0;
+export const setReadingProgressBodyProgressMax = 100;
+
+export const SetReadingProgressBody = zod.object({
+  authorName: zod.string().min(1),
+  progress: zod
+    .number()
+    .min(setReadingProgressBodyProgressMin)
+    .max(setReadingProgressBodyProgressMax),
+});
+
+export const SetReadingProgressResponse = zod.object({
+  storyId: zod.number(),
+  authorName: zod.string(),
+  progress: zod.number(),
+  updatedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Record a story view (analytics)
+ */
+export const RecordStoryViewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RecordStoryViewBody = zod.object({
+  viewerName: zod.string().nullish(),
+  completed: zod.boolean().optional(),
+});
+
+/**
+ * @summary Author analytics for a story (last 30 days)
+ */
+export const GetStoryAnalyticsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryAnalyticsQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+export const GetStoryAnalyticsResponse = zod.object({
+  storyId: zod.number(),
+  totalViews: zod.number(),
+  totalCompleted: zod.number(),
+  totalLikes: zod.number(),
+  totalComments: zod.number(),
+  daily: zod.array(
+    zod.object({
+      day: zod.string(),
+      views: zod.number(),
+      completed: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary List series, optionally filtered by author
+ */
+export const ListSeriesQueryParams = zod.object({
+  authorName: zod.coerce.string().optional(),
+});
+
+export const ListSeriesResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  summary: zod.string().nullish(),
+  authorName: zod.string(),
+  storyCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+export const ListSeriesResponse = zod.array(ListSeriesResponseItem);
+
+/**
+ * @summary Create a series
+ */
+export const createSeriesBodyTitleMax = 120;
+
+export const CreateSeriesBody = zod.object({
+  title: zod.string().min(1).max(createSeriesBodyTitleMax),
+  summary: zod.string().nullish(),
+  authorName: zod.string().min(1),
+});
+
+/**
+ * @summary Get a series with its stories
+ */
+export const GetSeriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getSeriesResponseTwoStoriesItemOneCoAuthorsDefault = [];
+
+export const GetSeriesResponse = zod
+  .object({
+    id: zod.number(),
+    title: zod.string(),
+    summary: zod.string().nullish(),
+    authorName: zod.string(),
+    storyCount: zod.number(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      stories: zod.array(
+        zod
+          .object({
+            id: zod.number(),
+            title: zod.string(),
+            genre: zod.string(),
+            artStyle: zod.string(),
+            lengthSetting: zod.enum(["short", "medium", "long"]),
+            seedPrompt: zod.string().nullish(),
+            fullText: zod.string().nullish(),
+            summary: zod.string().nullish(),
+            characters: zod.string().nullish(),
+            status: zod.enum(["draft", "published"]),
+            authorName: zod.string(),
+            coAuthors: zod
+              .array(zod.string())
+              .default(getSeriesResponseTwoStoriesItemOneCoAuthorsDefault),
+            coverImageUrl: zod.string().nullish(),
+            createdAt: zod.string(),
+            updatedAt: zod.string(),
+            likeCount: zod.number(),
+            commentCount: zod.number(),
+          })
+          .and(
+            zod.object({
+              position: zod.number(),
+            }),
+          ),
+      ),
+    }),
+  );
+
+/**
+ * @summary Update title/summary
+ */
+export const UpdateSeriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const updateSeriesBodyTitleMax = 120;
+
+export const UpdateSeriesBody = zod.object({
+  title: zod.string().min(1).max(updateSeriesBodyTitleMax).optional(),
+  summary: zod.string().nullish(),
+  requesterAuthorName: zod.string().min(1),
+});
+
+export const UpdateSeriesResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  summary: zod.string().nullish(),
+  authorName: zod.string(),
+  storyCount: zod.number(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Delete a series
+ */
+export const DeleteSeriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteSeriesQueryParams = zod.object({
+  requesterAuthorName: zod.coerce.string(),
+});
+
+/**
+ * @summary Add a story to a series (author only)
+ */
+export const AddStoryToSeriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const addStoryToSeriesBodyPositionDefault = 0;
+
+export const AddStoryToSeriesBody = zod.object({
+  storyId: zod.number(),
+  position: zod.number().default(addStoryToSeriesBodyPositionDefault),
+  requesterAuthorName: zod.string().min(1),
+});
+
+export const addStoryToSeriesResponseTwoStoriesItemOneCoAuthorsDefault = [];
+
+export const AddStoryToSeriesResponse = zod
+  .object({
+    id: zod.number(),
+    title: zod.string(),
+    summary: zod.string().nullish(),
+    authorName: zod.string(),
+    storyCount: zod.number(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+  })
+  .and(
+    zod.object({
+      stories: zod.array(
+        zod
+          .object({
+            id: zod.number(),
+            title: zod.string(),
+            genre: zod.string(),
+            artStyle: zod.string(),
+            lengthSetting: zod.enum(["short", "medium", "long"]),
+            seedPrompt: zod.string().nullish(),
+            fullText: zod.string().nullish(),
+            summary: zod.string().nullish(),
+            characters: zod.string().nullish(),
+            status: zod.enum(["draft", "published"]),
+            authorName: zod.string(),
+            coAuthors: zod
+              .array(zod.string())
+              .default(
+                addStoryToSeriesResponseTwoStoriesItemOneCoAuthorsDefault,
+              ),
+            coverImageUrl: zod.string().nullish(),
+            createdAt: zod.string(),
+            updatedAt: zod.string(),
+            likeCount: zod.number(),
+            commentCount: zod.number(),
+          })
+          .and(
+            zod.object({
+              position: zod.number(),
+            }),
+          ),
+      ),
+    }),
+  );
+
+/**
+ * @summary Remove a story from a series
+ */
+export const RemoveStoryFromSeriesParams = zod.object({
+  id: zod.coerce.number(),
+  storyId: zod.coerce.number(),
+});
+
+export const RemoveStoryFromSeriesQueryParams = zod.object({
+  requesterAuthorName: zod.coerce.string(),
+});
+
+/**
+ * @summary Get an author's notification preferences
+ */
+export const GetNotificationPrefsParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const GetNotificationPrefsResponse = zod.object({
+  authorName: zod.string(),
+  comment: zod.boolean(),
+  follow: zod.boolean(),
+  like: zod.boolean(),
+  repost: zod.boolean(),
+  coAuthorChapter: zod.boolean(),
+});
+
+/**
+ * @summary Update an author's notification preferences
+ */
+export const UpdateNotificationPrefsParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const UpdateNotificationPrefsBody = zod.object({
+  comment: zod.boolean().optional(),
+  follow: zod.boolean().optional(),
+  like: zod.boolean().optional(),
+  repost: zod.boolean().optional(),
+  coAuthorChapter: zod.boolean().optional(),
+});
+
+export const UpdateNotificationPrefsResponse = zod.object({
+  authorName: zod.string(),
+  comment: zod.boolean(),
+  follow: zod.boolean(),
+  like: zod.boolean(),
+  repost: zod.boolean(),
+  coAuthorChapter: zod.boolean(),
 });

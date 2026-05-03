@@ -10,10 +10,12 @@ export const storyCommentsTable = pgTable(
       .references(() => storiesTable.id, { onDelete: "cascade" }),
     authorName: text("author_name").notNull(),
     body: text("body").notNull(),
+    parentId: integer("parent_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
     storyIdx: index("story_comments_story_idx").on(table.storyId),
+    parentIdx: index("story_comments_parent_idx").on(table.parentId),
   }),
 );
 
