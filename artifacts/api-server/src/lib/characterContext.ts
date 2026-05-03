@@ -12,6 +12,7 @@ import {
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { objectStorageClient } from "./objectStorage";
 import { logger } from "./logger";
+import { traceOpenAI } from "./sentry";
 import type { CharacterRef } from "./prompt";
 
 // Load all characters linked to a story (via story_characters join).
@@ -45,7 +46,8 @@ export async function filterCharactersInSection(
   if (!trimmed) return characters;
   const namesList = characters.map((c) => c.name);
   try {
-    const resp = await openai.chat.completions.create({
+    const resp = await traceOpenAI("characterContext.detect", () =>
+      openai.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0,
       response_format: { type: "json_object" },
@@ -60,7 +62,8 @@ export async function filterCharactersInSection(
           content: `Characters: ${JSON.stringify(namesList)}\n\nPassage:\n${trimmed.slice(0, 4000)}`,
         },
       ],
-    });
+    }),
+    );
     const raw = resp.choices[0]?.message?.content ?? "";
     const parsed = JSON.parse(raw) as { present?: unknown };
     if (!Array.isArray(parsed.present)) return characters;

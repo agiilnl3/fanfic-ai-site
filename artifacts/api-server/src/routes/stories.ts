@@ -81,6 +81,7 @@ import { backfillStoryToChapters, lockStoryChapters } from "../lib/chapters";
 import { chaptersTable } from "@workspace/db";
 import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
+import { traceOpenAI } from "../lib/sentry";
 import { buildIllustrationPrompt } from "../lib/prompt";
 import {
   loadStoryCharacters,
@@ -162,15 +163,17 @@ Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 
     : `Write an original ${genre} fiction story of approximately ${wordTarget} words with memorable characters and a satisfying plot arc.
 Return JSON with: { "title": string, "fullText": string, "summary": string (2-3 sentences), "characters": string (brief description of main characters, max 200 chars), "sections": string[] (3-4 brief 1-2 sentence scene descriptions for illustration prompts — do NOT repeat fullText) }`;
 
-  const response = await openai.chat.completions.create({
-    model,
-    max_completion_tokens: maxTokens,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-  });
+  const response = await traceOpenAI("stories.generate.text", () =>
+    openai.chat.completions.create({
+      model,
+      max_completion_tokens: maxTokens,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+    }),
+  );
 
   const raw = response.choices[0]?.message?.content ?? "{}";
   let parsed: unknown;

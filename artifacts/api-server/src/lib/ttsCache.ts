@@ -3,6 +3,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { objectStorageClient } from "./objectStorage";
 import { setObjectAclPolicy } from "./objectAcl";
 import { logger } from "./logger";
+import { traceOpenAI } from "./sentry";
 
 export type TtsVoice =
   | "alloy"
@@ -55,12 +56,14 @@ export async function synthesizeStoryNarration(
     logger.warn({ err }, "tts cache lookup failed; regenerating");
   }
 
-  const resp = await openai.audio.speech.create({
-    model: "tts-1",
-    voice,
-    input: text,
-    response_format: "mp3",
-  });
+  const resp = await traceOpenAI("tts.synthesize", () =>
+    openai.audio.speech.create({
+      model: "tts-1",
+      voice,
+      input: text,
+      response_format: "mp3",
+    }),
+  );
   const buffer = Buffer.from(await resp.arrayBuffer());
   await file.save(buffer, {
     contentType: "audio/mpeg",

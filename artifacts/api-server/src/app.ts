@@ -13,8 +13,17 @@ import { attachUserPlan } from "./middlewares/rate-limit";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { processStripeWebhook } from "./lib/stripeWebhookHandlers";
+import {
+  sentryRequestMiddleware,
+  sentryUserContextMiddleware,
+  sentryErrorMiddleware,
+} from "./lib/sentry";
 
 const app: Express = express();
+
+// Sentry per-request scope — must be the very first middleware so all
+// downstream errors and user context attach to the right scope.
+app.use(sentryRequestMiddleware());
 
 app.set("trust proxy", 1);
 
@@ -86,7 +95,15 @@ app.use("/api", overrideClientIdentity);
 // Warm the per-user plan cache so tier-aware rate limiters can read it
 // synchronously when they fire downstream.
 app.use("/api", attachUserPlan);
+// Now that req.user is populated, attach it to the Sentry scope so any
+// captured exception includes user identity.
+app.use("/api", sentryUserContextMiddleware());
 
 app.use("/api", router);
+
+// Sentry error handler MUST be the last middleware. It forwards the
+// error to Sentry then re-throws to the default Express handler so the
+// response shape stays unchanged.
+app.use(sentryErrorMiddleware());
 
 export default app;

@@ -29,6 +29,8 @@ jobs:
       ADMIN_PASSWORD: ci-admin-token
       NODE_ENV: test
       PORT: 3000
+      VITE_API_BASE_URL: http://localhost:3000
+      E2E_BASE_URL: http://localhost:5173
 
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +50,41 @@ jobs:
       - name: Push DB schema
         run: pnpm --filter @workspace/db run push
 
+      - name: Lint
+        run: pnpm run lint
+
       - name: Typecheck
         run: pnpm -r --if-present run typecheck
 
       - name: API integration tests
         run: pnpm --filter @workspace/api-server run test
+
+      - name: Install Playwright browser
+        run: pnpm --filter @workspace/e2e-tests exec playwright install --with-deps chromium
+
+      - name: Start backend (api-server)
+        run: |
+          pnpm --filter @workspace/api-server run build
+          pnpm --filter @workspace/api-server run start &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 40); do
+            curl -sf http://localhost:3000/api/billing/config && break || sleep 1;
+          done
+
+      - name: Start frontend (fanfic-ai)
+        run: |
+          pnpm --filter @workspace/fanfic-ai run build || true
+          pnpm --filter @workspace/fanfic-ai run dev &
+          echo $! > /tmp/web.pid
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:5173 && break || sleep 1;
+          done
+
+      - name: E2E tests
+        run: pnpm --filter @workspace/e2e-tests run test
+
+      - name: Stop services
+        if: always()
+        run: |
+          [ -f /tmp/api.pid ] && kill $(cat /tmp/api.pid) || true
+          [ -f /tmp/web.pid ] && kill $(cat /tmp/web.pid) || true
