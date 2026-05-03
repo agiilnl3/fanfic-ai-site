@@ -1495,13 +1495,28 @@ export default function StoryReading() {
               {trailerOpen && (
                 <div className="mt-8 w-full max-w-2xl" data-testid="trailer-panel">
                   {trailerQuery.data?.status === "ready" && trailerQuery.data.url ? (
-                    <video
-                      src={trailerQuery.data.url}
-                      controls
-                      playsInline
-                      className="w-full rounded-lg shadow-lg"
-                      data-testid="trailer-video"
-                    />
+                    <>
+                      <video
+                        src={trailerQuery.data.url}
+                        controls
+                        playsInline
+                        className="w-full rounded-lg shadow-lg"
+                        data-testid="trailer-video"
+                      />
+                      <div className="mt-3 flex justify-center">
+                        <Button asChild variant="outline" size="sm" data-testid="button-trailer-download">
+                          <a
+                            href={trailerQuery.data.url}
+                            download={`trailer-${storyId}.mp4`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <FileDown className="w-4 h-4 mr-2" />
+                            {t("story.downloadTrailer", "Download trailer")}
+                          </a>
+                        </Button>
+                      </div>
+                    </>
                   ) : trailerQuery.data?.status === "failed" ? (
                     <p className="text-destructive text-sm">
                       {t("story.trailerFailedDesc", "Trailer render failed. Try again later.")}
@@ -1519,7 +1534,7 @@ export default function StoryReading() {
                   )}
                 </div>
               )}
-              <div className="hidden">
+              <div className="flex gap-3 flex-wrap justify-center mt-4">
                 {isAuthor && illustrations.length >= 2 && (
                   <Button
                     variant="outline"
