@@ -19,14 +19,18 @@ import type {
 import type {
   AddCommentBody,
   AddStoryToSeriesBody,
+  AdminFeatureFlag,
+  AdminFeatureFlagOverride,
   AdminListReportsParams,
   AdminListUsersParams,
   AdminLoginBody,
   AdminLoginResponse,
   AdminMetrics,
+  AdminSetFlagOverrideBody,
   AdminStats,
   AdminStoryRow,
   AdminUpdateStoryBody,
+  AdminUpsertFlagBody,
   AdminUserRow,
   AuthorProfile,
   AuthorSearchHit,
@@ -6749,6 +6753,520 @@ export const useAdminResolveReport = <
   TContext
 > => {
   return useMutation(getAdminResolveReportMutationOptions(options));
+};
+
+/**
+ * @summary List all feature flags with their rollout configuration
+ */
+export const getAdminListFlagsUrl = () => {
+  return `/api/admin/flags`;
+};
+
+export const adminListFlags = async (
+  options?: RequestInit,
+): Promise<AdminFeatureFlag[]> => {
+  return customFetch<AdminFeatureFlag[]>(getAdminListFlagsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListFlagsQueryKey = () => {
+  return [`/api/admin/flags`] as const;
+};
+
+export const getAdminListFlagsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListFlags>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListFlags>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminListFlagsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListFlags>>> = ({
+    signal,
+  }) => adminListFlags({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListFlags>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListFlagsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListFlags>>
+>;
+export type AdminListFlagsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all feature flags with their rollout configuration
+ */
+
+export function useAdminListFlags<
+  TData = Awaited<ReturnType<typeof adminListFlags>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListFlags>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListFlagsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update a feature flag
+ */
+export const getAdminUpsertFlagUrl = (name: string) => {
+  return `/api/admin/flags/${name}`;
+};
+
+export const adminUpsertFlag = async (
+  name: string,
+  adminUpsertFlagBody: AdminUpsertFlagBody,
+  options?: RequestInit,
+): Promise<AdminFeatureFlag> => {
+  return customFetch<AdminFeatureFlag>(getAdminUpsertFlagUrl(name), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminUpsertFlagBody),
+  });
+};
+
+export const getAdminUpsertFlagMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpsertFlag>>,
+    TError,
+    { name: string; data: BodyType<AdminUpsertFlagBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminUpsertFlag>>,
+  TError,
+  { name: string; data: BodyType<AdminUpsertFlagBody> },
+  TContext
+> => {
+  const mutationKey = ["adminUpsertFlag"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminUpsertFlag>>,
+    { name: string; data: BodyType<AdminUpsertFlagBody> }
+  > = (props) => {
+    const { name, data } = props ?? {};
+
+    return adminUpsertFlag(name, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminUpsertFlagMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminUpsertFlag>>
+>;
+export type AdminUpsertFlagMutationBody = BodyType<AdminUpsertFlagBody>;
+export type AdminUpsertFlagMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create or update a feature flag
+ */
+export const useAdminUpsertFlag = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpsertFlag>>,
+    TError,
+    { name: string; data: BodyType<AdminUpsertFlagBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminUpsertFlag>>,
+  TError,
+  { name: string; data: BodyType<AdminUpsertFlagBody> },
+  TContext
+> => {
+  return useMutation(getAdminUpsertFlagMutationOptions(options));
+};
+
+/**
+ * @summary Delete a feature flag (and its overrides)
+ */
+export const getAdminDeleteFlagUrl = (name: string) => {
+  return `/api/admin/flags/${name}`;
+};
+
+export const adminDeleteFlag = async (
+  name: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAdminDeleteFlagUrl(name), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminDeleteFlagMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteFlag>>,
+    TError,
+    { name: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminDeleteFlag>>,
+  TError,
+  { name: string },
+  TContext
+> => {
+  const mutationKey = ["adminDeleteFlag"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminDeleteFlag>>,
+    { name: string }
+  > = (props) => {
+    const { name } = props ?? {};
+
+    return adminDeleteFlag(name, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminDeleteFlagMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminDeleteFlag>>
+>;
+
+export type AdminDeleteFlagMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a feature flag (and its overrides)
+ */
+export const useAdminDeleteFlag = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteFlag>>,
+    TError,
+    { name: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminDeleteFlag>>,
+  TError,
+  { name: string },
+  TContext
+> => {
+  return useMutation(getAdminDeleteFlagMutationOptions(options));
+};
+
+/**
+ * @summary List per-user overrides for a feature flag
+ */
+export const getAdminListFlagOverridesUrl = (name: string) => {
+  return `/api/admin/flags/${name}/overrides`;
+};
+
+export const adminListFlagOverrides = async (
+  name: string,
+  options?: RequestInit,
+): Promise<AdminFeatureFlagOverride[]> => {
+  return customFetch<AdminFeatureFlagOverride[]>(
+    getAdminListFlagOverridesUrl(name),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAdminListFlagOverridesQueryKey = (name: string) => {
+  return [`/api/admin/flags/${name}/overrides`] as const;
+};
+
+export const getAdminListFlagOverridesQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListFlagOverrides>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListFlagOverrides>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminListFlagOverridesQueryKey(name);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListFlagOverrides>>
+  > = ({ signal }) =>
+    adminListFlagOverrides(name, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!name,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListFlagOverrides>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListFlagOverridesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListFlagOverrides>>
+>;
+export type AdminListFlagOverridesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List per-user overrides for a feature flag
+ */
+
+export function useAdminListFlagOverrides<
+  TData = Awaited<ReturnType<typeof adminListFlagOverrides>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListFlagOverrides>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListFlagOverridesQueryOptions(name, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add or update a per-user override for a feature flag
+ */
+export const getAdminSetFlagOverrideUrl = (name: string) => {
+  return `/api/admin/flags/${name}/overrides`;
+};
+
+export const adminSetFlagOverride = async (
+  name: string,
+  adminSetFlagOverrideBody: AdminSetFlagOverrideBody,
+  options?: RequestInit,
+): Promise<AdminFeatureFlagOverride> => {
+  return customFetch<AdminFeatureFlagOverride>(
+    getAdminSetFlagOverrideUrl(name),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(adminSetFlagOverrideBody),
+    },
+  );
+};
+
+export const getAdminSetFlagOverrideMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetFlagOverride>>,
+    TError,
+    { name: string; data: BodyType<AdminSetFlagOverrideBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSetFlagOverride>>,
+  TError,
+  { name: string; data: BodyType<AdminSetFlagOverrideBody> },
+  TContext
+> => {
+  const mutationKey = ["adminSetFlagOverride"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSetFlagOverride>>,
+    { name: string; data: BodyType<AdminSetFlagOverrideBody> }
+  > = (props) => {
+    const { name, data } = props ?? {};
+
+    return adminSetFlagOverride(name, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSetFlagOverrideMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSetFlagOverride>>
+>;
+export type AdminSetFlagOverrideMutationBody =
+  BodyType<AdminSetFlagOverrideBody>;
+export type AdminSetFlagOverrideMutationError = ErrorType<void>;
+
+/**
+ * @summary Add or update a per-user override for a feature flag
+ */
+export const useAdminSetFlagOverride = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetFlagOverride>>,
+    TError,
+    { name: string; data: BodyType<AdminSetFlagOverrideBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSetFlagOverride>>,
+  TError,
+  { name: string; data: BodyType<AdminSetFlagOverrideBody> },
+  TContext
+> => {
+  return useMutation(getAdminSetFlagOverrideMutationOptions(options));
+};
+
+/**
+ * @summary Remove a per-user override
+ */
+export const getAdminDeleteFlagOverrideUrl = (name: string, userId: number) => {
+  return `/api/admin/flags/${name}/overrides/${userId}`;
+};
+
+export const adminDeleteFlagOverride = async (
+  name: string,
+  userId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAdminDeleteFlagOverrideUrl(name, userId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminDeleteFlagOverrideMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteFlagOverride>>,
+    TError,
+    { name: string; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminDeleteFlagOverride>>,
+  TError,
+  { name: string; userId: number },
+  TContext
+> => {
+  const mutationKey = ["adminDeleteFlagOverride"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminDeleteFlagOverride>>,
+    { name: string; userId: number }
+  > = (props) => {
+    const { name, userId } = props ?? {};
+
+    return adminDeleteFlagOverride(name, userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminDeleteFlagOverrideMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminDeleteFlagOverride>>
+>;
+
+export type AdminDeleteFlagOverrideMutationError = ErrorType<void>;
+
+/**
+ * @summary Remove a per-user override
+ */
+export const useAdminDeleteFlagOverride = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteFlagOverride>>,
+    TError,
+    { name: string; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminDeleteFlagOverride>>,
+  TError,
+  { name: string; userId: number },
+  TContext
+> => {
+  return useMutation(getAdminDeleteFlagOverrideMutationOptions(options));
 };
 
 /**

@@ -2296,6 +2296,113 @@ export const AdminResolveReportResponse = zod.object({
 });
 
 /**
+ * @summary List all feature flags with their rollout configuration
+ */
+export const adminListFlagsResponseRolloutPercentMin = 0;
+export const adminListFlagsResponseRolloutPercentMax = 100;
+
+export const AdminListFlagsResponseItem = zod.object({
+  name: zod.string(),
+  enabled: zod.boolean(),
+  rolloutPercent: zod
+    .number()
+    .min(adminListFlagsResponseRolloutPercentMin)
+    .max(adminListFlagsResponseRolloutPercentMax),
+  description: zod.string().nullish(),
+  updatedAt: zod.string(),
+  overrideCount: zod.number(),
+});
+export const AdminListFlagsResponse = zod.array(AdminListFlagsResponseItem);
+
+/**
+ * @summary Create or update a feature flag
+ */
+export const AdminUpsertFlagParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const adminUpsertFlagBodyRolloutPercentMin = 0;
+export const adminUpsertFlagBodyRolloutPercentMax = 100;
+
+export const AdminUpsertFlagBody = zod.object({
+  enabled: zod.boolean(),
+  rolloutPercent: zod
+    .number()
+    .min(adminUpsertFlagBodyRolloutPercentMin)
+    .max(adminUpsertFlagBodyRolloutPercentMax),
+  description: zod.string().nullish(),
+});
+
+export const adminUpsertFlagResponseRolloutPercentMin = 0;
+export const adminUpsertFlagResponseRolloutPercentMax = 100;
+
+export const AdminUpsertFlagResponse = zod.object({
+  name: zod.string(),
+  enabled: zod.boolean(),
+  rolloutPercent: zod
+    .number()
+    .min(adminUpsertFlagResponseRolloutPercentMin)
+    .max(adminUpsertFlagResponseRolloutPercentMax),
+  description: zod.string().nullish(),
+  updatedAt: zod.string(),
+  overrideCount: zod.number(),
+});
+
+/**
+ * @summary Delete a feature flag (and its overrides)
+ */
+export const AdminDeleteFlagParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+/**
+ * @summary List per-user overrides for a feature flag
+ */
+export const AdminListFlagOverridesParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const AdminListFlagOverridesResponseItem = zod.object({
+  flagName: zod.string(),
+  userId: zod.number(),
+  userHandle: zod.string().nullish(),
+  enabled: zod.boolean(),
+  createdAt: zod.string(),
+});
+export const AdminListFlagOverridesResponse = zod.array(
+  AdminListFlagOverridesResponseItem,
+);
+
+/**
+ * @summary Add or update a per-user override for a feature flag
+ */
+export const AdminSetFlagOverrideParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const AdminSetFlagOverrideBody = zod.object({
+  userId: zod.number().min(1),
+  enabled: zod.boolean(),
+});
+
+export const AdminSetFlagOverrideResponse = zod.object({
+  flagName: zod.string(),
+  userId: zod.number(),
+  userHandle: zod.string().nullish(),
+  enabled: zod.boolean(),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary Remove a per-user override
+ */
+
+export const AdminDeleteFlagOverrideParams = zod.object({
+  name: zod.coerce.string(),
+  userId: zod.coerce.number().min(1),
+});
+
+/**
  * @summary Submit a moderation report (any pen name)
  */
 

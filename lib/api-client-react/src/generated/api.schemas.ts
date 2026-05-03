@@ -945,6 +945,46 @@ export interface SetUserBannedBody {
   banned: boolean;
 }
 
+export interface AdminFeatureFlag {
+  name: string;
+  enabled: boolean;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  rolloutPercent: number;
+  /** @nullable */
+  description?: string | null;
+  updatedAt: string;
+  overrideCount: number;
+}
+
+export interface AdminUpsertFlagBody {
+  enabled: boolean;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  rolloutPercent: number;
+  /** @nullable */
+  description?: string | null;
+}
+
+export interface AdminFeatureFlagOverride {
+  flagName: string;
+  userId: number;
+  /** @nullable */
+  userHandle?: string | null;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface AdminSetFlagOverrideBody {
+  /** @minimum 1 */
+  userId: number;
+  enabled: boolean;
+}
+
 export type StoryAnalyticsDailyItem = {
   day: string;
   views: number;

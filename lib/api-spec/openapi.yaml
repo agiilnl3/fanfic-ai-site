@@ -1783,6 +1783,104 @@ paths:
       responses:
         "200": { description: Updated report, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
 
+  /admin/flags:
+    get:
+      operationId: adminListFlags
+      tags: [admin]
+      summary: List all feature flags with their rollout configuration
+      responses:
+        "200":
+          description: Flags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminFeatureFlag" }
+
+  /admin/flags/{name}:
+    put:
+      operationId: adminUpsertFlag
+      tags: [admin]
+      summary: Create or update a feature flag
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUpsertFlagBody" }
+      responses:
+        "200": { description: Updated flag, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlag" } } } }
+    delete:
+      operationId: adminDeleteFlag
+      tags: [admin]
+      summary: Delete a feature flag (and its overrides)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
+  /admin/flags/{name}/overrides:
+    get:
+      operationId: adminListFlagOverrides
+      tags: [admin]
+      summary: List per-user overrides for a feature flag
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Overrides
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminFeatureFlagOverride" }
+    post:
+      operationId: adminSetFlagOverride
+      tags: [admin]
+      summary: Add or update a per-user override for a feature flag
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminSetFlagOverrideBody" }
+      responses:
+        "200": { description: Override, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlagOverride" } } } }
+        "404": { description: User or flag not found }
+
+  /admin/flags/{name}/overrides/{userId}:
+    delete:
+      operationId: adminDeleteFlagOverride
+      tags: [admin]
+      summary: Remove a per-user override
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema: { type: string }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "204": { description: Deleted }
+        "404": { description: Not found }
+
   /reports:
     post:
       operationId: createReport
@@ -3440,6 +3538,44 @@ components:
       properties:
         banned: { type: boolean }
       required: [banned]
+      additionalProperties: false
+
+    AdminFeatureFlag:
+      type: object
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        rolloutPercent: { type: integer, minimum: 0, maximum: 100 }
+        description: { type: ["string", "null"] }
+        updatedAt: { type: string }
+        overrideCount: { type: integer }
+      required: [name, enabled, rolloutPercent, updatedAt, overrideCount]
+
+    AdminUpsertFlagBody:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        rolloutPercent: { type: integer, minimum: 0, maximum: 100 }
+        description: { type: ["string", "null"] }
+      required: [enabled, rolloutPercent]
+      additionalProperties: false
+
+    AdminFeatureFlagOverride:
+      type: object
+      properties:
+        flagName: { type: string }
+        userId: { type: integer }
+        userHandle: { type: ["string", "null"] }
+        enabled: { type: boolean }
+        createdAt: { type: string }
+      required: [flagName, userId, enabled, createdAt]
+
+    AdminSetFlagOverrideBody:
+      type: object
+      properties:
+        userId: { type: integer, minimum: 1 }
+        enabled: { type: boolean }
+      required: [userId, enabled]
       additionalProperties: false
 
     StoryAnalytics:

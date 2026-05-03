@@ -19,12 +19,21 @@ import {
   useAdminResolveReport,
   useAdminListUsers,
   useAdminSetUserBanned,
+  useAdminListFlags,
+  useAdminUpsertFlag,
+  useAdminDeleteFlag,
+  useAdminListFlagOverrides,
+  useAdminSetFlagOverride,
+  useAdminDeleteFlagOverride,
   getAdminListStoriesQueryKey,
   getAdminGetStatsQueryKey,
   getAdminGetTariffQueryKey,
   getAdminGetMetricsQueryKey,
   getAdminListReportsQueryKey,
   getAdminListUsersQueryKey,
+  getAdminListFlagsQueryKey,
+  getAdminListFlagOverridesQueryKey,
+  type AdminFeatureFlag,
   type AdminListReportsStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +54,9 @@ import {
   Coins,
   Flag,
   Users,
+  Plus,
+  X,
+  ToggleLeft,
 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -63,7 +75,7 @@ const TOKEN_KEY = "fanfic_admin_token";
 const TIERS = ["free", "premium"] as const;
 type ReqOpts = { headers?: { "x-admin-token"?: string } };
 
-type TabId = "overview" | "stories" | "tariffs" | "reports" | "users";
+type TabId = "overview" | "stories" | "tariffs" | "reports" | "users" | "flags";
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -71,6 +83,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; icon: React.ComponentType<
   { id: "users", label: "Users", icon: Users },
   { id: "stories", label: "Stories", icon: BookOpen },
   { id: "tariffs", label: "Tariffs", icon: Coins },
+  { id: "flags", label: "Flags", icon: ToggleLeft },
 ];
 
 export default function AdminPage() {
@@ -225,6 +238,7 @@ export default function AdminPage() {
             {activeTab === "tariffs" && <TariffsTab requestOptions={requestOptions} />}
             {activeTab === "reports" && <ReportsTab requestOptions={requestOptions} />}
             {activeTab === "users" && <UsersTab requestOptions={requestOptions} />}
+            {activeTab === "flags" && <FlagsTab requestOptions={requestOptions} />}
           </div>
         </div>
       </div>
@@ -847,5 +861,464 @@ function UsersTab({ requestOptions }: { requestOptions: ReqOpts }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function FlagsTab({ requestOptions }: { requestOptions: ReqOpts }) {
+  const { data: flags, isLoading } = useAdminListFlags({
+    query: { queryKey: getAdminListFlagsQueryKey() },
+    request: requestOptions,
+  });
+  const [showNew, setShowNew] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Feature flags</span>
+            <Button
+              size="sm"
+              onClick={() => setShowNew((v) => !v)}
+              data-testid="button-new-flag"
+            >
+              <Plus className="w-4 h-4 mr-1" /> New flag
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {showNew && (
+            <NewFlagForm
+              requestOptions={requestOptions}
+              onDone={() => setShowNew(false)}
+            />
+          )}
+          {isLoading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (flags ?? []).length === 0 ? (
+            <p className="text-muted-foreground text-sm py-6 text-center">
+              No feature flags yet. Create one to start rolling out a feature.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {(flags ?? []).map((f) => (
+                <FlagRow
+                  key={f.name}
+                  flag={f}
+                  requestOptions={requestOptions}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function NewFlagForm({
+  requestOptions,
+  onDone,
+}: {
+  requestOptions: ReqOpts;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [rollout, setRollout] = useState("0");
+
+  const upsert = useAdminUpsertFlag({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getAdminListFlagsQueryKey() });
+        toast({ title: "Flag created" });
+        onDone();
+      },
+      onError: () => toast({ title: "Create failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  return (
+    <form
+      className="mb-6 p-4 border border-border/60 rounded-lg space-y-3 bg-muted/20"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const r = parseInt(rollout, 10);
+        if (!name.trim() || Number.isNaN(r) || r < 0 || r > 100) return;
+        upsert.mutate({
+          name: name.trim(),
+          data: {
+            enabled,
+            rolloutPercent: r,
+            description: description.trim() || null,
+          },
+        });
+      }}
+    >
+      <Input
+        placeholder="flag_name (snake_case)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        data-testid="input-new-flag-name"
+        autoFocus
+      />
+      <Input
+        placeholder="Description (optional)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        data-testid="input-new-flag-description"
+      />
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            data-testid="input-new-flag-enabled"
+          />
+          Enabled
+        </label>
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          value={rollout}
+          onChange={(e) => setRollout(e.target.value)}
+          placeholder="Rollout %"
+          data-testid="input-new-flag-rollout"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button
+          type="submit"
+          size="sm"
+          disabled={upsert.isPending || !name.trim()}
+          data-testid="button-save-new-flag"
+        >
+          {upsert.isPending ? (
+            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4 mr-1" />
+          )}
+          Create
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={onDone}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function FlagRow({
+  flag,
+  requestOptions,
+}: {
+  flag: AdminFeatureFlag;
+  requestOptions: ReqOpts;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [enabled, setEnabled] = useState(flag.enabled);
+  const [rollout, setRollout] = useState(String(flag.rolloutPercent));
+  const [description, setDescription] = useState(flag.description ?? "");
+  const [showOverrides, setShowOverrides] = useState(false);
+
+  useEffect(() => {
+    setEnabled(flag.enabled);
+    setRollout(String(flag.rolloutPercent));
+    setDescription(flag.description ?? "");
+  }, [flag]);
+
+  const dirty =
+    enabled !== flag.enabled ||
+    rollout !== String(flag.rolloutPercent) ||
+    description !== (flag.description ?? "");
+
+  const upsert = useAdminUpsertFlag({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getAdminListFlagsQueryKey() });
+        toast({ title: `Flag ${flag.name} updated` });
+      },
+      onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  const del = useAdminDeleteFlag({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getAdminListFlagsQueryKey() });
+        toast({ title: `Flag ${flag.name} deleted` });
+      },
+      onError: () => toast({ title: "Delete failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  function save() {
+    const r = parseInt(rollout, 10);
+    if (Number.isNaN(r) || r < 0 || r > 100) {
+      toast({ title: "Rollout must be 0–100", variant: "destructive" });
+      return;
+    }
+    upsert.mutate({
+      name: flag.name,
+      data: {
+        enabled,
+        rolloutPercent: r,
+        description: description.trim() || null,
+      },
+    });
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-border/60 p-4 bg-card/40"
+      data-testid={`flag-row-${flag.name}`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <div className="font-mono text-sm font-medium truncate">
+            {flag.name}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Updated {format(new Date(flag.updatedAt), "MMM d, yyyy h:mm a")} ·{" "}
+            {flag.overrideCount} override{flag.overrideCount === 1 ? "" : "s"}
+          </div>
+        </div>
+        <Badge variant={enabled ? "default" : "outline"}>
+          {enabled ? "on" : "off"}
+        </Badge>
+      </div>
+
+      <div className="grid md:grid-cols-[auto_120px_1fr_auto] gap-3 items-end">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            data-testid={`input-flag-enabled-${flag.name}`}
+          />
+          Enabled
+        </label>
+        <div>
+          <label
+            className="text-xs text-muted-foreground block mb-1"
+            htmlFor={`rollout-${flag.name}`}
+          >
+            Rollout %
+          </label>
+          <Input
+            id={`rollout-${flag.name}`}
+            type="number"
+            min={0}
+            max={100}
+            value={rollout}
+            onChange={(e) => setRollout(e.target.value)}
+            data-testid={`input-flag-rollout-${flag.name}`}
+          />
+        </div>
+        <div>
+          <label
+            className="text-xs text-muted-foreground block mb-1"
+            htmlFor={`desc-${flag.name}`}
+          >
+            Description
+          </label>
+          <Input
+            id={`desc-${flag.name}`}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional"
+            data-testid={`input-flag-description-${flag.name}`}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={save}
+            disabled={!dirty || upsert.isPending}
+            data-testid={`button-save-flag-${flag.name}`}
+          >
+            {upsert.isPending ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4 mr-1" />
+            )}
+            Save
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={del.isPending}
+            onClick={() => {
+              if (confirm(`Delete flag "${flag.name}"? Overrides will be removed too.`)) {
+                del.mutate({ name: flag.name });
+              }
+            }}
+            data-testid={`button-delete-flag-${flag.name}`}
+            aria-label={`Delete flag ${flag.name}`}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowOverrides((v) => !v)}
+          data-testid={`button-toggle-overrides-${flag.name}`}
+        >
+          {showOverrides ? "Hide" : "Show"} per-user overrides ({flag.overrideCount})
+        </Button>
+        {showOverrides && (
+          <FlagOverrides
+            flagName={flag.name}
+            requestOptions={requestOptions}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FlagOverrides({
+  flagName,
+  requestOptions,
+}: {
+  flagName: string;
+  requestOptions: ReqOpts;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const overridesKey = getAdminListFlagOverridesQueryKey(flagName);
+  const { data: overrides, isLoading } = useAdminListFlagOverrides(flagName, {
+    query: { queryKey: overridesKey },
+    request: requestOptions,
+  });
+  const [userId, setUserId] = useState("");
+  const [enabled, setEnabled] = useState(true);
+
+  const setOverride = useAdminSetFlagOverride({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: overridesKey });
+        queryClient.invalidateQueries({ queryKey: getAdminListFlagsQueryKey() });
+        setUserId("");
+        toast({ title: "Override saved" });
+      },
+      onError: () => toast({ title: "Save failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  const removeOverride = useAdminDeleteFlagOverride({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: overridesKey });
+        queryClient.invalidateQueries({ queryKey: getAdminListFlagsQueryKey() });
+        toast({ title: "Override removed" });
+      },
+      onError: () => toast({ title: "Remove failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  return (
+    <div className="mt-3 border-t border-border/60 pt-3">
+      <form
+        className="flex flex-wrap items-end gap-2 mb-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const id = parseInt(userId, 10);
+          if (Number.isNaN(id) || id <= 0) return;
+          setOverride.mutate({
+            name: flagName,
+            data: { userId: id, enabled },
+          });
+        }}
+      >
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            User ID
+          </label>
+          <Input
+            type="number"
+            min={1}
+            value={userId}
+            onChange={(e) => setUserId(e.target.value)}
+            placeholder="e.g. 42"
+            className="w-32"
+            data-testid={`input-override-userid-${flagName}`}
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm pb-2">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+            data-testid={`input-override-enabled-${flagName}`}
+          />
+          Enabled
+        </label>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={setOverride.isPending || !userId}
+          data-testid={`button-add-override-${flagName}`}
+        >
+          <Plus className="w-4 h-4 mr-1" /> Add / update
+        </Button>
+      </form>
+
+      {isLoading ? (
+        <Loader2 className="w-4 h-4 animate-spin" />
+      ) : (overrides ?? []).length === 0 ? (
+        <p className="text-xs text-muted-foreground">No overrides.</p>
+      ) : (
+        <ul className="space-y-1 text-sm">
+          {(overrides ?? []).map((o) => (
+            <li
+              key={o.userId}
+              className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-muted/30"
+              data-testid={`override-${flagName}-${o.userId}`}
+            >
+              <span className="font-mono">
+                #{o.userId}
+                {o.userHandle ? ` · @${o.userHandle}` : ""}
+              </span>
+              <span className="flex items-center gap-2">
+                <Badge variant={o.enabled ? "default" : "outline"}>
+                  {o.enabled ? "on" : "off"}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={removeOverride.isPending}
+                  onClick={() =>
+                    removeOverride.mutate({
+                      name: flagName,
+                      userId: o.userId,
+                    })
+                  }
+                  aria-label={`Remove override for user ${o.userId}`}
+                  data-testid={`button-remove-override-${flagName}-${o.userId}`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

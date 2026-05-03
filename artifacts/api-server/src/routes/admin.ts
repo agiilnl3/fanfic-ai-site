@@ -11,6 +11,8 @@ import {
   storyCommentsTable,
   usersTable,
   adminsTable,
+  featureFlagsTable,
+  featureFlagOverridesTable,
 } from "@workspace/db";
 import { z } from "zod";
 import { logAdminAction } from "../lib/admin-audit";
@@ -22,6 +24,8 @@ import {
   AdminGetTariffParams,
   AdminUpdateTariffParams,
   AdminUpdateTariffBody,
+  AdminUpsertFlagBody,
+  AdminSetFlagOverrideBody,
 } from "@workspace/api-zod";
 import { adminAuth } from "../middlewares/admin";
 import { getFreeTariff, invalidateTariffCache } from "../lib/usage";
@@ -524,6 +528,259 @@ router.post(
     });
     const [shaped] = await shapeUserRows([updated]);
     res.json(shaped);
+  },
+);
+
+// --- Feature flags --------------------------------------------------
+
+const FLAG_NAME_RE = /^[a-zA-Z0-9_.-]+$/;
+const FlagNameParam = z.object({
+  name: z.string().min(1).max(128).regex(FLAG_NAME_RE),
+});
+const FlagOverrideParams = z.object({
+  name: z.string().min(1).max(128).regex(FLAG_NAME_RE),
+  userId: z.coerce.number().int().positive(),
+});
+
+async function shapeFlagRows(
+  rows: Array<typeof featureFlagsTable.$inferSelect>,
+): Promise<
+  Array<{
+    name: string;
+    enabled: boolean;
+    rolloutPercent: number;
+    description: string | null;
+    updatedAt: string;
+    overrideCount: number;
+  }>
+> {
+  if (rows.length === 0) return [];
+  const names = rows.map((r) => r.name);
+  const counts = await db
+    .select({
+      flagName: featureFlagOverridesTable.flagName,
+      c: count(),
+    })
+    .from(featureFlagOverridesTable)
+    .where(inArray(featureFlagOverridesTable.flagName, names))
+    .groupBy(featureFlagOverridesTable.flagName);
+  const cMap = new Map(counts.map((r) => [r.flagName, Number(r.c)]));
+  return rows.map((f) => ({
+    name: f.name,
+    enabled: f.enabled,
+    rolloutPercent: f.rolloutPercent,
+    description: f.description,
+    updatedAt: f.updatedAt.toISOString(),
+    overrideCount: cMap.get(f.name) ?? 0,
+  }));
+}
+
+router.get("/admin/flags", adminAuth, async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(featureFlagsTable)
+    .orderBy(featureFlagsTable.name);
+  res.json(await shapeFlagRows(rows));
+});
+
+router.put("/admin/flags/:name", adminAuth, async (req, res): Promise<void> => {
+  const params = FlagNameParam.safeParse(req.params);
+  const body = AdminUpsertFlagBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const description = body.data.description ?? null;
+  const [row] = await db
+    .insert(featureFlagsTable)
+    .values({
+      name: params.data.name,
+      enabled: body.data.enabled,
+      rolloutPercent: body.data.rolloutPercent,
+      description,
+    })
+    .onConflictDoUpdate({
+      target: featureFlagsTable.name,
+      set: {
+        enabled: body.data.enabled,
+        rolloutPercent: body.data.rolloutPercent,
+        description,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+  await logAdminAction(req, {
+    action: "upsert_flag",
+    targetType: "feature_flag",
+    targetId: null,
+    metadata: {
+      name: params.data.name,
+      enabled: body.data.enabled,
+      rolloutPercent: body.data.rolloutPercent,
+    },
+  });
+  const [shaped] = await shapeFlagRows([row]);
+  res.json(shaped);
+});
+
+router.delete(
+  "/admin/flags/:name",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = FlagNameParam.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [deleted] = await db
+      .delete(featureFlagsTable)
+      .where(eq(featureFlagsTable.name, params.data.name))
+      .returning();
+    if (!deleted) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    await db
+      .delete(featureFlagOverridesTable)
+      .where(eq(featureFlagOverridesTable.flagName, params.data.name));
+    await logAdminAction(req, {
+      action: "delete_flag",
+      targetType: "feature_flag",
+      targetId: null,
+      metadata: { name: params.data.name },
+    });
+    res.sendStatus(204);
+  },
+);
+
+router.get(
+  "/admin/flags/:name/overrides",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = FlagNameParam.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const rows = await db
+      .select({
+        flagName: featureFlagOverridesTable.flagName,
+        userId: featureFlagOverridesTable.userId,
+        enabled: featureFlagOverridesTable.enabled,
+        createdAt: featureFlagOverridesTable.createdAt,
+        userHandle: usersTable.handle,
+      })
+      .from(featureFlagOverridesTable)
+      .leftJoin(
+        usersTable,
+        eq(featureFlagOverridesTable.userId, usersTable.id),
+      )
+      .where(eq(featureFlagOverridesTable.flagName, params.data.name))
+      .orderBy(desc(featureFlagOverridesTable.createdAt));
+    res.json(
+      rows.map((r) => ({
+        flagName: r.flagName,
+        userId: r.userId,
+        userHandle: r.userHandle,
+        enabled: r.enabled,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    );
+  },
+);
+
+router.post(
+  "/admin/flags/:name/overrides",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = FlagNameParam.safeParse(req.params);
+    const body = AdminSetFlagOverrideBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [flag] = await db
+      .select({ name: featureFlagsTable.name })
+      .from(featureFlagsTable)
+      .where(eq(featureFlagsTable.name, params.data.name))
+      .limit(1);
+    if (!flag) {
+      res.status(404).json({ error: "Flag not found" });
+      return;
+    }
+    const [user] = await db
+      .select({ id: usersTable.id, handle: usersTable.handle })
+      .from(usersTable)
+      .where(eq(usersTable.id, body.data.userId))
+      .limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const [row] = await db
+      .insert(featureFlagOverridesTable)
+      .values({
+        flagName: params.data.name,
+        userId: body.data.userId,
+        enabled: body.data.enabled,
+      })
+      .onConflictDoUpdate({
+        target: [
+          featureFlagOverridesTable.flagName,
+          featureFlagOverridesTable.userId,
+        ],
+        set: { enabled: body.data.enabled },
+      })
+      .returning();
+    await logAdminAction(req, {
+      action: "set_flag_override",
+      targetType: "feature_flag",
+      targetId: body.data.userId,
+      metadata: {
+        flagName: params.data.name,
+        userId: body.data.userId,
+        enabled: body.data.enabled,
+      },
+    });
+    res.json({
+      flagName: row.flagName,
+      userId: row.userId,
+      userHandle: user.handle,
+      enabled: row.enabled,
+      createdAt: row.createdAt.toISOString(),
+    });
+  },
+);
+
+router.delete(
+  "/admin/flags/:name/overrides/:userId",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = FlagOverrideParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [deleted] = await db
+      .delete(featureFlagOverridesTable)
+      .where(
+        and(
+          eq(featureFlagOverridesTable.flagName, params.data.name),
+          eq(featureFlagOverridesTable.userId, params.data.userId),
+        ),
+      )
+      .returning();
+    if (!deleted) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    await logAdminAction(req, {
+      action: "delete_flag_override",
+      targetType: "feature_flag",
+      targetId: params.data.userId,
+      metadata: { flagName: params.data.name, userId: params.data.userId },
+    });
+    res.sendStatus(204);
   },
 );
 
