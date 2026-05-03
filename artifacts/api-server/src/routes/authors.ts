@@ -16,9 +16,12 @@ import {
   FollowAuthorBody,
   UnfollowAuthorParams,
   UnfollowAuthorQueryParams,
+  SearchAuthorsQueryParams,
 } from "@workspace/api-zod";
+import { ilike } from "drizzle-orm";
 import { writeLimiter } from "../middlewares/rate-limit";
 import { logger } from "../lib/logger";
+import { notifyRecipient } from "../lib/notification-bus";
 
 const router: IRouter = Router();
 
@@ -47,6 +50,58 @@ async function followCounts(authorName: string, followerName?: string) {
     isFollowing,
   };
 }
+
+router.get("/authors/search", async (req, res): Promise<void> => {
+  const parsed = SearchAuthorsQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "q required" });
+    return;
+  }
+  const term = parsed.data.q.trim();
+  if (!term) {
+    res.json([]);
+    return;
+  }
+  const limit = parsed.data.limit ?? 10;
+  const rows = await db
+    .select({
+      authorName: storiesTable.authorName,
+      publishedCount: count(storiesTable.id),
+    })
+    .from(storiesTable)
+    .where(
+      and(
+        eq(storiesTable.status, "published"),
+        ilike(storiesTable.authorName, `%${term}%`),
+      ),
+    )
+    .groupBy(storiesTable.authorName)
+    .orderBy(desc(count(storiesTable.id)))
+    .limit(limit);
+
+  if (rows.length === 0) {
+    res.json([]);
+    return;
+  }
+  const names = rows.map((r) => r.authorName);
+  const followerRows = await db
+    .select({
+      authorName: authorFollowsTable.authorName,
+      value: count(authorFollowsTable.id),
+    })
+    .from(authorFollowsTable)
+    .where(inArray(authorFollowsTable.authorName, names))
+    .groupBy(authorFollowsTable.authorName);
+  const followerMap = new Map(followerRows.map((r) => [r.authorName, Number(r.value)]));
+
+  res.json(
+    rows.map((r) => ({
+      authorName: r.authorName,
+      publishedCount: Number(r.publishedCount),
+      followerCount: followerMap.get(r.authorName) ?? 0,
+    })),
+  );
+});
 
 router.get("/authors/:name", async (req, res): Promise<void> => {
   const params = GetAuthorProfileParams.safeParse(req.params);
@@ -193,6 +248,7 @@ router.post("/authors/:name/follow", writeLimiter, async (req, res): Promise<voi
         actorName: follower,
         payload: {},
       });
+      notifyRecipient(author);
     } catch (err) {
       logger.warn({ err }, "failed to insert follow notification");
     }

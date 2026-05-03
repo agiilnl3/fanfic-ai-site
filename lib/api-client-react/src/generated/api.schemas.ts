@@ -351,6 +351,52 @@ export interface MarkReadBody {
   recipientName: string;
 }
 
+export interface AuthorSearchHit {
+  authorName: string;
+  publishedCount: number;
+  followerCount: number;
+}
+
+export interface RepostInfo {
+  storyId: number;
+  repostCount: number;
+  hasReposted: boolean;
+}
+
+export interface RepostBody {
+  /** @minLength 1 */
+  reposterName: string;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface RepostFeedEntry {
+  repostId: number;
+  reposterName: string;
+  /** @nullable */
+  note?: string | null;
+  repostedAt: string;
+  story: Story;
+}
+
+export interface ReorderIllustrationsBody {
+  /** Illustration ids in the desired display order. */
+  order: number[];
+  /** @minLength 1 */
+  requesterAuthorName: string;
+}
+
+export interface UsageInfo {
+  authorName: string;
+  day: string;
+  storyCount: number;
+  illustrationCount: number;
+  storyLimit: number;
+  illustrationLimit: number;
+  storiesRemaining: number;
+  illustrationsRemaining: number;
+}
+
 export type ListStoriesParams = {
   status?: ListStoriesStatus;
   genre?: string;
@@ -426,4 +472,21 @@ export type ListNotificationsParams = {
 
 export type GetUnreadNotificationCountParams = {
   recipientName: string;
+};
+
+export type SearchAuthorsParams = {
+  q: string;
+  limit?: number;
+};
+
+export type GetStoryRepostParams = {
+  reposterName?: string;
+};
+
+export type UnrepostStoryParams = {
+  reposterName: string;
+};
+
+export type GetMyUsageParams = {
+  authorName: string;
 };

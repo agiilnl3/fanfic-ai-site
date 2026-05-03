@@ -1,5 +1,12 @@
 import { useRoute, Link } from "wouter";
-import { useGetAuthorProfile, getGetAuthorProfileQueryKey } from "@workspace/api-client-react";
+import {
+  useGetAuthorProfile,
+  getGetAuthorProfileQueryKey,
+  useListAuthorReposts,
+  getListAuthorRepostsQueryKey,
+} from "@workspace/api-client-react";
+import { formatDistanceToNow } from "date-fns";
+import { Repeat2 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { StoryCard } from "@/components/story-card";
@@ -38,6 +45,14 @@ export default function AuthorPage() {
       enabled: !!name,
       staleTime: 60_000,
       queryKey: getGetAuthorProfileQueryKey(name),
+    },
+  });
+
+  const { data: reposts } = useListAuthorReposts(name, {
+    query: {
+      enabled: !!name,
+      staleTime: 60_000,
+      queryKey: getListAuthorRepostsQueryKey(name),
     },
   });
 
@@ -106,6 +121,29 @@ export default function AuthorPage() {
                 {data.stories.map((story) => (
                   <StoryCard key={story.id} story={story} />
                 ))}
+              </div>
+            )}
+
+            {reposts && reposts.length > 0 && (
+              <div className="mt-12">
+                <h2 className="font-serif text-2xl mb-2 flex items-center gap-2">
+                  <Repeat2 className="w-5 h-5 text-primary" />
+                  Reposted tales
+                </h2>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Stories {data.authorName} has shared with their followers.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {reposts.map((entry) => (
+                    <div key={entry.repostId} className="space-y-2">
+                      <StoryCard story={entry.story} />
+                      <div className="text-xs text-muted-foreground px-1">
+                        Reposted {formatDistanceToNow(new Date(entry.repostedAt), { addSuffix: true })}
+                        {entry.note ? ` — “${entry.note}”` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>

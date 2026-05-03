@@ -859,3 +859,157 @@ export const MarkNotificationsReadResponse = zod.object({
   recipientName: zod.string(),
   unread: zod.number(),
 });
+
+/**
+ * @summary Search authors by name (prefix/substring match)
+ */
+export const searchAuthorsQueryLimitDefault = 10;
+
+export const SearchAuthorsQueryParams = zod.object({
+  q: zod.coerce.string(),
+  limit: zod.coerce.number().default(searchAuthorsQueryLimitDefault),
+});
+
+export const SearchAuthorsResponseItem = zod.object({
+  authorName: zod.string(),
+  publishedCount: zod.number(),
+  followerCount: zod.number(),
+});
+export const SearchAuthorsResponse = zod.array(SearchAuthorsResponseItem);
+
+/**
+ * @summary Get repost count for a story and whether the requester reposted
+ */
+export const GetStoryRepostParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryRepostQueryParams = zod.object({
+  reposterName: zod.coerce.string().optional(),
+});
+
+export const GetStoryRepostResponse = zod.object({
+  storyId: zod.number(),
+  repostCount: zod.number(),
+  hasReposted: zod.boolean(),
+});
+
+/**
+ * @summary Repost a story
+ */
+export const RepostStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RepostStoryBody = zod.object({
+  reposterName: zod.string().min(1),
+  note: zod.string().nullish(),
+});
+
+export const RepostStoryResponse = zod.object({
+  storyId: zod.number(),
+  repostCount: zod.number(),
+  hasReposted: zod.boolean(),
+});
+
+/**
+ * @summary Remove a repost
+ */
+export const UnrepostStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UnrepostStoryQueryParams = zod.object({
+  reposterName: zod.coerce.string(),
+});
+
+export const UnrepostStoryResponse = zod.object({
+  storyId: zod.number(),
+  repostCount: zod.number(),
+  hasReposted: zod.boolean(),
+});
+
+/**
+ * @summary List stories reposted by an author (with optional note)
+ */
+export const ListAuthorRepostsParams = zod.object({
+  name: zod.coerce.string(),
+});
+
+export const listAuthorRepostsResponseStoryCoAuthorsDefault = [];
+
+export const ListAuthorRepostsResponseItem = zod.object({
+  repostId: zod.number(),
+  reposterName: zod.string(),
+  note: zod.string().nullish(),
+  repostedAt: zod.string(),
+  story: zod.object({
+    id: zod.number(),
+    title: zod.string(),
+    genre: zod.string(),
+    artStyle: zod.string(),
+    lengthSetting: zod.enum(["short", "medium", "long"]),
+    seedPrompt: zod.string().nullish(),
+    fullText: zod.string().nullish(),
+    summary: zod.string().nullish(),
+    characters: zod.string().nullish(),
+    status: zod.enum(["draft", "published"]),
+    authorName: zod.string(),
+    coAuthors: zod
+      .array(zod.string())
+      .default(listAuthorRepostsResponseStoryCoAuthorsDefault),
+    coverImageUrl: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    likeCount: zod.number(),
+    commentCount: zod.number(),
+  }),
+});
+export const ListAuthorRepostsResponse = zod.array(
+  ListAuthorRepostsResponseItem,
+);
+
+/**
+ * @summary Reorder a story's illustrations by setting their sectionIndex order
+ */
+export const ReorderIllustrationsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReorderIllustrationsBody = zod.object({
+  order: zod
+    .array(zod.number())
+    .describe("Illustration ids in the desired display order."),
+  requesterAuthorName: zod.string().min(1),
+});
+
+export const ReorderIllustrationsResponseItem = zod.object({
+  id: zod.number(),
+  storyId: zod.number(),
+  sectionIndex: zod.number(),
+  prompt: zod.string(),
+  imageUrl: zod.string(),
+  caption: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+export const ReorderIllustrationsResponse = zod.array(
+  ReorderIllustrationsResponseItem,
+);
+
+/**
+ * @summary Get today's usage counters and remaining free-tier quota
+ */
+export const GetMyUsageQueryParams = zod.object({
+  authorName: zod.coerce.string(),
+});
+
+export const GetMyUsageResponse = zod.object({
+  authorName: zod.string(),
+  day: zod.string(),
+  storyCount: zod.number(),
+  illustrationCount: zod.number(),
+  storyLimit: zod.number(),
+  illustrationLimit: zod.number(),
+  storiesRemaining: zod.number(),
+  illustrationsRemaining: zod.number(),
+});

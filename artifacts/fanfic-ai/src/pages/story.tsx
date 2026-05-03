@@ -4,6 +4,8 @@ import { FollowButton } from "@/components/follow-button";
 import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { LikeButton } from "@/components/like-button";
+import { RepostButton } from "@/components/repost-button";
+import { IllustrationReorderDialog } from "@/components/illustration-reorder-dialog";
 import { CommentsSection } from "@/components/comments-section";
 import {
   useGetStory,
@@ -32,7 +34,7 @@ import { useAuthor } from "@/hooks/use-author";
 import { format } from "date-fns";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -48,6 +50,7 @@ export default function StoryReading() {
   const [editText, setEditText] = useState("");
   const [promptEditingId, setPromptEditingId] = useState<number | null>(null);
   const [promptDraft, setPromptDraft] = useState("");
+  const [reorderOpen, setReorderOpen] = useState(false);
 
   const { data: story, isLoading, error } = useGetStory(storyId, {
     query: {
@@ -573,6 +576,7 @@ export default function StoryReading() {
             </p>
             <div className="mt-6 flex justify-center items-center gap-3">
               <LikeButton storyId={story.id} size="lg" variant="outline" className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 hover:text-rose-400 px-4" />
+              <RepostButton storyId={story.id} size="default" />
               <a
                 href="#comments-section"
                 className="inline-flex items-center gap-2 px-4 h-10 rounded-md bg-background/30 backdrop-blur-md border border-white/20 text-white hover:bg-background/50 transition-colors text-sm"
@@ -814,6 +818,15 @@ export default function StoryReading() {
                     <FileDown className="w-4 h-4 mr-2" /> Download PDF
                   </a>
                 </Button>
+                {isAuthor && illustrations.length >= 2 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setReorderOpen(true)}
+                    data-testid="button-reorder-illustrations"
+                  >
+                    <ArrowUpDown className="w-4 h-4 mr-2" /> Reorder Art
+                  </Button>
+                )}
                 {isAuthor && (
                   <Button
                     variant="default"
@@ -853,6 +866,15 @@ export default function StoryReading() {
           <CommentsSection storyId={story.id} />
         </div>
       </article>
+      {isAuthor && authorName && (
+        <IllustrationReorderDialog
+          storyId={storyId}
+          illustrations={illustrations}
+          authorName={authorName}
+          open={reorderOpen}
+          onOpenChange={setReorderOpen}
+        />
+      )}
     </Layout>
   );
 }

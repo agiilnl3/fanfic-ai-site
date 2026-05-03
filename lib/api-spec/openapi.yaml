@@ -26,6 +26,10 @@ tags:
     description: Author profiles, follows, subscription feed
   - name: notifications
     description: In-app notifications
+  - name: reposts
+    description: Author reposts of stories
+  - name: usage
+    description: Daily usage and quotas (free-tier limits)
 paths:
   /healthz:
     get:
@@ -980,6 +984,169 @@ paths:
               schema:
                 $ref: "#/components/schemas/UnreadCount"
 
+  /authors/search:
+    get:
+      operationId: searchAuthors
+      tags: [authors]
+      summary: Search authors by name (prefix/substring match)
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Matching authors with story counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuthorSearchHit"
+
+  /stories/{id}/repost:
+    get:
+      operationId: getStoryRepost
+      tags: [reposts]
+      summary: Get repost count for a story and whether the requester reposted
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reposterName
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repost info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepostInfo"
+    post:
+      operationId: repostStory
+      tags: [reposts]
+      summary: Repost a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepostBody"
+      responses:
+        "200":
+          description: Repost info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepostInfo"
+    delete:
+      operationId: unrepostStory
+      tags: [reposts]
+      summary: Remove a repost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reposterName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Repost info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RepostInfo"
+
+  /authors/{name}/reposts:
+    get:
+      operationId: listAuthorReposts
+      tags: [reposts]
+      summary: List stories reposted by an author (with optional note)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reposts feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RepostFeedEntry"
+
+  /stories/{id}/illustrations/order:
+    put:
+      operationId: reorderIllustrations
+      tags: [stories]
+      summary: Reorder a story's illustrations by setting their sectionIndex order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderIllustrationsBody"
+      responses:
+        "200":
+          description: Updated illustrations in new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Illustration"
+
+  /usage/me:
+    get:
+      operationId: getMyUsage
+      tags: [usage]
+      summary: Get today's usage counters and remaining free-tier quota
+      parameters:
+        - name: authorName
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Usage info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageInfo"
+
 components:
   schemas:
     HealthStatus:
@@ -1475,3 +1642,84 @@ components:
           type: string
           minLength: 1
       required: [recipientName]
+
+    AuthorSearchHit:
+      type: object
+      properties:
+        authorName:
+          type: string
+        publishedCount:
+          type: integer
+        followerCount:
+          type: integer
+      required: [authorName, publishedCount, followerCount]
+
+    RepostInfo:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        repostCount:
+          type: integer
+        hasReposted:
+          type: boolean
+      required: [storyId, repostCount, hasReposted]
+
+    RepostBody:
+      type: object
+      properties:
+        reposterName:
+          type: string
+          minLength: 1
+        note:
+          type: ["string", "null"]
+      required: [reposterName]
+
+    RepostFeedEntry:
+      type: object
+      properties:
+        repostId:
+          type: integer
+        reposterName:
+          type: string
+        note:
+          type: ["string", "null"]
+        repostedAt:
+          type: string
+        story:
+          $ref: "#/components/schemas/Story"
+      required: [repostId, reposterName, repostedAt, story]
+
+    ReorderIllustrationsBody:
+      type: object
+      properties:
+        order:
+          type: array
+          items:
+            type: integer
+          description: Illustration ids in the desired display order.
+        requesterAuthorName:
+          type: string
+          minLength: 1
+      required: [order, requesterAuthorName]
+
+    UsageInfo:
+      type: object
+      properties:
+        authorName:
+          type: string
+        day:
+          type: string
+        storyCount:
+          type: integer
+        illustrationCount:
+          type: integer
+        storyLimit:
+          type: integer
+        illustrationLimit:
+          type: integer
+        storiesRemaining:
+          type: integer
+        illustrationsRemaining:
+          type: integer
+      required: [authorName, day, storyCount, illustrationCount, storyLimit, illustrationLimit, storiesRemaining, illustrationsRemaining]

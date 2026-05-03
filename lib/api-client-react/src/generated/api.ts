@@ -24,6 +24,7 @@ import type {
   AdminStoryRow,
   AdminUpdateStoryBody,
   AuthorProfile,
+  AuthorSearchHit,
   CoAuthorList,
   CoAuthorMutationBody,
   CoAuthorRemoveBody,
@@ -35,9 +36,11 @@ import type {
   GenerateIllustrationBody,
   GenerateStoryBody,
   GetAuthorFollowParams,
+  GetMyUsageParams,
   GetPublicFeedParams,
   GetStoryAudioParams,
   GetStoryLikeParams,
+  GetStoryRepostParams,
   GetUnreadNotificationCountParams,
   HealthStatus,
   Illustration,
@@ -49,6 +52,11 @@ import type {
   RegenerateIllustrationBody,
   RegenerateSectionBody,
   RegenerateSectionResponse,
+  ReorderIllustrationsBody,
+  RepostBody,
+  RepostFeedEntry,
+  RepostInfo,
+  SearchAuthorsParams,
   Story,
   StoryComment,
   StoryLikeInfo,
@@ -57,7 +65,9 @@ import type {
   UnfollowAuthorParams,
   UnlikeStoryParams,
   UnreadCount,
+  UnrepostStoryParams,
   UpdateStoryBody,
+  UsageInfo,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -3667,3 +3677,662 @@ export const useMarkNotificationsRead = <
 > => {
   return useMutation(getMarkNotificationsReadMutationOptions(options));
 };
+
+/**
+ * @summary Search authors by name (prefix/substring match)
+ */
+export const getSearchAuthorsUrl = (params: SearchAuthorsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/authors/search?${stringifiedParams}`
+    : `/api/authors/search`;
+};
+
+export const searchAuthors = async (
+  params: SearchAuthorsParams,
+  options?: RequestInit,
+): Promise<AuthorSearchHit[]> => {
+  return customFetch<AuthorSearchHit[]>(getSearchAuthorsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchAuthorsQueryKey = (params?: SearchAuthorsParams) => {
+  return [`/api/authors/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchAuthorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchAuthors>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchAuthorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchAuthors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchAuthorsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchAuthors>>> = ({
+    signal,
+  }) => searchAuthors(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchAuthors>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchAuthorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchAuthors>>
+>;
+export type SearchAuthorsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search authors by name (prefix/substring match)
+ */
+
+export function useSearchAuthors<
+  TData = Awaited<ReturnType<typeof searchAuthors>>,
+  TError = ErrorType<unknown>,
+>(
+  params: SearchAuthorsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchAuthors>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchAuthorsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get repost count for a story and whether the requester reposted
+ */
+export const getGetStoryRepostUrl = (
+  id: number,
+  params?: GetStoryRepostParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/repost?${stringifiedParams}`
+    : `/api/stories/${id}/repost`;
+};
+
+export const getStoryRepost = async (
+  id: number,
+  params?: GetStoryRepostParams,
+  options?: RequestInit,
+): Promise<RepostInfo> => {
+  return customFetch<RepostInfo>(getGetStoryRepostUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryRepostQueryKey = (
+  id: number,
+  params?: GetStoryRepostParams,
+) => {
+  return [`/api/stories/${id}/repost`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetStoryRepostQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryRepost>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetStoryRepostParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryRepost>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStoryRepostQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoryRepost>>> = ({
+    signal,
+  }) => getStoryRepost(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryRepost>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryRepostQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryRepost>>
+>;
+export type GetStoryRepostQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get repost count for a story and whether the requester reposted
+ */
+
+export function useGetStoryRepost<
+  TData = Awaited<ReturnType<typeof getStoryRepost>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  params?: GetStoryRepostParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryRepost>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryRepostQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Repost a story
+ */
+export const getRepostStoryUrl = (id: number) => {
+  return `/api/stories/${id}/repost`;
+};
+
+export const repostStory = async (
+  id: number,
+  repostBody: RepostBody,
+  options?: RequestInit,
+): Promise<RepostInfo> => {
+  return customFetch<RepostInfo>(getRepostStoryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(repostBody),
+  });
+};
+
+export const getRepostStoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof repostStory>>,
+    TError,
+    { id: number; data: BodyType<RepostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof repostStory>>,
+  TError,
+  { id: number; data: BodyType<RepostBody> },
+  TContext
+> => {
+  const mutationKey = ["repostStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof repostStory>>,
+    { id: number; data: BodyType<RepostBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return repostStory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RepostStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof repostStory>>
+>;
+export type RepostStoryMutationBody = BodyType<RepostBody>;
+export type RepostStoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Repost a story
+ */
+export const useRepostStory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof repostStory>>,
+    TError,
+    { id: number; data: BodyType<RepostBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof repostStory>>,
+  TError,
+  { id: number; data: BodyType<RepostBody> },
+  TContext
+> => {
+  return useMutation(getRepostStoryMutationOptions(options));
+};
+
+/**
+ * @summary Remove a repost
+ */
+export const getUnrepostStoryUrl = (
+  id: number,
+  params: UnrepostStoryParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/repost?${stringifiedParams}`
+    : `/api/stories/${id}/repost`;
+};
+
+export const unrepostStory = async (
+  id: number,
+  params: UnrepostStoryParams,
+  options?: RequestInit,
+): Promise<RepostInfo> => {
+  return customFetch<RepostInfo>(getUnrepostStoryUrl(id, params), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getUnrepostStoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unrepostStory>>,
+    TError,
+    { id: number; params: UnrepostStoryParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unrepostStory>>,
+  TError,
+  { id: number; params: UnrepostStoryParams },
+  TContext
+> => {
+  const mutationKey = ["unrepostStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unrepostStory>>,
+    { id: number; params: UnrepostStoryParams }
+  > = (props) => {
+    const { id, params } = props ?? {};
+
+    return unrepostStory(id, params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnrepostStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unrepostStory>>
+>;
+
+export type UnrepostStoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a repost
+ */
+export const useUnrepostStory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unrepostStory>>,
+    TError,
+    { id: number; params: UnrepostStoryParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unrepostStory>>,
+  TError,
+  { id: number; params: UnrepostStoryParams },
+  TContext
+> => {
+  return useMutation(getUnrepostStoryMutationOptions(options));
+};
+
+/**
+ * @summary List stories reposted by an author (with optional note)
+ */
+export const getListAuthorRepostsUrl = (name: string) => {
+  return `/api/authors/${name}/reposts`;
+};
+
+export const listAuthorReposts = async (
+  name: string,
+  options?: RequestInit,
+): Promise<RepostFeedEntry[]> => {
+  return customFetch<RepostFeedEntry[]>(getListAuthorRepostsUrl(name), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAuthorRepostsQueryKey = (name: string) => {
+  return [`/api/authors/${name}/reposts`] as const;
+};
+
+export const getListAuthorRepostsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAuthorReposts>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAuthorReposts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAuthorRepostsQueryKey(name);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAuthorReposts>>
+  > = ({ signal }) => listAuthorReposts(name, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!name,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAuthorReposts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAuthorRepostsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAuthorReposts>>
+>;
+export type ListAuthorRepostsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List stories reposted by an author (with optional note)
+ */
+
+export function useListAuthorReposts<
+  TData = Awaited<ReturnType<typeof listAuthorReposts>>,
+  TError = ErrorType<unknown>,
+>(
+  name: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAuthorReposts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAuthorRepostsQueryOptions(name, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Reorder a story's illustrations by setting their sectionIndex order
+ */
+export const getReorderIllustrationsUrl = (id: number) => {
+  return `/api/stories/${id}/illustrations/order`;
+};
+
+export const reorderIllustrations = async (
+  id: number,
+  reorderIllustrationsBody: ReorderIllustrationsBody,
+  options?: RequestInit,
+): Promise<Illustration[]> => {
+  return customFetch<Illustration[]>(getReorderIllustrationsUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(reorderIllustrationsBody),
+  });
+};
+
+export const getReorderIllustrationsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderIllustrations>>,
+    TError,
+    { id: number; data: BodyType<ReorderIllustrationsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reorderIllustrations>>,
+  TError,
+  { id: number; data: BodyType<ReorderIllustrationsBody> },
+  TContext
+> => {
+  const mutationKey = ["reorderIllustrations"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reorderIllustrations>>,
+    { id: number; data: BodyType<ReorderIllustrationsBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reorderIllustrations(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReorderIllustrationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reorderIllustrations>>
+>;
+export type ReorderIllustrationsMutationBody =
+  BodyType<ReorderIllustrationsBody>;
+export type ReorderIllustrationsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reorder a story's illustrations by setting their sectionIndex order
+ */
+export const useReorderIllustrations = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reorderIllustrations>>,
+    TError,
+    { id: number; data: BodyType<ReorderIllustrationsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reorderIllustrations>>,
+  TError,
+  { id: number; data: BodyType<ReorderIllustrationsBody> },
+  TContext
+> => {
+  return useMutation(getReorderIllustrationsMutationOptions(options));
+};
+
+/**
+ * @summary Get today's usage counters and remaining free-tier quota
+ */
+export const getGetMyUsageUrl = (params: GetMyUsageParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/usage/me?${stringifiedParams}`
+    : `/api/usage/me`;
+};
+
+export const getMyUsage = async (
+  params: GetMyUsageParams,
+  options?: RequestInit,
+): Promise<UsageInfo> => {
+  return customFetch<UsageInfo>(getGetMyUsageUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyUsageQueryKey = (params?: GetMyUsageParams) => {
+  return [`/api/usage/me`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetMyUsageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyUsage>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetMyUsageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyUsage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyUsageQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyUsage>>> = ({
+    signal,
+  }) => getMyUsage(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyUsage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyUsageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyUsage>>
+>;
+export type GetMyUsageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get today's usage counters and remaining free-tier quota
+ */
+
+export function useGetMyUsage<
+  TData = Awaited<ReturnType<typeof getMyUsage>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetMyUsageParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMyUsage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyUsageQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

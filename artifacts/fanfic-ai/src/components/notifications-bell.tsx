@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -16,12 +16,15 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, MessageCircle, UserPlus, Sparkles } from "lucide-react";
+import { Bell, MessageCircle, UserPlus, Heart, Repeat2, BookPlus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function iconForType(type: string) {
   if (type === "comment") return MessageCircle;
   if (type === "follow") return UserPlus;
+  if (type === "like") return Heart;
+  if (type === "repost") return Repeat2;
+  if (type === "co_author_chapter") return BookPlus;
   return Sparkles;
 }
 
@@ -30,15 +33,12 @@ function summarize(n: {
   actorName: string;
   payload?: Record<string, unknown> | null;
 }) {
-  if (n.type === "comment") {
-    const title = (n.payload?.storyTitle as string | undefined) ?? "your story";
-    return `${n.actorName} commented on “${title}”`;
-  }
+  const title = (n.payload?.storyTitle as string | undefined) ?? "your story";
+  if (n.type === "comment") return `${n.actorName} commented on “${title}”`;
   if (n.type === "follow") return `${n.actorName} started following you`;
-  if (n.type === "co_author_chapter") {
-    const title = (n.payload?.storyTitle as string | undefined) ?? "your story";
-    return `${n.actorName} added a chapter to “${title}”`;
-  }
+  if (n.type === "like") return `${n.actorName} liked “${title}”`;
+  if (n.type === "repost") return `${n.actorName} reposted “${title}”`;
+  if (n.type === "co_author_chapter") return `${n.actorName} added a chapter to “${title}”`;
   return `${n.actorName}: ${n.type}`;
 }
 
@@ -61,6 +61,25 @@ export function NotificationsBell() {
     { recipientName: recipient, limit: 30 },
     { query: { enabled: enabled && open, queryKey: listKey } },
   );
+
+  // Live updates over Server-Sent Events: any nudge invalidates unread/list caches.
+  useEffect(() => {
+    if (!enabled) return;
+    const url = `/api/notifications/stream?recipientName=${encodeURIComponent(recipient)}`;
+    const es = new EventSource(url);
+    const refresh = () => {
+      queryClient.invalidateQueries({ queryKey: unreadKey });
+      queryClient.invalidateQueries({ queryKey: listKey });
+    };
+    es.addEventListener("ping", refresh);
+    es.onerror = () => {
+      // browser auto-reconnects; nothing to do.
+    };
+    return () => {
+      es.removeEventListener("ping", refresh);
+      es.close();
+    };
+  }, [enabled, recipient, queryClient, unreadKey, listKey]);
 
   const markRead = useMarkNotificationsRead({
     mutation: {

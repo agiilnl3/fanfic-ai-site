@@ -50,7 +50,11 @@ import {
   AddStoryCommentBody,
   DeleteStoryCommentParams,
   DeleteStoryCommentQueryParams,
+  ReorderIllustrationsParams,
+  ReorderIllustrationsBody,
 } from "@workspace/api-zod";
+import { checkAndBumpStory, checkAndBumpIllustration } from "../lib/usage";
+import { notifyRecipient } from "../lib/notification-bus";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
 import { uploadIllustrationBuffer } from "../lib/uploadIllustration";
@@ -217,6 +221,16 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
 
   const { genre, artStyle, lengthSetting, seedPrompt, authorName, generateIllustrations, model } =
     parsed.data;
+
+  const quota = await checkAndBumpStory(authorName);
+  if (!quota.ok) {
+    res.status(429).json({
+      error: "Daily story quota reached",
+      remaining: quota.remaining,
+      limit: quota.limit,
+    });
+    return;
+  }
 
   req.log.info({ genre, artStyle, lengthSetting, model }, "Generating story with AI");
 
@@ -515,6 +529,16 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
     return;
   }
 
+  const quota = await checkAndBumpIllustration(story.authorName);
+  if (!quota.ok) {
+    res.status(429).json({
+      error: "Daily illustration quota reached",
+      remaining: quota.remaining,
+      limit: quota.limit,
+    });
+    return;
+  }
+
   const prompt = buildIllustrationPrompt(
     parsed.data.sectionText,
     story.genre,
@@ -539,6 +563,69 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
     .returning();
 
   res.status(201).json(illustration);
+});
+
+router.put("/stories/:id/illustrations/order", async (req, res): Promise<void> => {
+  const params = ReorderIllustrationsParams.safeParse(req.params);
+  const body = ReorderIllustrationsBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid parameters" });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+  if (!canEditStory(story, body.data.requesterAuthorName)) {
+    res.status(403).json({ error: "Only the author or a co-author may reorder" });
+    return;
+  }
+  const ids = body.data.order;
+  if (ids.length === 0) {
+    res.json([]);
+    return;
+  }
+  const existing = await db
+    .select({ id: illustrationsTable.id })
+    .from(illustrationsTable)
+    .where(
+      and(
+        eq(illustrationsTable.storyId, story.id),
+        inArray(illustrationsTable.id, ids),
+      ),
+    );
+  if (existing.length !== ids.length) {
+    res.status(400).json({ error: "Order list does not match story illustrations" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    // Two-phase update to dodge unique constraints if any are added later.
+    for (let i = 0; i < ids.length; i++) {
+      await tx
+        .update(illustrationsTable)
+        .set({ sectionIndex: -1 - i })
+        .where(eq(illustrationsTable.id, ids[i]));
+    }
+    for (let i = 0; i < ids.length; i++) {
+      await tx
+        .update(illustrationsTable)
+        .set({ sectionIndex: i })
+        .where(eq(illustrationsTable.id, ids[i]));
+    }
+  });
+
+  const updated = await db
+    .select()
+    .from(illustrationsTable)
+    .where(eq(illustrationsTable.storyId, story.id))
+    .orderBy(illustrationsTable.sectionIndex);
+  res.json(updated);
 });
 
 router.delete(
@@ -817,6 +904,16 @@ router.post(
       return;
     }
 
+    const quota = await checkAndBumpStory(body.data.authorName);
+    if (!quota.ok) {
+      res.status(429).json({
+        error: "Daily story quota reached",
+        remaining: quota.remaining,
+        limit: quota.limit,
+      });
+      return;
+    }
+
     const previousChapter = (story.fullText ?? "").slice(-3000);
     const userPrompt = `You are continuing a ${story.genre} story titled "${story.title}".
 Previously: ${previousChapter}
@@ -860,6 +957,22 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
       .set({ fullText: appended, updatedAt: new Date() })
       .where(eq(storiesTable.id, story.id))
       .returning();
+
+    // Notify the primary author if a co-author wrote this chapter
+    if (story.authorName && story.authorName !== body.data.authorName) {
+      try {
+        await db.insert(notificationsTable).values({
+          recipientName: story.authorName,
+          type: "co_author_chapter",
+          actorName: body.data.authorName,
+          storyId: story.id,
+          payload: { storyTitle: story.title, chapterTitle },
+        });
+        notifyRecipient(story.authorName);
+      } catch (err) {
+        logger.warn({ err }, "failed to insert co-author chapter notification");
+      }
+    }
 
     if (body.data.generateIllustration !== false && newSection) {
       try {
@@ -1106,10 +1219,33 @@ router.post("/stories/:id/like", writeLimiter, async (req, res): Promise<void> =
     return;
   }
 
-  await db
+  const insertedLikes = await db
     .insert(storyLikesTable)
     .values({ storyId: params.data.id, authorName })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: storyLikesTable.id });
+
+  if (insertedLikes.length > 0) {
+    const [storyMeta] = await db
+      .select({ authorName: storiesTable.authorName, title: storiesTable.title })
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (storyMeta && storyMeta.authorName && storyMeta.authorName !== authorName) {
+      try {
+        await db.insert(notificationsTable).values({
+          recipientName: storyMeta.authorName,
+          type: "like",
+          actorName: authorName,
+          storyId: params.data.id,
+          payload: { storyTitle: storyMeta.title },
+        });
+        notifyRecipient(storyMeta.authorName);
+      } catch (err) {
+        logger.warn({ err }, "failed to insert like notification");
+      }
+    }
+  }
 
   const info = await getLikeInfo(params.data.id, authorName);
   res.json(info);
@@ -1305,6 +1441,7 @@ router.post(
           storyId: story.id,
           payload: { storyTitle: story.title, preview: text.slice(0, 140) },
         });
+        notifyRecipient(story.authorName);
       } catch (err) {
         logger.warn({ err }, "failed to insert comment notification");
       }

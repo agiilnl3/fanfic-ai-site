@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { useAuthor } from "@/hooks/use-author";
 import { generateStory, generateIllustration } from "@workspace/api-client-react";
+import { UsageMeter } from "@/components/usage-meter";
 import type { Story, Illustration } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -330,6 +331,7 @@ export default function CreateStory() {
                     placeholder="Jane Austen"
                     className="bg-background/50"
                   />
+                  {authorName.trim() && <UsageMeter authorName={authorName.trim()} />}
                 </div>
 
                 <div className="space-y-2">

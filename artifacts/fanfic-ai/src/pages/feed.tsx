@@ -3,6 +3,7 @@ import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { useGetPublicFeed, type Story } from "@workspace/api-client-react";
 import { StoryCard } from "@/components/story-card";
+import { AuthorSearch } from "@/components/author-search";
 import { Input } from "@/components/ui/input";
 import { Search, BookOpen, Users, Globe } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -170,6 +171,8 @@ export default function Feed() {
             </SelectContent>
           </Select>
         </div>
+
+        <AuthorSearch query={debouncedSearch} />
 
         {tab === "following" && !authorName?.trim() ? (
           <div className="text-center py-32 border border-dashed border-border/50 rounded-2xl bg-card/10">

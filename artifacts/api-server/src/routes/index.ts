@@ -6,6 +6,9 @@ import storageRouter from "./storage";
 import adminRouter from "./admin";
 import authorsRouter from "./authors";
 import notificationsRouter from "./notifications";
+import repostsRouter from "./reposts";
+import usageRouter from "./usage";
+import notificationsStreamRouter from "./notifications-stream";
 
 const router: IRouter = Router();
 
@@ -16,5 +19,8 @@ router.use(storageRouter);
 router.use(adminRouter);
 router.use(authorsRouter);
 router.use(notificationsRouter);
+router.use(notificationsStreamRouter);
+router.use(repostsRouter);
+router.use(usageRouter);
 
 export default router;
