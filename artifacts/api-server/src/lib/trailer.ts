@@ -19,7 +19,9 @@ export type TrailerStatus =
 const MIN_TRAILER_SECONDS = 20;
 const MAX_TRAILER_SECONDS = 30;
 const MIN_PER_IMAGE = 3;
-const MAX_PER_IMAGE = 6;
+// Allow up to ~7s per image so a story with the minimum 3 illustrations
+// can still reach the 20s floor (3 * 7 = 21s).
+const MAX_PER_IMAGE = 8;
 const MIN_ILLUSTRATIONS = 3;
 const MAX_ILLUSTRATIONS = 8;
 const FPS = 30;
