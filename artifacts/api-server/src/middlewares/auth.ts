@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { eq, sql } from "drizzle-orm";
-import { db, usersTable, type User } from "@workspace/db";
+import { eq, and, isNull, sql } from "drizzle-orm";
+import { db, usersTable, storiesTable, seriesTable, type User } from "@workspace/db";
 
 const userCache = new Map<string, { user: User; expiresAt: number }>();
 const CACHE_TTL_MS = 60_000;
@@ -14,6 +14,21 @@ function cleanHandle(s: string): string {
     .slice(0, 30) || `user${Date.now().toString(36)}`;
 }
 
+async function handleHasOrphanLegacyContent(handle: string): Promise<boolean> {
+  const [s] = await db
+    .select({ id: storiesTable.id })
+    .from(storiesTable)
+    .where(and(eq(storiesTable.authorName, handle), isNull(storiesTable.userId)))
+    .limit(1);
+  if (s) return true;
+  const [se] = await db
+    .select({ id: seriesTable.id })
+    .from(seriesTable)
+    .where(and(eq(seriesTable.authorName, handle), isNull(seriesTable.userId)))
+    .limit(1);
+  return !!se;
+}
+
 async function pickUniqueHandle(base: string): Promise<string> {
   let candidate = base;
   for (let i = 0; i < 8; i++) {
@@ -22,7 +37,13 @@ async function pickUniqueHandle(base: string): Promise<string> {
       .from(usersTable)
       .where(eq(usersTable.handle, candidate))
       .limit(1);
-    if (!existing) return candidate;
+    // Refuse any handle that has orphan legacy content attributed to it
+    // (user_id IS NULL), so a new sign-in cannot silently inherit
+    // edit/delete authority over pre-Clerk guest content via the legacy
+    // handle fallback in canEditStory/canEditSeries.
+    if (!existing && !(await handleHasOrphanLegacyContent(candidate))) {
+      return candidate;
+    }
     candidate = `${base}${Math.floor(Math.random() * 9000 + 1000)}`;
   }
   return `${base}${Date.now().toString(36)}`;

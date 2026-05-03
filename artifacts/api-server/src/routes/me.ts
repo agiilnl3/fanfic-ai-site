@@ -89,62 +89,55 @@ router.put("/me", requireAuth, async (req, res): Promise<void> => {
   if (parsed.data.avatarUrl !== undefined) {
     patch.avatarUrl = parsed.data.avatarUrl === "" ? null : parsed.data.avatarUrl;
   }
-  const [updated] = await db
-    .update(usersTable)
-    .set(patch)
-    .where(eq(usersTable.id, me.id))
-    .returning();
-
-  // If the handle changed, propagate the new handle to all denormalized
-  // author_name columns owned by this user_id so that profile/library/like/
-  // repost/follow lookups keyed on author_name still find the user's rows.
-  if (patch.handle) {
-    const oldHandle = me.handle;
-    const h = updated.handle;
-    await db
-      .update(storiesTable)
-      .set({ authorName: h })
-      .where(eq(storiesTable.userId, me.id));
-    await db
-      .update(seriesTable)
-      .set({ authorName: h })
-      .where(eq(seriesTable.userId, me.id));
-    await db
-      .update(storyCommentsTable)
-      .set({ authorName: h })
-      .where(eq(storyCommentsTable.userId, me.id));
-    await db
-      .update(storyLikesTable)
-      .set({ authorName: h })
-      .where(eq(storyLikesTable.userId, me.id));
-    await db
-      .update(storyRepostsTable)
-      .set({ reposterName: h })
-      .where(eq(storyRepostsTable.userId, me.id));
-    await db
-      .update(authorFollowsTable)
-      .set({ followerName: h })
-      .where(eq(authorFollowsTable.followerUserId, me.id));
-    await db
-      .update(bookmarksTable)
-      .set({ authorName: h })
-      .where(eq(bookmarksTable.userId, me.id));
-    await db
-      .update(readingProgressTable)
-      .set({ authorName: h })
-      .where(eq(readingProgressTable.userId, me.id));
-    // Move notification prefs row from old handle to new handle if present.
-    // (Old row is keyed by author_name PK, so an UPDATE moves it.)
-    if (oldHandle !== h) {
-      await db
-        .delete(notificationPrefsTable)
-        .where(eq(notificationPrefsTable.authorName, h));
-      await db
-        .update(notificationPrefsTable)
+  // Run the user update plus all denormalized handle renames in a single
+  // transaction so account-keyed lookups stay consistent with users.handle.
+  const updated = await db.transaction(async (tx) => {
+    const [u] = await tx
+      .update(usersTable)
+      .set(patch)
+      .where(eq(usersTable.id, me.id))
+      .returning();
+    if (patch.handle) {
+      const oldHandle = me.handle;
+      const h = u.handle;
+      await tx.update(storiesTable).set({ authorName: h }).where(eq(storiesTable.userId, me.id));
+      await tx.update(seriesTable).set({ authorName: h }).where(eq(seriesTable.userId, me.id));
+      await tx
+        .update(storyCommentsTable)
         .set({ authorName: h })
-        .where(eq(notificationPrefsTable.authorName, oldHandle));
+        .where(eq(storyCommentsTable.userId, me.id));
+      await tx
+        .update(storyLikesTable)
+        .set({ authorName: h })
+        .where(eq(storyLikesTable.userId, me.id));
+      await tx
+        .update(storyRepostsTable)
+        .set({ reposterName: h })
+        .where(eq(storyRepostsTable.userId, me.id));
+      await tx
+        .update(authorFollowsTable)
+        .set({ followerName: h })
+        .where(eq(authorFollowsTable.followerUserId, me.id));
+      await tx
+        .update(bookmarksTable)
+        .set({ authorName: h })
+        .where(eq(bookmarksTable.userId, me.id));
+      await tx
+        .update(readingProgressTable)
+        .set({ authorName: h })
+        .where(eq(readingProgressTable.userId, me.id));
+      if (oldHandle !== h) {
+        await tx
+          .delete(notificationPrefsTable)
+          .where(eq(notificationPrefsTable.authorName, h));
+        await tx
+          .update(notificationPrefsTable)
+          .set({ authorName: h })
+          .where(eq(notificationPrefsTable.authorName, oldHandle));
+      }
     }
-  }
+    return u;
+  });
 
   invalidateUserCache(me.clerkUserId);
   res.json({
