@@ -126,32 +126,78 @@ export function requireAuth(
 }
 
 /**
- * Server-side authorization shim: when the user is signed in, force the
- * authoritative handle into common request fields that legacy routes read
- * (`body.authorName`, `body.followerName`, `body.requesterAuthorName`,
- * `body.reposterName`, `query.authorName`, `query.followerName`).
- *
- * This means the client is no longer trusted to claim an identity — the
- * Clerk session is the source of truth — without rewriting every route.
+ * Routes that are intentionally public (no auth required for writes).
+ * Everything else under /api/* requires an authenticated Clerk session
+ * for any non-GET request.
+ */
+const PUBLIC_WRITE_PATTERNS: RegExp[] = [
+  /^\/admin\/login\b/, // legacy admin token login
+  /^\/stories\/\d+\/view\b/, // anonymous view counter
+  /^\/reports\b/, // unauthenticated reports allowed
+];
+
+const IDENTITY_BODY_KEYS = [
+  "authorName",
+  "followerName",
+  "requesterAuthorName",
+  "reposterName",
+  "recipientName",
+  "actorName",
+  "ownerName",
+  "userName",
+] as const;
+
+const IDENTITY_QUERY_KEYS = [
+  "authorName",
+  "followerName",
+  "requesterAuthorName",
+  "reposterName",
+  "recipientName",
+  "ownerName",
+] as const;
+
+function isPublicWritePath(path: string): boolean {
+  return PUBLIC_WRITE_PATTERNS.some((re) => re.test(path));
+}
+
+/**
+ * Server-side authorization shim:
+ *  - Rejects all non-GET requests under /api/* without a Clerk session
+ *    (with a small public allowlist).
+ *  - When signed in, forces the authoritative handle into common request
+ *    body and query fields that legacy routes read so the client cannot
+ *    impersonate another user without rewriting every route.
  */
 export function overrideClientIdentity(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void {
+  const isWrite = req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
+
+  if (isWrite && !req.user && !isPublicWritePath(req.path)) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+
   if (!req.user) return next();
   const handle = req.user.handle;
+
   const body = req.body as Record<string, unknown> | undefined;
   if (body && typeof body === "object" && !Array.isArray(body)) {
-    if ("authorName" in body) body.authorName = handle;
-    if ("followerName" in body) body.followerName = handle;
-    if ("requesterAuthorName" in body) body.requesterAuthorName = handle;
-    if ("reposterName" in body) body.reposterName = handle;
-    if ("recipientName" in body && req.method !== "GET") {
-      // recipient on notification-mark-read endpoints is the signed-in user
-      body.recipientName = handle;
+    for (const key of IDENTITY_BODY_KEYS) {
+      if (key in body) body[key] = handle;
     }
   }
+
+  // Express's req.query is a getter on Express 5; mutate in place.
+  const query = req.query as Record<string, unknown> | undefined;
+  if (query && typeof query === "object") {
+    for (const key of IDENTITY_QUERY_KEYS) {
+      if (key in query) query[key] = handle;
+    }
+  }
+
   next();
 }
 

@@ -30,12 +30,14 @@ function ProfileEditor() {
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   useEffect(() => {
     if (me) {
       setHandle(me.handle ?? "");
       setDisplayName(me.displayName ?? "");
       setBio(me.bio ?? "");
+      setAvatarUrl(me.avatarUrl ?? "");
     }
   }, [me]);
 
@@ -46,7 +48,7 @@ function ProfileEditor() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ handle, displayName, bio }),
+        body: JSON.stringify({ handle, displayName, bio, avatarUrl }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -100,6 +102,16 @@ function ProfileEditor() {
             placeholder={t("settings.displayNamePlaceholder", "Your pen name") ?? ""}
             maxLength={80}
             data-testid="input-displayname"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="profile-avatar">{t("settings.avatarUrl", "Avatar URL")}</Label>
+          <Input
+            id="profile-avatar"
+            value={avatarUrl}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            placeholder="https://..."
+            data-testid="input-avatar"
           />
         </div>
         <div className="space-y-2">

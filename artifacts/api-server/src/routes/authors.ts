@@ -7,6 +7,7 @@ import {
   storyLikesTable,
   storyCommentsTable,
   notificationsTable,
+  usersTable,
 } from "@workspace/db";
 import {
   GetAuthorProfileParams,
@@ -111,6 +112,12 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
   }
   const name = params.data.name;
 
+  const [profile] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.handle, name))
+    .limit(1);
+
   const stories = await db
     .select()
     .from(storiesTable)
@@ -127,12 +134,17 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
       .select({ value: count() })
       .from(authorFollowsTable)
       .where(eq(authorFollowsTable.followerName, name));
-    if ((followerRow?.value ?? 0) === 0 && (followingRow?.value ?? 0) === 0) {
+    if (!profile && (followerRow?.value ?? 0) === 0 && (followingRow?.value ?? 0) === 0) {
       res.status(404).json({ error: "Author not found" });
       return;
     }
     res.json({
       authorName: name,
+      handle: profile?.handle ?? name,
+      displayName: profile?.displayName ?? name,
+      bio: profile?.bio ?? null,
+      avatarUrl: profile?.avatarUrl ?? null,
+      joinedAt: profile?.createdAt ? profile.createdAt.toISOString() : null,
       storyCount: 0,
       publishedCount: 0,
       followerCount: followerRow?.value ?? 0,
@@ -184,6 +196,11 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
 
   res.json({
     authorName: name,
+    handle: profile?.handle ?? name,
+    displayName: profile?.displayName ?? name,
+    bio: profile?.bio ?? null,
+    avatarUrl: profile?.avatarUrl ?? null,
+    joinedAt: profile?.createdAt ? profile.createdAt.toISOString() : null,
     storyCount: stories.length,
     publishedCount: published.length,
     followerCount: followerRow?.value ?? 0,

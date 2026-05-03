@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, index, integer } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -16,6 +16,8 @@ export const storiesTable = pgTable(
     summary: text("summary"),
     characters: text("characters"),
     status: text("status").notNull().default("draft"),
+    // Clerk-backed owner. Nullable for legacy rows created pre-Clerk.
+    userId: integer("user_id"),
     authorName: text("author_name").notNull(),
     coAuthors: text("co_authors")
       .array()

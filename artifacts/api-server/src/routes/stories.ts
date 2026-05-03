@@ -213,6 +213,7 @@ router.post("/stories", writeLimiter, async (req, res): Promise<void> => {
     .insert(storiesTable)
     .values({
       ...parsed.data,
+      userId: req.user?.id ?? null,
       status: "draft",
     })
     .returning();
@@ -262,6 +263,7 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
       summary: generated.summary,
       characters: generated.characters,
       authorName,
+      userId: req.user?.id ?? null,
       status: "draft",
     })
     .returning();
