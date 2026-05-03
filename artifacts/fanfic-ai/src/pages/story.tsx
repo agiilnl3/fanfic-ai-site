@@ -132,9 +132,11 @@ export default function StoryReading() {
   const [trailerPolling, setTrailerPolling] = useState(false);
   const generateTrailerMutation = useGenerateStoryTrailer();
   const trailerQuery = useGetStoryTrailer(storyId, {
+    // For non-authors, only fetch once on mount to know whether a ready
+    // trailer exists; authors poll while rendering.
     query: {
       queryKey: getGetStoryTrailerQueryKey(storyId),
-      enabled: trailerOpen,
+      enabled: true,
       refetchInterval: trailerPolling ? 4000 : false,
     },
   });
@@ -1467,30 +1469,41 @@ export default function StoryReading() {
                     <FileDown className="w-4 h-4 mr-2" /> {t("story.downloadPdf")}
                   </a>
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleGenerateTrailer}
-                  disabled={
-                    generateTrailerMutation.isPending ||
-                    trailerQuery.data?.status === "rendering" ||
-                    trailerQuery.data?.status === "queued"
-                  }
-                  data-testid="button-trailer"
-                >
-                  {trailerQuery.data?.status === "rendering" ||
-                  trailerQuery.data?.status === "queued" ||
-                  generateTrailerMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
+                {isAuthor ? (
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerateTrailer}
+                    disabled={
+                      generateTrailerMutation.isPending ||
+                      trailerQuery.data?.status === "rendering" ||
+                      trailerQuery.data?.status === "queued"
+                    }
+                    data-testid="button-trailer"
+                  >
+                    {trailerQuery.data?.status === "rendering" ||
+                    trailerQuery.data?.status === "queued" ||
+                    generateTrailerMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Film className="w-4 h-4 mr-2" />
+                    )}
+                    {trailerQuery.data?.status === "ready"
+                      ? t("story.viewTrailer", "View trailer")
+                      : trailerQuery.data?.status === "rendering" ||
+                          trailerQuery.data?.status === "queued"
+                        ? t("story.renderingTrailer", "Rendering trailer…")
+                        : t("story.generateTrailer", "Generate trailer")}
+                  </Button>
+                ) : trailerQuery.data?.status === "ready" && trailerQuery.data.url ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setTrailerOpen(true)}
+                    data-testid="button-trailer"
+                  >
                     <Film className="w-4 h-4 mr-2" />
-                  )}
-                  {trailerQuery.data?.status === "ready"
-                    ? t("story.viewTrailer", "View trailer")
-                    : trailerQuery.data?.status === "rendering" ||
-                        trailerQuery.data?.status === "queued"
-                      ? t("story.renderingTrailer", "Rendering trailer…")
-                      : t("story.generateTrailer", "Generate trailer")}
-                </Button>
+                    {t("story.viewTrailer", "View trailer")}
+                  </Button>
+                ) : null}
               </div>
               {trailerOpen && (
                 <div className="mt-8 w-full max-w-2xl" data-testid="trailer-panel">

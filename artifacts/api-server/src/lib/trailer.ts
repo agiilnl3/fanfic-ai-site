@@ -11,9 +11,41 @@ import { logger } from "./logger";
 
 export type TrailerStatus = "queued" | "rendering" | "ready" | "failed";
 
-const SECONDS_PER_IMAGE = 4;
+const MIN_TRAILER_SECONDS = 20;
+const MAX_TRAILER_SECONDS = 30;
+const MIN_PER_IMAGE = 3;
+const MAX_PER_IMAGE = 6;
+const MIN_ILLUSTRATIONS = 3;
+const MAX_ILLUSTRATIONS = 8;
 const FPS = 30;
 const ZOOM_END = 1.18;
+
+function planTrailerTiming(picks: number): { perImage: number; total: number } {
+  let perImage = Math.max(
+    MIN_PER_IMAGE,
+    Math.min(MAX_PER_IMAGE, Math.round(MIN_TRAILER_SECONDS / picks)),
+  );
+  let total = perImage * picks;
+  if (total < MIN_TRAILER_SECONDS) {
+    perImage = Math.min(MAX_PER_IMAGE, Math.ceil(MIN_TRAILER_SECONDS / picks));
+    total = perImage * picks;
+  }
+  if (total > MAX_TRAILER_SECONDS) {
+    perImage = Math.max(MIN_PER_IMAGE, Math.floor(MAX_TRAILER_SECONDS / picks));
+    total = perImage * picks;
+  }
+  return { perImage, total };
+}
+
+function selectIllustrations<T>(all: T[]): T[] {
+  if (all.length <= MAX_ILLUSTRATIONS) return all;
+  const step = (all.length - 1) / (MAX_ILLUSTRATIONS - 1);
+  const out: T[] = [];
+  for (let i = 0; i < MAX_ILLUSTRATIONS; i++) {
+    out.push(all[Math.round(i * step)]);
+  }
+  return out;
+}
 
 function ffmpegBin(): string {
   return process.env.FFMPEG_PATH ?? "ffmpeg";
@@ -42,10 +74,7 @@ function computeHash(parts: (string | number | null | undefined)[]): string {
 }
 
 async function fetchToFile(url: string, dest: string): Promise<void> {
-  // SSRF guard: only allow our own object-storage proxy paths
-  // (e.g. `/api/storage/uploads/<uuid>`). Refuse absolute URLs so a
-  // tampered `imageUrl` row can't trick the server into fetching
-  // arbitrary internal/private endpoints.
+  // SSRF guard: only allow local object-storage paths.
   if (!url.startsWith("/api/storage/")) {
     throw new Error(`refusing to fetch non-local image url: ${url}`);
   }
@@ -60,8 +89,6 @@ async function renderNarration(
   text: string,
   outPath: string,
 ): Promise<number> {
-  // Reuse the shared TTS cache so the trailer narration is persisted
-  // and dedup'd with /stories/:id/audio for identical input text.
   const trimmed = text.slice(0, 4000);
   const { buffer } = await synthesizeStoryNarration(trimmed, "nova");
   await writeFile(outPath, buffer);
@@ -72,10 +99,11 @@ interface RenderOptions {
   imagePaths: string[];
   audioPath: string;
   outPath: string;
+  perImageSeconds: number;
 }
 
 async function renderTrailer(opts: RenderOptions): Promise<void> {
-  const totalFrames = SECONDS_PER_IMAGE * FPS;
+  const totalFrames = opts.perImageSeconds * FPS;
   // Each image becomes a `lavfi`-like still that pans/zooms via zoompan,
   // then they're concatenated and muxed with the narration. We trim to
   // the audio length so the trailer is exactly `min(image-budget, audio)`.
@@ -97,7 +125,7 @@ async function renderTrailer(opts: RenderOptions): Promise<void> {
 
   const args: string[] = [];
   for (const p of opts.imagePaths) {
-    args.push("-loop", "1", "-t", String(SECONDS_PER_IMAGE), "-i", p);
+    args.push("-loop", "1", "-t", String(opts.perImageSeconds), "-i", p);
   }
   args.push("-i", opts.audioPath);
   args.push(
@@ -156,18 +184,33 @@ export async function runTrailerJob(storyId: number): Promise<void> {
       .from(illustrationsTable)
       .where(eq(illustrationsTable.storyId, storyId))
       .orderBy(illustrationsTable.sectionIndex);
-    const picks = illos.slice(0, 8);
-    if (picks.length < 1) {
+    if (illos.length < MIN_ILLUSTRATIONS) {
+      logger.info(
+        { storyId, illustrations: illos.length },
+        "trailer: not enough illustrations",
+      );
       await db
         .update(storiesTable)
         .set({ trailerStatus: "failed" })
         .where(eq(storiesTable.id, storyId));
       return;
     }
+    const picks = selectIllustrations(illos);
+    const timing = planTrailerTiming(picks.length);
+
+    const narrationText =
+      (story.summary && story.summary.length > 60
+        ? story.summary
+        : story.fullText.slice(0, 1200)) ?? "";
+    const narrationVoice = "nova" as const;
 
     const hash = computeHash([
-      story.fullText.length,
+      "v2",
       story.title,
+      story.fullText,
+      narrationText,
+      narrationVoice,
+      timing.perImage,
       ...picks.map((p) => `${p.id}:${p.imageUrl}`),
     ]);
 
@@ -192,20 +235,17 @@ export async function runTrailerJob(storyId: number): Promise<void> {
       imagePaths.push(p);
     }
     const audioPath = join(workDir, "narration.mp3");
-    // Use the summary if present (more "trailer-like"), otherwise a
-    // reasonable opening slice.
-    const narrationText =
-      (story.summary && story.summary.length > 60
-        ? story.summary
-        : story.fullText.slice(0, 1200)) ?? "";
     await renderNarration(narrationText, audioPath);
 
     const outPath = join(workDir, "trailer.mp4");
-    await renderTrailer({ imagePaths, audioPath, outPath });
+    await renderTrailer({
+      imagePaths,
+      audioPath,
+      outPath,
+      perImageSeconds: timing.perImage,
+    });
 
     const mp4 = await readFile(outPath);
-    // Deterministic object key keyed by storyId + content hash so
-    // identical inputs upload to the same path (idempotent).
     const url = await uploadIllustrationBuffer(mp4, "video/mp4", {
       key: `trailers/${storyId}-${hash}.mp4`,
     });
