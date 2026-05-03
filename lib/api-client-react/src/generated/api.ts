@@ -28,6 +28,7 @@ import type {
   Illustration,
   LikeBody,
   ListStoriesParams,
+  RegenerateIllustrationBody,
   RegenerateSectionBody,
   RegenerateSectionResponse,
   Story,
@@ -1164,7 +1165,7 @@ export const useDeleteIllustration = <
 };
 
 /**
- * @summary Regenerate an existing illustration using its stored prompt
+ * @summary Regenerate an existing illustration, optionally with an edited prompt
  */
 export const getRegenerateIllustrationUrl = (
   id: number,
@@ -1176,6 +1177,7 @@ export const getRegenerateIllustrationUrl = (
 export const regenerateIllustration = async (
   id: number,
   illustrationId: number,
+  regenerateIllustrationBody?: RegenerateIllustrationBody,
   options?: RequestInit,
 ): Promise<Illustration> => {
   return customFetch<Illustration>(
@@ -1183,6 +1185,8 @@ export const regenerateIllustration = async (
     {
       ...options,
       method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(regenerateIllustrationBody),
     },
   );
 };
@@ -1194,14 +1198,22 @@ export const getRegenerateIllustrationMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof regenerateIllustration>>,
     TError,
-    { id: number; illustrationId: number },
+    {
+      id: number;
+      illustrationId: number;
+      data: BodyType<RegenerateIllustrationBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof regenerateIllustration>>,
   TError,
-  { id: number; illustrationId: number },
+  {
+    id: number;
+    illustrationId: number;
+    data: BodyType<RegenerateIllustrationBody>;
+  },
   TContext
 > => {
   const mutationKey = ["regenerateIllustration"];
@@ -1215,11 +1227,15 @@ export const getRegenerateIllustrationMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof regenerateIllustration>>,
-    { id: number; illustrationId: number }
+    {
+      id: number;
+      illustrationId: number;
+      data: BodyType<RegenerateIllustrationBody>;
+    }
   > = (props) => {
-    const { id, illustrationId } = props ?? {};
+    const { id, illustrationId, data } = props ?? {};
 
-    return regenerateIllustration(id, illustrationId, requestOptions);
+    return regenerateIllustration(id, illustrationId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -1228,11 +1244,12 @@ export const getRegenerateIllustrationMutationOptions = <
 export type RegenerateIllustrationMutationResult = NonNullable<
   Awaited<ReturnType<typeof regenerateIllustration>>
 >;
-
+export type RegenerateIllustrationMutationBody =
+  BodyType<RegenerateIllustrationBody>;
 export type RegenerateIllustrationMutationError = ErrorType<void>;
 
 /**
- * @summary Regenerate an existing illustration using its stored prompt
+ * @summary Regenerate an existing illustration, optionally with an edited prompt
  */
 export const useRegenerateIllustration = <
   TError = ErrorType<void>,
@@ -1241,14 +1258,22 @@ export const useRegenerateIllustration = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof regenerateIllustration>>,
     TError,
-    { id: number; illustrationId: number },
+    {
+      id: number;
+      illustrationId: number;
+      data: BodyType<RegenerateIllustrationBody>;
+    },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof regenerateIllustration>>,
   TError,
-  { id: number; illustrationId: number },
+  {
+    id: number;
+    illustrationId: number;
+    data: BodyType<RegenerateIllustrationBody>;
+  },
   TContext
 > => {
   return useMutation(getRegenerateIllustrationMutationOptions(options));

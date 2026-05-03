@@ -16,6 +16,7 @@ import {
   GenerateIllustrationParams,
   DeleteIllustrationParams,
   RegenerateIllustrationParams,
+  RegenerateIllustrationBody,
   RegenerateStoryTextParams,
   RegenerateStorySectionParams,
   RegenerateStorySectionBody,
@@ -33,6 +34,7 @@ import {
 } from "@workspace/api-zod";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { generateImageBuffer } from "@workspace/integrations-openai-ai-server/image";
+import { uploadIllustrationBuffer } from "../lib/uploadIllustration";
 import PDFDocument from "pdfkit";
 import { logger } from "../lib/logger";
 import { buildIllustrationPrompt } from "../lib/prompt";
@@ -195,12 +197,12 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
           generated.summary,
         );
         const buffer = await generateImageBuffer(prompt, "1024x1024");
-        const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+        const imageUrl = await uploadIllustrationBuffer(buffer);
         await db.insert(illustrationsTable).values({
           storyId: story.id,
           sectionIndex: idx,
           prompt,
-          imageUrl: dataUrl,
+          imageUrl,
           caption: null,
         });
         return idx;
@@ -440,7 +442,7 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
 
   req.log.info({ storyId: story.id }, "Generating illustration");
   const buffer = await generateImageBuffer(prompt, "1024x1024");
-  const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+  const imageUrl = await uploadIllustrationBuffer(buffer);
 
   const [illustration] = await db
     .insert(illustrationsTable)
@@ -448,7 +450,7 @@ router.post("/stories/:id/illustrations", illustrationLimiter, async (req, res):
       storyId: story.id,
       sectionIndex: parsed.data.sectionIndex,
       prompt,
-      imageUrl: dataUrl,
+      imageUrl,
       caption: parsed.data.caption ?? null,
     })
     .returning();
@@ -520,19 +522,28 @@ router.post(
     }
 
     req.log.info({ illustrationId: existing.id }, "Regenerating illustration");
-    const buffer = await generateImageBuffer(existing.prompt, "1024x1024");
-    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+    const bodyParsed = RegenerateIllustrationBody.safeParse(req.body ?? {});
+    if (!bodyParsed.success) {
+      res.status(400).json({ error: bodyParsed.error.message });
+      return;
+    }
+    const promptOverride = bodyParsed.data.promptOverride;
+    const finalPrompt = typeof promptOverride === "string" && promptOverride.trim()
+      ? promptOverride.trim()
+      : existing.prompt;
+    const buffer = await generateImageBuffer(finalPrompt, "1024x1024");
+    const newImageUrl = await uploadIllustrationBuffer(buffer);
 
     const [updated] = await db
       .update(illustrationsTable)
-      .set({ imageUrl: dataUrl })
+      .set({ imageUrl: newImageUrl, prompt: finalPrompt })
       .where(eq(illustrationsTable.id, existing.id))
       .returning();
 
     if (existing.sectionIndex === 0) {
       await db
         .update(storiesTable)
-        .set({ coverImageUrl: dataUrl })
+        .set({ coverImageUrl: newImageUrl })
         .where(eq(storiesTable.id, params.data.id));
     }
 
@@ -647,7 +658,7 @@ router.post(
       story.summary,
     );
     const buffer = await generateImageBuffer(illustrationPrompt, "1024x1024");
-    const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+    const newImageUrl = await uploadIllustrationBuffer(buffer);
 
     const existingIlls = await db
       .select()
@@ -663,7 +674,7 @@ router.post(
     if (existingIlls[0]) {
       const [updated] = await db
         .update(illustrationsTable)
-        .set({ imageUrl: dataUrl, prompt: illustrationPrompt })
+        .set({ imageUrl: newImageUrl, prompt: illustrationPrompt })
         .where(eq(illustrationsTable.id, existingIlls[0].id))
         .returning();
       illustration = updated;
@@ -674,7 +685,7 @@ router.post(
           storyId: story.id,
           sectionIndex,
           prompt: illustrationPrompt,
-          imageUrl: dataUrl,
+          imageUrl: newImageUrl,
           caption: null,
         })
         .returning();
@@ -684,7 +695,7 @@ router.post(
     if (sectionIndex === 0 && illustration) {
       await db
         .update(storiesTable)
-        .set({ coverImageUrl: dataUrl })
+        .set({ coverImageUrl: newImageUrl })
         .where(eq(storiesTable.id, story.id));
     }
 
@@ -783,12 +794,12 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
           story.summary,
         );
         const buffer = await generateImageBuffer(prompt, "1024x1024");
-        const dataUrl = `data:image/png;base64,${buffer.toString("base64")}`;
+        const imageUrl = await uploadIllustrationBuffer(buffer);
         await db.insert(illustrationsTable).values({
           storyId: story.id,
           sectionIndex,
           prompt,
-          imageUrl: dataUrl,
+          imageUrl,
           caption: chapterTitle,
         });
       } catch (err) {
@@ -868,18 +879,33 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
   );
   doc.pipe(res);
 
-  function decodeImage(url: string): Buffer | null {
-    const match = url.match(/^data:image\/[^;]+;base64,(.+)$/);
-    if (!match) return null;
-    try {
-      return Buffer.from(match[1], "base64");
-    } catch {
-      return null;
+  async function decodeImage(url: string): Promise<Buffer | null> {
+    const m = url.match(/^data:image\/[^;]+;base64,(.+)$/);
+    if (m) {
+      try { return Buffer.from(m[1], "base64"); } catch { return null; }
     }
+    if (url.startsWith("/api/storage/objects/")) {
+      try {
+        const dir = process.env.PRIVATE_OBJECT_DIR;
+        if (!dir) return null;
+        const entityId = url.slice("/api/storage/objects/".length);
+        const fullPath = `${dir.replace(/\/$/, "")}/${entityId}`;
+        const parts = fullPath.replace(/^\//, "").split("/");
+        const bucketName = parts[0]!;
+        const objectName = parts.slice(1).join("/");
+        const { objectStorageClient } = await import("../lib/objectStorage");
+        const file = objectStorageClient.bucket(bucketName).file(objectName);
+        const [buf] = await file.download();
+        return buf;
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 
   // Cover
-  const coverBuf = story.coverImageUrl ? decodeImage(story.coverImageUrl) : null;
+  const coverBuf = story.coverImageUrl ? await decodeImage(story.coverImageUrl) : null;
   if (coverBuf) {
     try {
       doc.image(coverBuf, { fit: [475, 500], align: "center" });
@@ -905,7 +931,8 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
   doc.addPage();
   const chapters = (story.fullText ?? "").split(/\n\n## /);
   let illIdx = 0;
-  chapters.forEach((chunk, i) => {
+  for (let i = 0; i < chapters.length; i++) {
+    const chunk = chapters[i];
     if (i > 0) {
       const newlinePos = chunk.indexOf("\n");
       const heading = newlinePos > 0 ? chunk.slice(0, newlinePos) : `Chapter ${i + 1}`;
@@ -919,7 +946,7 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
     }
     if (illIdx < illustrations.length) {
       const ill = illustrations[illIdx++];
-      const buf = decodeImage(ill.imageUrl);
+      const buf = await decodeImage(ill.imageUrl);
       if (buf) {
         doc.moveDown(1);
         try {
@@ -935,7 +962,7 @@ router.get("/stories/:id/export.pdf", writeLimiter, async (req, res): Promise<vo
         doc.moveDown(1);
       }
     }
-  });
+  }
 
   doc.end();
 });

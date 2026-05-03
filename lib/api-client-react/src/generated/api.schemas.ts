@@ -210,6 +210,11 @@ export type GetPublicFeedParams = {
   limit?: number;
 };
 
+export type RegenerateIllustrationBody = {
+  /** If provided, replaces the stored prompt for this regeneration and persists. */
+  promptOverride?: string;
+};
+
 export type GetStoryLikeParams = {
   authorName?: string;
 };

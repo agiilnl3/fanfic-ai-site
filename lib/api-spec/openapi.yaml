@@ -293,7 +293,7 @@ paths:
     post:
       operationId: regenerateIllustration
       tags: [illustrations]
-      summary: Regenerate an existing illustration using its stored prompt
+      summary: Regenerate an existing illustration, optionally with an edited prompt
       parameters:
         - name: id
           in: path
@@ -305,6 +305,17 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                promptOverride:
+                  type: string
+                  description: If provided, replaces the stored prompt for this regeneration and persists.
+              additionalProperties: false
       responses:
         "200":
           description: Regenerated illustration

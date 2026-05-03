@@ -40,6 +40,8 @@ export default function StoryReading() {
   const [regeneratingSectionIdx, setRegeneratingSectionIdx] = useState<number | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState("");
+  const [promptEditingId, setPromptEditingId] = useState<number | null>(null);
+  const [promptDraft, setPromptDraft] = useState("");
 
   const { data: story, isLoading, error } = useGetStory(storyId, {
     query: {
@@ -133,10 +135,14 @@ export default function StoryReading() {
     );
   };
 
-  const handleRegenerateIllustration = (ill: Illustration) => {
+  const handleRegenerateIllustration = (ill: Illustration, promptOverride?: string) => {
     if (!story) return;
     regenerateIllustrationMutation.mutate(
-      { id: story.id, illustrationId: ill.id },
+      {
+        id: story.id,
+        illustrationId: ill.id,
+        data: promptOverride ? { promptOverride } : {},
+      },
       {
         onSuccess: (updated) => {
           queryClient.setQueryData(getGetStoryQueryKey(story.id), (old: typeof story | undefined) => {
@@ -147,6 +153,7 @@ export default function StoryReading() {
               coverImageUrl: ill.sectionIndex === 0 ? updated.imageUrl : old.coverImageUrl,
             };
           });
+          setPromptEditingId(null);
           toast({ title: "Illustration Regenerated", description: "A new scene has been painted." });
         },
         onError: () => {
@@ -154,6 +161,11 @@ export default function StoryReading() {
         },
       },
     );
+  };
+
+  const openPromptEditor = (ill: Illustration) => {
+    setPromptDraft(ill.prompt);
+    setPromptEditingId(ill.id);
   };
 
   const handleDeleteIllustration = (ill: Illustration) => {
@@ -354,7 +366,7 @@ export default function StoryReading() {
               )}
               <div className="absolute inset-0 ring-1 ring-inset ring-white/10 pointer-events-none rounded-xl" />
             </div>
-            {isAuthor && !editMode && (
+            {isAuthor && !editMode && promptEditingId !== ill.id && (
               <div className="mt-2 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   size="sm"
@@ -368,6 +380,16 @@ export default function StoryReading() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  className="text-xs h-7"
+                  disabled={isRegeneratingIll(ill)}
+                  onClick={() => openPromptEditor(ill)}
+                >
+                  <Edit3 className="w-3 h-3 mr-1" />
+                  Edit prompt
+                </Button>
+                <Button
+                  size="sm"
                   variant="destructive"
                   className="text-xs h-7"
                   disabled={deleteIllustrationMutation.isPending}
@@ -376,6 +398,46 @@ export default function StoryReading() {
                   <Trash2 className="w-3 h-3 mr-1" />
                   Remove
                 </Button>
+              </div>
+            )}
+            {isAuthor && promptEditingId === ill.id && (
+              <div className="mt-3 p-3 rounded-lg border bg-muted/30 space-y-2">
+                <div className="text-xs text-muted-foreground font-medium">
+                  Edit illustration prompt
+                </div>
+                <Textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  rows={4}
+                  className="text-sm font-mono"
+                  placeholder="Describe the scene you want to paint..."
+                  disabled={isRegeneratingIll(ill)}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs"
+                    disabled={isRegeneratingIll(ill)}
+                    onClick={() => setPromptEditingId(null)}
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={isRegeneratingIll(ill) || !promptDraft.trim()}
+                    onClick={() => handleRegenerateIllustration(ill, promptDraft.trim())}
+                  >
+                    {isRegeneratingIll(ill) ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <Check className="w-3 h-3 mr-1" />
+                    )}
+                    Regenerate with this prompt
+                  </Button>
+                </div>
               </div>
             )}
             {ill.caption && (

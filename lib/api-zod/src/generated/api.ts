@@ -270,11 +270,20 @@ export const DeleteIllustrationParams = zod.object({
 });
 
 /**
- * @summary Regenerate an existing illustration using its stored prompt
+ * @summary Regenerate an existing illustration, optionally with an edited prompt
  */
 export const RegenerateIllustrationParams = zod.object({
   id: zod.coerce.number(),
   illustrationId: zod.coerce.number(),
+});
+
+export const RegenerateIllustrationBody = zod.object({
+  promptOverride: zod
+    .string()
+    .optional()
+    .describe(
+      "If provided, replaces the stored prompt for this regeneration and persists.",
+    ),
 });
 
 export const RegenerateIllustrationResponse = zod.object({
