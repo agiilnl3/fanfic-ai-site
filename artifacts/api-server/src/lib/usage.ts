@@ -16,7 +16,7 @@ interface CachedTariff {
 const tariffCache = new Map<string, { row: CachedTariff; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
-// Conjurer is the paid tier shipped by Task #17. We seed both the legacy
+// Conjurer is the paid tier. We seed both the legacy
 // "premium" name (used by the admin UI to set custom quotas) and the
 // canonical "conjurer" plan so admins keep their existing controls and the
 // billing webhook lands on a real row.

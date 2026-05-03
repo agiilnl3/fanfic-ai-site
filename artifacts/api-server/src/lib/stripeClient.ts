@@ -50,11 +50,9 @@ async function getCredentials(): Promise<ConnectionSettings> {
 
 export async function getUncachableStripeClient(): Promise<Stripe> {
   const { secret } = await getCredentials();
-  // Don't change to an older API version.
-  // Pin the API version explicitly. Cast via `as never` because the bundled
-  // Stripe types only know about the very latest version string but the
-  // server account is still on 2025-08-27.basil.
-  return new Stripe(secret, { apiVersion: "2025-08-27.basil" as never });
+  // No apiVersion override — the Stripe SDK falls back to the API version
+  // configured on the connected account, which is what we want here.
+  return new Stripe(secret);
 }
 
 export async function getStripePublishableKey(): Promise<string> {

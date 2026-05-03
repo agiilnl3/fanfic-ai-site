@@ -1,10 +1,11 @@
 // Helpers shared by billing routes and the Stripe webhook handler.
 // Owns the local `subscriptions` row and Stripe Customer creation.
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import {
   db,
+  storiesTable,
   subscriptionsTable,
   usersTable,
   type User,
@@ -126,11 +127,14 @@ export async function resolvePlanForCustomer(
     product?.name === CONJURER_PRODUCT_NAME;
   const plan: Plan =
     ACTIVE_STATUSES.has(sub.status) && isConjurer ? "conjurer" : "free";
-  // Stripe types lag the API; period_end lives on the subscription item.
+  // The Stripe SDK types lag the live API, which moved current_period_end
+  // onto subscription items. Read from item first, fall back to the legacy
+  // top-level field. A narrow inline type keeps us from leaking `any`.
+  type WithPeriodEnd = { current_period_end?: number };
   const periodEndUnix =
-    item && typeof (item as unknown as { current_period_end?: number }).current_period_end === "number"
-      ? (item as unknown as { current_period_end: number }).current_period_end
-      : (sub as unknown as { current_period_end?: number }).current_period_end ?? null;
+    (item as WithPeriodEnd | undefined)?.current_period_end ??
+    (sub as unknown as WithPeriodEnd).current_period_end ??
+    null;
   return {
     plan,
     status: sub.status,
@@ -212,6 +216,20 @@ export async function applyPlanForCustomer(
       },
     });
   invalidatePlanCache(userId);
+
+  // When a user drops back to free (cancelled/expired/inactive Conjurer),
+  // their existing private stories must become readable again — privacy is
+  // a Conjurer-only feature. We flip isPrivate=false on every story they
+  // own. Idempotent.
+  if (resolved.plan !== "conjurer") {
+    await db
+      .update(storiesTable)
+      .set({ isPrivate: false, updatedAt: new Date() })
+      .where(
+        and(eq(storiesTable.userId, userId), eq(storiesTable.isPrivate, true)),
+      );
+  }
+
   logger.info(
     { userId, plan: resolved.plan, status: resolved.status },
     "applied plan for user",

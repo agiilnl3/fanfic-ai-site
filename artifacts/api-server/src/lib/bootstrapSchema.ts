@@ -63,7 +63,7 @@ export async function bootstrapBranchingSchema(): Promise<void> {
       ALTER TABLE stories
       ADD COLUMN IF NOT EXISTS trailer_hash TEXT
     `);
-    // Stripe paid tiers ("Conjurer" subscription) — Task #17.
+    // Stripe paid tiers ("Conjurer" subscription).
     // Private stories are a Conjurer perk; column is non-nullable so the
     // story authz fast path can rely on it without coalescing.
     await db.execute(sql`
