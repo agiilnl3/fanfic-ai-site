@@ -324,11 +324,27 @@ export default function StoryReading() {
     illBySection.set(ill.sectionIndex, ill);
   }
 
+  const desiredSections = Math.max(
+    numSections,
+    illustrations.length > 0 ? numSections : Math.min(4, Math.max(1, paragraphs.length)),
+  );
+
   const insertAfterParagraph = new Map<number, number>();
+  for (let s = 0; s < desiredSections; s++) {
+    if (paragraphs.length === 0) break;
+    const paraIdx = Math.min(
+      Math.floor(((s + 1) * paragraphs.length) / desiredSections) - 1,
+      paragraphs.length - 1,
+    );
+    const key = Math.max(0, paraIdx);
+    if (!insertAfterParagraph.has(key)) {
+      insertAfterParagraph.set(key, s);
+    }
+  }
   for (const ill of illustrations) {
     const s = ill.sectionIndex;
     const paraIdx = Math.min(
-      Math.floor(((s + 1) * paragraphs.length) / numSections) - 1,
+      Math.floor(((s + 1) * paragraphs.length) / desiredSections) - 1,
       paragraphs.length - 1,
     );
     insertAfterParagraph.set(Math.max(0, paraIdx), s);
