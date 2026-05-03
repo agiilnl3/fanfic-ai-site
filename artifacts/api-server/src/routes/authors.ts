@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc, count, inArray, sql, or, isNull } from "drizzle-orm";
+import { and, eq, desc, count, inArray, or, isNull } from "drizzle-orm";
 import {
   db,
   storiesTable,
@@ -157,7 +157,6 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
   }
 
   const published = stories.filter((s) => s.status === "published");
-  const ids = stories.map((s) => s.id);
   const publishedIds = published.map((s) => s.id);
 
   const likeRows = publishedIds.length
@@ -213,8 +212,6 @@ router.get("/authors/:name", async (req, res): Promise<void> => {
       commentCount: commentMap.get(s.id) ?? 0,
     })),
   });
-  void ids;
-  void sql;
 });
 
 router.get("/authors/:name/follow", async (req, res): Promise<void> => {

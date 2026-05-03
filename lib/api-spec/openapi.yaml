@@ -1916,8 +1916,6 @@ components:
         status:
           type: string
           enum: [draft, published]
-        authorName:
-          type: string
         coverImageUrl:
           type: string
 

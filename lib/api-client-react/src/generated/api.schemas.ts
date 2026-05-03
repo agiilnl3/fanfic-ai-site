@@ -212,7 +212,6 @@ export interface UpdateStoryBody {
   lengthSetting?: UpdateStoryBodyLengthSetting;
   fullText?: string;
   status?: UpdateStoryBodyStatus;
-  authorName?: string;
   coverImageUrl?: string;
 }
 

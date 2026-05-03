@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, usersTable, storiesTable, seriesTable, type User } from "@workspace/db";
 
 const userCache = new Map<string, { user: User; expiresAt: number }>();
@@ -189,12 +189,16 @@ export function overrideClientIdentity(
 ): void {
   const isWrite = req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
 
-  // Allow legacy x-admin-token-authenticated writes through to per-route
-  // adminAuth middleware, which validates the token. Without this bypass,
-  // /admin/* writes would be rejected here before adminAuth runs.
+  // Let /admin/* token-authenticated writes through to per-route adminAuth.
+  // The bypass is restricted to /admin/* so a valid x-admin-token cannot be
+  // used to impersonate an arbitrary user on regular write endpoints.
+  const isAdminPath = req.path.startsWith("/admin/");
   const adminToken = req.header("x-admin-token");
   const hasAdminToken =
-    !!adminToken && !!process.env.ADMIN_PASSWORD && adminToken === process.env.ADMIN_PASSWORD;
+    isAdminPath &&
+    !!adminToken &&
+    !!process.env.ADMIN_PASSWORD &&
+    adminToken === process.env.ADMIN_PASSWORD;
 
   if (isWrite && !req.user && !hasAdminToken && !isPublicWritePath(req.path)) {
     res.status(401).json({ error: "Authentication required" });
@@ -222,4 +226,3 @@ export function overrideClientIdentity(
   next();
 }
 
-void sql;

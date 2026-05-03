@@ -280,7 +280,6 @@ export const UpdateStoryBody = zod.object({
   lengthSetting: zod.enum(["short", "medium", "long"]).optional(),
   fullText: zod.string().optional(),
   status: zod.enum(["draft", "published"]).optional(),
-  authorName: zod.string().optional(),
   coverImageUrl: zod.string().optional(),
 });
 

@@ -644,9 +644,15 @@ router.patch("/stories/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Defensively strip identity fields so a co-author cannot rewrite the
+  // story's denormalized authorName via PATCH. (UpdateStoryBody no longer
+  // declares authorName, but we keep this guard in case any client sends it.)
+  const updates: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
+  delete updates.authorName;
+  delete updates.userId;
   const [story] = await db
     .update(storiesTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set(updates)
     .where(eq(storiesTable.id, params.data.id))
     .returning();
 
