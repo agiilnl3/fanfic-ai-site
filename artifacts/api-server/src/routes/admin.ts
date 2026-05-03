@@ -10,6 +10,7 @@ import {
   storyRepostsTable,
   storyCommentsTable,
   usersTable,
+  adminsTable,
 } from "@workspace/db";
 import { z } from "zod";
 import { logAdminAction } from "../lib/admin-audit";
@@ -222,6 +223,12 @@ router.put(
       })
       .returning();
     invalidateTariffCache();
+    await logAdminAction(req, {
+      action: "update_tariff",
+      targetType: "tariff",
+      targetId: null,
+      metadata: { tier: params.data.tier, ...body.data },
+    });
     res.json({ ...row, updatedAt: row.updatedAt.toISOString() });
   },
 );
@@ -449,19 +456,27 @@ async function shapeUserRows(
   rows: Array<typeof usersTable.$inferSelect>,
 ): Promise<Array<Record<string, unknown>>> {
   if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.handle);
+  const handles = rows.map((r) => r.handle);
+  const userIds = rows.map((r) => r.id);
   const counts = await db
     .select({ authorName: storiesTable.authorName, c: count() })
     .from(storiesTable)
-    .where(inArray(storiesTable.authorName, ids))
+    .where(inArray(storiesTable.authorName, handles))
     .groupBy(storiesTable.authorName);
   const cMap = new Map(counts.map((r) => [r.authorName, Number(r.c)]));
+  // Source `isAdmin` from the canonical allow-list, not the legacy
+  // `users.is_admin` column, so the panel reflects actual authz.
+  const adminRows = await db
+    .select({ userId: adminsTable.userId })
+    .from(adminsTable)
+    .where(inArray(adminsTable.userId, userIds));
+  const adminSet = new Set(adminRows.map((r) => r.userId));
   return rows.map((u) => ({
     id: u.id,
     handle: u.handle,
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
-    isAdmin: u.isAdmin,
+    isAdmin: adminSet.has(u.id),
     banned: u.banned,
     createdAt: u.createdAt.toISOString(),
     storyCount: cMap.get(u.handle) ?? 0,

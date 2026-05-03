@@ -16,3 +16,4 @@ export * from "./reports";
 export * from "./users";
 export * from "./collaborators";
 export * from "./admin-actions";
+export * from "./admins";

@@ -15,6 +15,7 @@ import {
   notificationPrefsTable,
 } from "@workspace/db";
 import { requireAuth, invalidateUserCache } from "../middlewares/auth";
+import { isUserAdmin } from "../middlewares/admin";
 
 const router: IRouter = Router();
 
@@ -30,8 +31,11 @@ const UpdateMeBody = z.object({
   avatarUrl: z.string().url().optional().or(z.literal("")),
 });
 
-router.get("/me", requireAuth, (req, res): void => {
+router.get("/me", requireAuth, async (req, res): Promise<void> => {
   const u = req.user!;
+  // Canonical admin marker is membership in the `admins` allow-list table.
+  // The legacy `users.is_admin` column is no longer trusted by adminAuth.
+  const isAdmin = await isUserAdmin(u.id);
   res.json({
     id: u.id,
     clerkUserId: u.clerkUserId,
@@ -39,7 +43,7 @@ router.get("/me", requireAuth, (req, res): void => {
     displayName: u.displayName,
     avatarUrl: u.avatarUrl,
     bio: u.bio,
-    isAdmin: u.isAdmin,
+    isAdmin,
     createdAt: u.createdAt.toISOString(),
   });
 });
