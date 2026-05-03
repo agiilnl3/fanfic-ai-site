@@ -1,5 +1,6 @@
-import { pgTable, serial, text, integer, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, uniqueIndex, index, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { storiesTable } from "./stories";
+import { chaptersTable } from "./chapters";
 
 export const bookmarksTable = pgTable(
   "bookmarks",
@@ -34,7 +35,10 @@ export const readingProgressTable = pgTable(
     paragraphIndex: integer("paragraph_index").notNull().default(0),
     // Tracks which chapter (and therefore which branch path) the reader
     // last cursored to. Nullable so legacy progress rows still work.
-    chapterId: integer("chapter_id"),
+    chapterId: integer("chapter_id").references(
+      (): AnyPgColumn => chaptersTable.id,
+      { onDelete: "set null" },
+    ),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => ({

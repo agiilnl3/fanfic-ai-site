@@ -2,31 +2,10 @@ import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { logger } from "./logger";
 
-/**
- * Defensive boot-time DDL safety net for the branching-storylines feature
- * (Task #14). The project's normal schema rollout path is
- * `pnpm --filter db push` in scripts/post-merge.sh, which Drizzle Kit
- * runs against the deploy database after a task merges. This function
- * exists so that:
- *
- *   1. A first-boot of the API server in any environment whose database
- *      hasn't received `db push` yet (e.g. a freshly provisioned DB,
- *      a local dev container, a hotfix path that bypassed the merge
- *      script) can still serve /chapter-tree, /branch and reading
- *      progress without 500s on a missing relation.
- *   2. The lazy chapter backfill in lib/chapters.ts can rely on the
- *      table existing before its first SELECT.
- *
- * It runs once at process start and is fully idempotent. We intentionally
- * keep this *narrow* — only the new objects from Task #14 — because
- * Drizzle remains the source of truth for the rest of the schema.
- */
+// Idempotent safety net so a fresh DB can serve /chapter-tree before
+// `pnpm --filter db push` has run. Drizzle remains the source of truth.
 export async function bootstrapBranchingSchema(): Promise<void> {
   try {
-    // Mirrors lib/db/src/schema/chapters.ts exactly. Drizzle remains
-    // the source of truth — any future schema changes go through
-    // `pnpm --filter db push`. ALTER ... ADD COLUMN IF NOT EXISTS keeps
-    // older deployments forward-compatible if they predate a column.
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS chapters (
         id SERIAL PRIMARY KEY,
@@ -43,7 +22,6 @@ export async function bootstrapBranchingSchema(): Promise<void> {
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
-    // Reconcile any pre-existing rollout that may have skipped a column.
     await db.execute(sql`
       ALTER TABLE chapters
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -67,9 +45,8 @@ export async function bootstrapBranchingSchema(): Promise<void> {
       ADD COLUMN IF NOT EXISTS chapter_id INTEGER
         REFERENCES chapters(id) ON DELETE SET NULL
     `);
-    logger.info("Branching-storylines schema bootstrap OK");
+    logger.info("chapters schema bootstrap OK");
   } catch (err) {
-    logger.error({ err }, "Failed to bootstrap branching-storylines schema");
-    // Don't crash the server — the rest of the API still works.
+    logger.error({ err }, "Failed to bootstrap chapters schema");
   }
 }

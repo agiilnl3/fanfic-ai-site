@@ -127,7 +127,10 @@ router.post(
       return;
     }
 
-    const quota = await checkAndBumpStory(body.data.authorName);
+    // Charge quota to the authenticated editor (canEditStory above
+     // guarantees req.user is present), not a client-supplied
+     // authorName, so co-authors can't bypass daily AI limits.
+    const quota = await checkAndBumpStory(req.user!.handle);
     if (!quota.ok) {
       res.status(429).json({
         error: "Daily story quota reached",
