@@ -133,7 +133,6 @@ export function requireAuth(
 const PUBLIC_WRITE_PATTERNS: RegExp[] = [
   /^\/admin\/login\b/, // legacy admin token login
   /^\/stories\/\d+\/view\b/, // anonymous view counter
-  /^\/reports\b/, // unauthenticated reports allowed
 ];
 
 const IDENTITY_BODY_KEYS = [

@@ -6,6 +6,7 @@ export const reportsTable = pgTable(
     id: serial("id").primaryKey(),
     targetType: text("target_type").notNull(),
     targetId: integer("target_id").notNull(),
+    reporterUserId: integer("reporter_user_id"),
     reporterName: text("reporter_name").notNull(),
     reason: text("reason").notNull().default(""),
     status: text("status").notNull().default("open"),

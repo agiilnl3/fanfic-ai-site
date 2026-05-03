@@ -7,6 +7,7 @@ export const seriesTable = pgTable(
     id: serial("id").primaryKey(),
     title: text("title").notNull(),
     summary: text("summary"),
+    userId: integer("user_id"),
     authorName: text("author_name").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

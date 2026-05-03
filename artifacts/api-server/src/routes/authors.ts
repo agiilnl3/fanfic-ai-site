@@ -249,7 +249,7 @@ router.post("/authors/:name/follow", writeLimiter, async (req, res): Promise<voi
   try {
     inserted = await db
       .insert(authorFollowsTable)
-      .values({ authorName: author, followerName: follower })
+      .values({ authorName: author, followerName: follower, followerUserId: req.user?.id ?? null })
       .onConflictDoNothing()
       .returning({ id: authorFollowsTable.id });
   } catch (err) {

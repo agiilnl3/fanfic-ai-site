@@ -84,7 +84,7 @@ router.post("/stories/:id/repost", writeLimiter, async (req, res): Promise<void>
 
   const inserted = await db
     .insert(storyRepostsTable)
-    .values({ storyId: story.id, reposterName: reposter, note: body.data.note ?? null })
+    .values({ storyId: story.id, reposterName: reposter, note: body.data.note ?? null, userId: req.user?.id ?? null })
     .onConflictDoNothing()
     .returning({ id: storyRepostsTable.id });
 

@@ -58,7 +58,7 @@ router.post("/stories/:id/bookmark", async (req, res): Promise<void> => {
   const author = body.data.authorName.trim();
   await db
     .insert(bookmarksTable)
-    .values({ authorName: author, storyId: params.data.id })
+    .values({ authorName: author, storyId: params.data.id, userId: req.user?.id ?? null })
     .onConflictDoNothing();
   res.json({ storyId: params.data.id, bookmarked: true });
 });
@@ -205,6 +205,7 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
     .insert(readingProgressTable)
     .values({
       authorName: author,
+      userId: req.user?.id ?? null,
       storyId: params.data.id,
       progress,
       paragraphIndex,

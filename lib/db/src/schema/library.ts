@@ -5,6 +5,7 @@ export const bookmarksTable = pgTable(
   "bookmarks",
   {
     id: serial("id").primaryKey(),
+    userId: integer("user_id"),
     authorName: text("author_name").notNull(),
     storyId: integer("story_id")
       .notNull()
@@ -24,6 +25,7 @@ export const readingProgressTable = pgTable(
   "reading_progress",
   {
     id: serial("id").primaryKey(),
+    userId: integer("user_id"),
     authorName: text("author_name").notNull(),
     storyId: integer("story_id")
       .notNull()

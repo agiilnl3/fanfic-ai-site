@@ -112,6 +112,7 @@ router.post("/series", async (req, res): Promise<void> => {
       title: body.data.title,
       summary: body.data.summary ?? null,
       authorName: body.data.authorName.trim(),
+      userId: req.user?.id ?? null,
     })
     .returning();
   res.status(201).json(shapeSeries(row, 0));

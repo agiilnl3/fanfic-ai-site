@@ -95,6 +95,7 @@ router.post("/reports", async (req, res): Promise<void> => {
       targetType: body.data.targetType,
       targetId: body.data.targetId,
       reporterName: body.data.reporterName.trim(),
+      reporterUserId: req.user?.id ?? null,
       reason: (body.data.reason ?? "").trim(),
     })
     .returning();

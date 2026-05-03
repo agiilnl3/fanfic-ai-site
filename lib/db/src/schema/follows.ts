@@ -1,9 +1,10 @@
-import { pgTable, serial, text, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, uniqueIndex, index, integer } from "drizzle-orm/pg-core";
 
 export const authorFollowsTable = pgTable(
   "author_follows",
   {
     id: serial("id").primaryKey(),
+    followerUserId: integer("follower_user_id"),
     followerName: text("follower_name").notNull(),
     authorName: text("author_name").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

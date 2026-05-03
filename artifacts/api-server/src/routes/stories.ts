@@ -776,7 +776,7 @@ router.put("/stories/:id/illustrations/order", async (req, res): Promise<void> =
     res.status(404).json({ error: "Story not found" });
     return;
   }
-  if (!canEditStory(story, body.data.requesterAuthorName)) {
+  if (!canEditStory(story, req.user ?? null)) {
     res.status(403).json({ error: "Only the author or a co-author may reorder" });
     return;
   }
@@ -1094,7 +1094,7 @@ router.post(
       return;
     }
 
-    if (!canEditStory(story, body.data.authorName)) {
+    if (!canEditStory(story, req.user ?? null)) {
       res.status(403).json({ error: "Only the author or a co-author may add chapters" });
       return;
     }
@@ -1416,7 +1416,7 @@ router.post("/stories/:id/like", writeLimiter, async (req, res): Promise<void> =
 
   const insertedLikes = await db
     .insert(storyLikesTable)
-    .values({ storyId: params.data.id, authorName })
+    .values({ storyId: params.data.id, authorName, userId: req.user?.id ?? null })
     .onConflictDoNothing()
     .returning({ id: storyLikesTable.id });
 
@@ -1510,8 +1510,12 @@ router.post("/stories/:id/co-authors", writeLimiter, async (req, res): Promise<v
     res.status(404).json({ error: "Not found" });
     return;
   }
-  const requester = body.data.requesterAuthorName.trim();
-  if (requester !== story.authorName) {
+  if (
+    !req.user ||
+    (story.userId != null
+      ? story.userId !== req.user.id
+      : req.user.handle !== story.authorName)
+  ) {
     res.status(403).json({ error: "Only the primary author can manage co-authors" });
     return;
   }
@@ -1550,7 +1554,12 @@ router.post("/stories/:id/co-authors/remove", writeLimiter, async (req, res): Pr
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (body.data.requesterAuthorName.trim() !== story.authorName) {
+  if (
+    !req.user ||
+    (story.userId != null
+      ? story.userId !== req.user.id
+      : req.user.handle !== story.authorName)
+  ) {
     res.status(403).json({ error: "Only the primary author can manage co-authors" });
     return;
   }
@@ -1641,7 +1650,7 @@ router.post(
     }
     const [comment] = await db
       .insert(storyCommentsTable)
-      .values({ storyId: params.data.id, authorName, body: text, parentId })
+      .values({ storyId: params.data.id, authorName, body: text, parentId, userId: req.user?.id ?? null })
       .returning();
 
     if (story.authorName && story.authorName !== authorName) {

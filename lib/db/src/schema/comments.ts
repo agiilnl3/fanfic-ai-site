@@ -8,6 +8,7 @@ export const storyCommentsTable = pgTable(
     storyId: integer("story_id")
       .notNull()
       .references(() => storiesTable.id, { onDelete: "cascade" }),
+    userId: integer("user_id"),
     authorName: text("author_name").notNull(),
     body: text("body").notNull(),
     parentId: integer("parent_id"),

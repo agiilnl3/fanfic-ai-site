@@ -5,6 +5,7 @@ export const storyRepostsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     storyId: integer("story_id").notNull(),
+    userId: integer("user_id"),
     reposterName: text("reposter_name").notNull(),
     note: text("note"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
