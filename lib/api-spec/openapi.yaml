@@ -649,6 +649,74 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/trailer:
+    post:
+      operationId: generateStoryTrailer
+      tags: [stories]
+      summary: Kick off (or return cached) video trailer render
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "202":
+          description: Render started or already in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryTrailer"
+        "200":
+          description: Cached trailer is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryTrailer"
+        "404":
+          description: Not found
+    get:
+      operationId: getStoryTrailer
+      tags: [stories]
+      summary: Get current trailer status / URL for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Current trailer state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryTrailer"
+        "404":
+          description: Not found
+
+  /og/{storyId}:
+    get:
+      operationId: getStoryOgImage
+      tags: [stories]
+      summary: Render (and cache) the dynamic Open Graph image for a story
+      parameters:
+        - name: storyId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PNG OG image (1200×630)
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+
   /stories/{id}/audio:
     get:
       operationId: getStoryAudio
@@ -2213,6 +2281,16 @@ components:
           default: []
         coverImageUrl:
           type: ["string", "null"]
+        posterCoverUrl:
+          type: ["string", "null"]
+          description: Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.
+        trailerUrl:
+          type: ["string", "null"]
+          description: URL of the rendered video trailer mp4 (if any).
+        trailerStatus:
+          type: ["string", "null"]
+          enum: [queued, rendering, ready, failed, null]
+          description: Status of the most recent trailer render job.
         createdAt:
           type: string
         updatedAt:
@@ -2297,6 +2375,18 @@ components:
         count:
           type: integer
       required: [paragraphIndex, count]
+
+    StoryTrailer:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        status:
+          type: string
+          enum: [queued, rendering, ready, failed]
+        url:
+          type: ["string", "null"]
+      required: [storyId, status, url]
 
     FacetBucket:
       type: object

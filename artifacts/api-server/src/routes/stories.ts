@@ -94,6 +94,17 @@ import {
   writeLimiter,
 } from "../middlewares/rate-limit";
 import { embedStoryInBackground, toVectorLiteral } from "../lib/embeddings";
+import { generatePosterCoverInBackground } from "../lib/posterCover";
+import {
+  startTrailerJobInBackground,
+  isTrailerJobInFlight,
+  type TrailerStatus,
+} from "../lib/trailer";
+import {
+  loadOgInputForStory,
+  ogContentHash,
+  renderOgImage,
+} from "../lib/ogImage";
 import { pool } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -335,6 +346,9 @@ router.post("/stories/generate", aiGenerationLimiter, async (req, res): Promise<
       story.coverImageUrl = firstIllustration[0].imageUrl;
     }
   }
+
+  // Dedicated 16:9 poster cover with title typography baked in. Best-effort.
+  generatePosterCoverInBackground(story.id);
 
   const finalStory = await db
     .select()
@@ -610,6 +624,10 @@ router.post(
         if (!res.writableEnded) res.end();
         return;
       }
+
+      // Best-effort dedicated poster cover (kicked off after everything
+      // else so it doesn't block the SSE close).
+      generatePosterCoverInBackground(story.id);
 
       send("done", { storyId: story.id });
       if (!res.writableEnded) res.end();
@@ -2912,5 +2930,113 @@ router.delete(
     res.sendStatus(204);
   },
 );
+
+// ---------- Trailer (video) ----------
+
+router.post(
+  "/stories/:id/trailer",
+  aiGenerationLimiter,
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    // Trailer renders are expensive (image fetches + TTS + ffmpeg).
+    // Restrict kickoffs to authors/co-authors so randoms can't grief.
+    if (!canEditStory(story, req.user ?? null)) {
+      res
+        .status(403)
+        .json({ error: "Only the author or a co-author may render a trailer" });
+      return;
+    }
+    const status: TrailerStatus =
+      story.trailerStatus === "ready" && story.trailerUrl
+        ? "ready"
+        : isTrailerJobInFlight(id)
+          ? "rendering"
+          : "queued";
+    if (status === "ready") {
+      res.status(200).json({ storyId: id, status, url: story.trailerUrl });
+      return;
+    }
+    if (status === "queued") {
+      await db
+        .update(storiesTable)
+        .set({ trailerStatus: "queued" })
+        .where(eq(storiesTable.id, id));
+      startTrailerJobInBackground(id);
+    }
+    res.status(202).json({ storyId: id, status, url: story.trailerUrl ?? null });
+  },
+);
+
+router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const [story] = await db
+    .select({
+      id: storiesTable.id,
+      trailerUrl: storiesTable.trailerUrl,
+      trailerStatus: storiesTable.trailerStatus,
+    })
+    .from(storiesTable)
+    .where(eq(storiesTable.id, id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const raw = story.trailerStatus as TrailerStatus | null;
+  // If the in-process job is running but the row hasn't been flipped
+  // to `rendering` yet, surface that to the client so it can poll.
+  const status: TrailerStatus =
+    raw === "ready" && story.trailerUrl
+      ? "ready"
+      : isTrailerJobInFlight(id)
+        ? "rendering"
+        : (raw ?? "queued");
+  res.json({ storyId: id, status, url: story.trailerUrl ?? null });
+});
+
+// ---------- Dynamic Open Graph image ----------
+
+router.get("/og/:storyId", async (req, res): Promise<void> => {
+  const id = Number(req.params.storyId);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).end();
+    return;
+  }
+  const input = await loadOgInputForStory(id);
+  if (!input) {
+    res.status(404).end();
+    return;
+  }
+  try {
+    const png = await renderOgImage(input);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=600, s-maxage=86400, stale-while-revalidate=604800",
+    );
+    res.setHeader("ETag", `"og-${id}-${ogContentHash(input)}"`);
+    res.send(png);
+  } catch (err) {
+    req.log.warn({ err, id }, "OG render failed");
+    res.status(500).end();
+  }
+});
 
 export default router;

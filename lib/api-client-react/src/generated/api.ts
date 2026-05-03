@@ -104,6 +104,7 @@ import type {
   StoryLikeInfo,
   StorySeriesContext,
   StoryStats,
+  StoryTrailer,
   StoryViewBody,
   StoryWithIllustrations,
   Tag,
@@ -2389,6 +2390,265 @@ export const useContinueStory = <
 > => {
   return useMutation(getContinueStoryMutationOptions(options));
 };
+
+/**
+ * @summary Kick off (or return cached) video trailer render
+ */
+export const getGenerateStoryTrailerUrl = (id: number) => {
+  return `/api/stories/${id}/trailer`;
+};
+
+export const generateStoryTrailer = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StoryTrailer> => {
+  return customFetch<StoryTrailer>(getGenerateStoryTrailerUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getGenerateStoryTrailerMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStoryTrailer>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateStoryTrailer>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["generateStoryTrailer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateStoryTrailer>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return generateStoryTrailer(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateStoryTrailerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateStoryTrailer>>
+>;
+
+export type GenerateStoryTrailerMutationError = ErrorType<void>;
+
+/**
+ * @summary Kick off (or return cached) video trailer render
+ */
+export const useGenerateStoryTrailer = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStoryTrailer>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateStoryTrailer>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getGenerateStoryTrailerMutationOptions(options));
+};
+
+/**
+ * @summary Get current trailer status / URL for a story
+ */
+export const getGetStoryTrailerUrl = (id: number) => {
+  return `/api/stories/${id}/trailer`;
+};
+
+export const getStoryTrailer = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StoryTrailer> => {
+  return customFetch<StoryTrailer>(getGetStoryTrailerUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryTrailerQueryKey = (id: number) => {
+  return [`/api/stories/${id}/trailer`] as const;
+};
+
+export const getGetStoryTrailerQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryTrailer>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryTrailer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetStoryTrailerQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoryTrailer>>> = ({
+    signal,
+  }) => getStoryTrailer(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryTrailer>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryTrailerQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryTrailer>>
+>;
+export type GetStoryTrailerQueryError = ErrorType<void>;
+
+/**
+ * @summary Get current trailer status / URL for a story
+ */
+
+export function useGetStoryTrailer<
+  TData = Awaited<ReturnType<typeof getStoryTrailer>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryTrailer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryTrailerQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Render (and cache) the dynamic Open Graph image for a story
+ */
+export const getGetStoryOgImageUrl = (storyId: number) => {
+  return `/api/og/${storyId}`;
+};
+
+export const getStoryOgImage = async (
+  storyId: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetStoryOgImageUrl(storyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStoryOgImageQueryKey = (storyId: number) => {
+  return [`/api/og/${storyId}`] as const;
+};
+
+export const getGetStoryOgImageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStoryOgImage>>,
+  TError = ErrorType<void>,
+>(
+  storyId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryOgImage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStoryOgImageQueryKey(storyId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStoryOgImage>>> = ({
+    signal,
+  }) => getStoryOgImage(storyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!storyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStoryOgImage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStoryOgImageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStoryOgImage>>
+>;
+export type GetStoryOgImageQueryError = ErrorType<void>;
+
+/**
+ * @summary Render (and cache) the dynamic Open Graph image for a story
+ */
+
+export function useGetStoryOgImage<
+  TData = Awaited<ReturnType<typeof getStoryOgImage>>,
+  TError = ErrorType<void>,
+>(
+  storyId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStoryOgImage>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStoryOgImageQueryOptions(storyId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Generate (or stream) TTS audio for a story

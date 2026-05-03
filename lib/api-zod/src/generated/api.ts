@@ -47,6 +47,26 @@ export const ListStoriesResponseItem = zod.object({
     .array(zod.string())
     .default(listStoriesResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -173,6 +193,26 @@ export const GetForYouFeedResponseItem = zod.object({
     .array(zod.string())
     .default(getForYouFeedResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -320,6 +360,26 @@ export const GetPublicFeedResponseItem = zod.object({
     .array(zod.string())
     .default(getPublicFeedResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -392,6 +452,26 @@ export const GetStoryResponse = zod
       .array(zod.string())
       .default(getStoryResponseOneCoAuthorsDefault),
     coverImageUrl: zod.string().nullish(),
+    posterCoverUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+      ),
+    trailerUrl: zod
+      .string()
+      .nullish()
+      .describe("URL of the rendered video trailer mp4 (if any)."),
+    trailerStatus: zod
+      .union([
+        zod.literal("queued"),
+        zod.literal("rendering"),
+        zod.literal("ready"),
+        zod.literal("failed"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe("Status of the most recent trailer render job."),
     createdAt: zod.string(),
     updatedAt: zod.string(),
     likeCount: zod.number(),
@@ -471,6 +551,26 @@ export const UpdateStoryResponse = zod.object({
     .array(zod.string())
     .default(updateStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -532,6 +632,26 @@ export const PublishStoryResponse = zod.object({
     .array(zod.string())
     .default(publishStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -783,6 +903,26 @@ export const ContinueStoryResponse = zod.object({
     .array(zod.string())
     .default(continueStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -806,6 +946,39 @@ export const ContinueStoryResponse = zod.object({
     .describe(
       "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
     ),
+});
+
+/**
+ * @summary Kick off (or return cached) video trailer render
+ */
+export const GenerateStoryTrailerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GenerateStoryTrailerResponse = zod.object({
+  storyId: zod.number(),
+  status: zod.enum(["queued", "rendering", "ready", "failed"]),
+  url: zod.string().nullable(),
+});
+
+/**
+ * @summary Get current trailer status / URL for a story
+ */
+export const GetStoryTrailerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStoryTrailerResponse = zod.object({
+  storyId: zod.number(),
+  status: zod.enum(["queued", "rendering", "ready", "failed"]),
+  url: zod.string().nullable(),
+});
+
+/**
+ * @summary Render (and cache) the dynamic Open Graph image for a story
+ */
+export const GetStoryOgImageParams = zod.object({
+  storyId: zod.coerce.number(),
 });
 
 /**
@@ -859,6 +1032,26 @@ export const RegenerateStoryTextResponse = zod.object({
     .array(zod.string())
     .default(regenerateStoryTextResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -1296,6 +1489,26 @@ export const AdminUpdateStoryResponse = zod.object({
     .array(zod.string())
     .default(adminUpdateStoryResponseCoAuthorsDefault),
   coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
   createdAt: zod.string(),
   updatedAt: zod.string(),
   likeCount: zod.number(),
@@ -1423,6 +1636,26 @@ export const GetAuthorProfileResponse = zod.object({
         .array(zod.string())
         .default(getAuthorProfileResponseStoriesItemCoAuthorsDefault),
       coverImageUrl: zod.string().nullish(),
+      posterCoverUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+        ),
+      trailerUrl: zod
+        .string()
+        .nullish()
+        .describe("URL of the rendered video trailer mp4 (if any)."),
+      trailerStatus: zod
+        .union([
+          zod.literal("queued"),
+          zod.literal("rendering"),
+          zod.literal("ready"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe("Status of the most recent trailer render job."),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       likeCount: zod.number(),
@@ -1677,6 +1910,26 @@ export const ListAuthorRepostsResponseItem = zod.object({
       .array(zod.string())
       .default(listAuthorRepostsResponseStoryCoAuthorsDefault),
     coverImageUrl: zod.string().nullish(),
+    posterCoverUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+      ),
+    trailerUrl: zod
+      .string()
+      .nullish()
+      .describe("URL of the rendered video trailer mp4 (if any)."),
+    trailerStatus: zod
+      .union([
+        zod.literal("queued"),
+        zod.literal("rendering"),
+        zod.literal("ready"),
+        zod.literal("failed"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe("Status of the most recent trailer render job."),
     createdAt: zod.string(),
     updatedAt: zod.string(),
     likeCount: zod.number(),
@@ -2016,6 +2269,26 @@ export const ListBookmarksResponseItem = zod.object({
         .array(zod.string())
         .default(listBookmarksResponseStoryCoAuthorsDefault),
       coverImageUrl: zod.string().nullish(),
+      posterCoverUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+        ),
+      trailerUrl: zod
+        .string()
+        .nullish()
+        .describe("URL of the rendered video trailer mp4 (if any)."),
+      trailerStatus: zod
+        .union([
+          zod.literal("queued"),
+          zod.literal("rendering"),
+          zod.literal("ready"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe("Status of the most recent trailer render job."),
       createdAt: zod.string(),
       updatedAt: zod.string(),
       likeCount: zod.number(),
@@ -2077,6 +2350,26 @@ export const ListReadingHistoryResponseItem = zod.object({
       .array(zod.string())
       .default(listReadingHistoryResponseStoryCoAuthorsDefault),
     coverImageUrl: zod.string().nullish(),
+    posterCoverUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+      ),
+    trailerUrl: zod
+      .string()
+      .nullish()
+      .describe("URL of the rendered video trailer mp4 (if any)."),
+    trailerStatus: zod
+      .union([
+        zod.literal("queued"),
+        zod.literal("rendering"),
+        zod.literal("ready"),
+        zod.literal("failed"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe("Status of the most recent trailer render job."),
     createdAt: zod.string(),
     updatedAt: zod.string(),
     likeCount: zod.number(),
@@ -2270,6 +2563,26 @@ export const GetSeriesResponse = zod
               .array(zod.string())
               .default(getSeriesResponseTwoStoriesItemOneCoAuthorsDefault),
             coverImageUrl: zod.string().nullish(),
+            posterCoverUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+              ),
+            trailerUrl: zod
+              .string()
+              .nullish()
+              .describe("URL of the rendered video trailer mp4 (if any)."),
+            trailerStatus: zod
+              .union([
+                zod.literal("queued"),
+                zod.literal("rendering"),
+                zod.literal("ready"),
+                zod.literal("failed"),
+                zod.literal(null),
+              ])
+              .nullish()
+              .describe("Status of the most recent trailer render job."),
             createdAt: zod.string(),
             updatedAt: zod.string(),
             likeCount: zod.number(),
@@ -2392,6 +2705,26 @@ export const AddStoryToSeriesResponse = zod
                 addStoryToSeriesResponseTwoStoriesItemOneCoAuthorsDefault,
               ),
             coverImageUrl: zod.string().nullish(),
+            posterCoverUrl: zod
+              .string()
+              .nullish()
+              .describe(
+                "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+              ),
+            trailerUrl: zod
+              .string()
+              .nullish()
+              .describe("URL of the rendered video trailer mp4 (if any)."),
+            trailerStatus: zod
+              .union([
+                zod.literal("queued"),
+                zod.literal("rendering"),
+                zod.literal("ready"),
+                zod.literal("failed"),
+                zod.literal(null),
+              ])
+              .nullish()
+              .describe("Status of the most recent trailer render job."),
             createdAt: zod.string(),
             updatedAt: zod.string(),
             likeCount: zod.number(),

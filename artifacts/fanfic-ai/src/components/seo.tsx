@@ -7,6 +7,13 @@ interface SeoProps {
   type?: "website" | "article";
   author?: string;
   publishedTime?: string;
+  /**
+   * If set, overrides `image` with the dynamic OG endpoint
+   * /api/og/:storyId so social-card crawlers always get the
+   * latest cover+title+author composite. Resolved against
+   * window.location.origin so absolute URLs are emitted.
+   */
+  storyId?: number;
 }
 
 const SITE_NAME = "FanFic AI";
@@ -20,9 +27,14 @@ export function Seo({
   type = "website",
   author,
   publishedTime,
+  storyId,
 }: SeoProps) {
   const fullTitle = title ? `${title} · ${SITE_NAME}` : `${SITE_NAME} — Conjure Worlds with Ink & Algorithm`;
   const url = typeof window !== "undefined" ? window.location.href : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const resolvedImage = storyId
+    ? `${origin}/api/og/${storyId}`
+    : image;
 
   return (
     <Helmet>
@@ -35,14 +47,16 @@ export function Seo({
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
       <meta property="og:site_name" content={SITE_NAME} />
-      {image && <meta property="og:image" content={image} />}
+      {resolvedImage && <meta property="og:image" content={resolvedImage} />}
+      {resolvedImage && <meta property="og:image:width" content="1200" />}
+      {resolvedImage && <meta property="og:image:height" content="630" />}
       {author && <meta property="article:author" content={author} />}
       {publishedTime && <meta property="article:published_time" content={publishedTime} />}
 
-      <meta name="twitter:card" content={image ? "summary_large_image" : "summary"} />
+      <meta name="twitter:card" content={resolvedImage ? "summary_large_image" : "summary"} />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
-      {image && <meta name="twitter:image" content={image} />}
+      {resolvedImage && <meta name="twitter:image" content={resolvedImage} />}
     </Helmet>
   );
 }

@@ -32,6 +32,21 @@ export const StoryStatus = {
   cancelled: "cancelled",
 } as const;
 
+/**
+ * Status of the most recent trailer render job.
+ * @nullable
+ */
+export type StoryTrailerStatus =
+  | (typeof StoryTrailerStatus)[keyof typeof StoryTrailerStatus]
+  | null;
+
+export const StoryTrailerStatus = {
+  queued: "queued",
+  rendering: "rendering",
+  ready: "ready",
+  failed: "failed",
+} as const;
+
 export interface Tag {
   id: number;
   slug: string;
@@ -62,6 +77,21 @@ treat them as incomplete drafts.
   coAuthors: string[];
   /** @nullable */
   coverImageUrl?: string | null;
+  /**
+   * Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.
+   * @nullable
+   */
+  posterCoverUrl?: string | null;
+  /**
+   * URL of the rendered video trailer mp4 (if any).
+   * @nullable
+   */
+  trailerUrl?: string | null;
+  /**
+   * Status of the most recent trailer render job.
+   * @nullable
+   */
+  trailerStatus?: StoryTrailerStatus;
   createdAt: string;
   updatedAt: string;
   likeCount: number;
@@ -114,6 +144,13 @@ export interface AddCommentBody {
 export interface ParagraphCommentCount {
   paragraphIndex: number;
   count: number;
+}
+
+export interface StoryTrailer {
+  storyId: number;
+  status: StoryTrailerStatus;
+  /** @nullable */
+  url: string | null;
 }
 
 export interface FacetBucket {

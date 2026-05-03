@@ -24,6 +24,10 @@ export const storiesTable = pgTable(
       .notNull()
       .default(sql`ARRAY[]::text[]`),
     coverImageUrl: text("cover_image_url"),
+    posterCoverUrl: text("poster_cover_url"),
+    trailerUrl: text("trailer_url"),
+    trailerStatus: text("trailer_status"),
+    trailerHash: text("trailer_hash"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

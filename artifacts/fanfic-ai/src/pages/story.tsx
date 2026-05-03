@@ -29,6 +29,9 @@ import {
   getGetChapterTreeQueryKey,
   getGetStoryAudioUrl,
   getExportStoryPdfUrl,
+  useGenerateStoryTrailer,
+  useGetStoryTrailer,
+  getGetStoryTrailerQueryKey,
   useRecordStoryView,
   useSetReadingProgress,
   useGetChapterTree,
@@ -57,7 +60,7 @@ import { format } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown, Users,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown, Users, Film,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -125,6 +128,47 @@ export default function StoryReading() {
   const [audioOpen, setAudioOpen] = useState(false);
   const audioUrl = getGetStoryAudioUrl(storyId);
   const pdfUrl = getExportStoryPdfUrl(storyId);
+  const [trailerOpen, setTrailerOpen] = useState(false);
+  const [trailerPolling, setTrailerPolling] = useState(false);
+  const generateTrailerMutation = useGenerateStoryTrailer();
+  const trailerQuery = useGetStoryTrailer(storyId, {
+    query: {
+      queryKey: getGetStoryTrailerQueryKey(storyId),
+      enabled: trailerOpen,
+      refetchInterval: trailerPolling ? 4000 : false,
+    },
+  });
+  useEffect(() => {
+    const s = trailerQuery.data?.status;
+    if (s === "ready" || s === "failed") setTrailerPolling(false);
+  }, [trailerQuery.data?.status]);
+  const handleGenerateTrailer = () => {
+    setTrailerOpen(true);
+    if (trailerQuery.data?.status === "ready") return;
+    setTrailerPolling(true);
+    generateTrailerMutation.mutate(
+      { id: storyId },
+      {
+        onSuccess: (res) => {
+          queryClient.setQueryData(getGetStoryTrailerQueryKey(storyId), res);
+          if (res.status === "ready" || res.status === "failed") {
+            setTrailerPolling(false);
+          }
+        },
+        onError: () => {
+          setTrailerPolling(false);
+          toast({
+            title: t("story.trailerFailed", "Trailer failed"),
+            description: t(
+              "story.trailerFailedDesc",
+              "Could not start trailer render.",
+            ),
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const { data: coAuthorData } = useListCoAuthors(storyId, {
     query: { enabled: !!storyId, queryKey: getListCoAuthorsQueryKey(storyId) },
@@ -964,7 +1008,7 @@ export default function StoryReading() {
       <Seo
         title={story.title}
         description={story.summary ?? t("story.seoFallback", { genre: t(`genres.${story.genre}`, story.genre), author: story.authorName })}
-        image={story.coverImageUrl ?? undefined}
+        storyId={story.id}
         type="article"
         author={story.authorName}
         publishedTime={story.createdAt}
@@ -1423,6 +1467,59 @@ export default function StoryReading() {
                     <FileDown className="w-4 h-4 mr-2" /> {t("story.downloadPdf")}
                   </a>
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateTrailer}
+                  disabled={
+                    generateTrailerMutation.isPending ||
+                    trailerQuery.data?.status === "rendering" ||
+                    trailerQuery.data?.status === "queued"
+                  }
+                  data-testid="button-trailer"
+                >
+                  {trailerQuery.data?.status === "rendering" ||
+                  trailerQuery.data?.status === "queued" ||
+                  generateTrailerMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Film className="w-4 h-4 mr-2" />
+                  )}
+                  {trailerQuery.data?.status === "ready"
+                    ? t("story.viewTrailer", "View trailer")
+                    : trailerQuery.data?.status === "rendering" ||
+                        trailerQuery.data?.status === "queued"
+                      ? t("story.renderingTrailer", "Rendering trailer…")
+                      : t("story.generateTrailer", "Generate trailer")}
+                </Button>
+              </div>
+              {trailerOpen && (
+                <div className="mt-8 w-full max-w-2xl" data-testid="trailer-panel">
+                  {trailerQuery.data?.status === "ready" && trailerQuery.data.url ? (
+                    <video
+                      src={trailerQuery.data.url}
+                      controls
+                      playsInline
+                      className="w-full rounded-lg shadow-lg"
+                      data-testid="trailer-video"
+                    />
+                  ) : trailerQuery.data?.status === "failed" ? (
+                    <p className="text-destructive text-sm">
+                      {t("story.trailerFailedDesc", "Trailer render failed. Try again later.")}
+                    </p>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 py-12 text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        {t(
+                          "story.renderingTrailerHint",
+                          "Rendering your trailer — this typically takes a minute.",
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="hidden">
                 {isAuthor && illustrations.length >= 2 && (
                   <Button
                     variant="outline"
