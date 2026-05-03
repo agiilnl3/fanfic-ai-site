@@ -67,8 +67,10 @@ export async function filterCharactersInSection(
     const present = new Set(
       parsed.present.filter((n): n is string => typeof n === "string"),
     );
-    const filtered = characters.filter((c) => present.has(c.name));
-    return filtered.length > 0 ? filtered : characters;
+    // A valid empty result means the model believes none of the linked
+    // characters appear in this passage — honor that and skip injecting
+    // anyone. We only fall back to "all" on parse/API failure above.
+    return characters.filter((c) => present.has(c.name));
   } catch (err) {
     logger.warn(
       { err },

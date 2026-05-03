@@ -149,10 +149,9 @@ export function CharactersDialog({
       onSuccess: (newChar) => {
         setName("");
         setDescription("");
-        // In story mode, auto-link the freshly-created character to the
-        // current story so the author doesn't have to tick a box and
-        // hit "Save selection" — they came from the story page expecting
-        // this character to participate in this story.
+        // In story mode, pre-check the freshly-created character so it's
+        // already selected when the author clicks "Save selection". The
+        // link itself is still persisted by that final save click.
         if (mode === "story" && newChar?.id) {
           setLinked((prev) => {
             const next = new Set(prev);
