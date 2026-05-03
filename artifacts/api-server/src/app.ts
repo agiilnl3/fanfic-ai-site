@@ -40,8 +40,10 @@ app.use(
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Bumped from the default ~100 KB so character reference images uploaded
+// as base64 (capped server-side at 6 MB encoded) make it past the parser.
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 app.use(
   clerkMiddleware((req) => ({
