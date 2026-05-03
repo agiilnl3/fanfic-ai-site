@@ -326,7 +326,7 @@ export default function StoryReading() {
 
   const desiredSections = Math.max(
     numSections,
-    illustrations.length > 0 ? numSections : Math.min(4, Math.max(1, paragraphs.length)),
+    Math.min(4, Math.max(1, paragraphs.length)),
   );
 
   const insertAfterParagraph = new Map<number, number>();
