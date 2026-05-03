@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, inArray, count, asc, sql } from "drizzle-orm";
+import { canEditStory } from "../lib/storyAuthz";
 import {
   db,
   tagsTable,
@@ -74,7 +75,7 @@ router.put("/stories/:id/tags", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Story not found" });
     return;
   }
-  if (story.authorName !== body.data.requesterAuthorName.trim()) {
+  if (!canEditStory(story, req.user)) {
     res.status(403).json({ error: "Only the story author can edit tags" });
     return;
   }

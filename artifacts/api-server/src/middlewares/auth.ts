@@ -168,7 +168,14 @@ export function overrideClientIdentity(
 ): void {
   const isWrite = req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS";
 
-  if (isWrite && !req.user && !isPublicWritePath(req.path)) {
+  // Allow legacy x-admin-token-authenticated writes through to per-route
+  // adminAuth middleware, which validates the token. Without this bypass,
+  // /admin/* writes would be rejected here before adminAuth runs.
+  const adminToken = req.header("x-admin-token");
+  const hasAdminToken =
+    !!adminToken && !!process.env.ADMIN_PASSWORD && adminToken === process.env.ADMIN_PASSWORD;
+
+  if (isWrite && !req.user && !hasAdminToken && !isPublicWritePath(req.path)) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }

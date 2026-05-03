@@ -39,6 +39,11 @@ router.put(
       res.status(400).json({ error: "Invalid input" });
       return;
     }
+    // Only the named author (or an admin) may modify their own prefs.
+    if (!req.user?.isAdmin && req.user?.handle !== params.data.name) {
+      res.status(403).json({ error: "Cannot modify another author's preferences" });
+      return;
+    }
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (body.data.comment !== undefined) patch.comment = body.data.comment;
     if (body.data.follow !== undefined) patch.follow = body.data.follow;
