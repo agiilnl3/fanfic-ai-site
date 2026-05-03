@@ -54,3 +54,10 @@ tests/e2e/playwright-report/
 
 # vite-plugin-pwa generated dev service worker
 dev-dist
+
+# Replit local
+.local/
+.cache/
+.config/
+.upm/
+attached_assets/
