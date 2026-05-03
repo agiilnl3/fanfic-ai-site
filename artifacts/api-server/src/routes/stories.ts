@@ -1227,16 +1227,16 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
     const existingChapterCount = ((story.fullText ?? "").match(/^## /gm) || []).length;
     const newChapterIndex = existingChapterCount + 1; // index 0 = original story body
 
-    const [updated] = await db
-      .update(storiesTable)
-      .set({ fullText: appended, updatedAt: new Date() })
-      .where(eq(storiesTable.id, story.id))
-      .returning();
-
-    // Record chapter authorship for byline rendering.
-    if (req.user) {
-      try {
-        await db
+    // Append the chapter and record authorship in a single transaction so a
+    // chapter cannot exist without a matching authorship row.
+    const [updated] = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(storiesTable)
+        .set({ fullText: appended, updatedAt: new Date() })
+        .where(eq(storiesTable.id, story.id))
+        .returning();
+      if (req.user) {
+        await tx
           .insert(chapterAuthorsTable)
           .values({
             storyId: story.id,
@@ -1245,10 +1245,9 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
             authorHandle: req.user.handle,
           })
           .onConflictDoNothing();
-      } catch (err) {
-        logger.warn({ err }, "failed to record chapter authorship");
       }
-    }
+      return [row];
+    });
 
     // Notify the primary author if a co-author wrote this chapter
     if (story.authorName && story.authorName !== body.data.authorName) {

@@ -90,6 +90,7 @@ export default function StoryReading() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetStoryQueryKey(storyId) });
         queryClient.invalidateQueries({ queryKey: getGetIllustrationsQueryKey(storyId) });
+        queryClient.invalidateQueries({ queryKey: getListStoryChaptersQueryKey(storyId) });
         toast({ title: t("story.newChapterAdded"), description: t("story.newChapterDesc") });
       },
       onError: () => toast({ title: t("story.failedContinue"), variant: "destructive" }),
