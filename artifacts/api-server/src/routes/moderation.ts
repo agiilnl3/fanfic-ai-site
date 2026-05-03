@@ -16,6 +16,7 @@ import {
   AdminResolveReportBody,
 } from "@workspace/api-zod";
 import { adminAuth } from "../middlewares/admin";
+import { logAdminAction } from "../lib/admin-audit";
 
 const router: IRouter = Router();
 
@@ -197,6 +198,12 @@ router.post(
       })
       .where(eq(reportsTable.id, params.data.id))
       .returning();
+    await logAdminAction(req, {
+      action: body.data.action === "hide" ? "hide_report" : "dismiss_report",
+      targetType: report.targetType,
+      targetId: report.targetId,
+      metadata: { reportId: report.id, reason: report.reason },
+    });
     res.json(shape(updated));
   },
 );

@@ -1028,6 +1028,49 @@ export const AdminGetStatsResponse = zod.object({
 });
 
 /**
+ * @summary List recent users (newest first)
+ */
+export const adminListUsersQueryLimitMax = 200;
+
+export const AdminListUsersQueryParams = zod.object({
+  limit: zod.coerce.number().min(1).max(adminListUsersQueryLimitMax).optional(),
+});
+
+export const AdminListUsersResponseItem = zod.object({
+  id: zod.number(),
+  handle: zod.string(),
+  displayName: zod.string(),
+  avatarUrl: zod.string().nullish(),
+  isAdmin: zod.boolean(),
+  banned: zod.boolean(),
+  createdAt: zod.string(),
+  storyCount: zod.number(),
+});
+export const AdminListUsersResponse = zod.array(AdminListUsersResponseItem);
+
+/**
+ * @summary Ban or unban a user
+ */
+export const AdminSetUserBannedParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminSetUserBannedBody = zod.object({
+  banned: zod.boolean(),
+});
+
+export const AdminSetUserBannedResponse = zod.object({
+  id: zod.number(),
+  handle: zod.string(),
+  displayName: zod.string(),
+  avatarUrl: zod.string().nullish(),
+  isAdmin: zod.boolean(),
+  banned: zod.boolean(),
+  createdAt: zod.string(),
+  storyCount: zod.number(),
+});
+
+/**
  * @summary Public profile of an author with their published stories and counters
  */
 export const GetAuthorProfileParams = zod.object({

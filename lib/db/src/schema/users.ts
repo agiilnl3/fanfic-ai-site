@@ -10,6 +10,7 @@ export const usersTable = pgTable(
     avatarUrl: text("avatar_url"),
     bio: text("bio"),
     isAdmin: boolean("is_admin").notNull().default(false),
+    banned: boolean("banned").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

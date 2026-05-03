@@ -988,6 +988,49 @@ paths:
         "401":
           description: Missing or invalid admin token
 
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      tags: [admin]
+      summary: List recent users (newest first)
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AdminUserRow" }
+
+  /admin/users/{id}/ban:
+    post:
+      operationId: adminSetUserBanned
+      tags: [admin]
+      summary: Ban or unban a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetUserBannedBody" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminUserRow" }
+        "404":
+          description: Not found
+
   /authors/{name}:
     get:
       operationId: getAuthorProfile
@@ -2688,6 +2731,26 @@ components:
       properties:
         action: { type: string, enum: [hide, dismiss] }
       required: [action]
+
+    AdminUserRow:
+      type: object
+      properties:
+        id: { type: integer }
+        handle: { type: string }
+        displayName: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+        isAdmin: { type: boolean }
+        banned: { type: boolean }
+        createdAt: { type: string }
+        storyCount: { type: integer }
+      required: [id, handle, displayName, isAdmin, banned, createdAt, storyCount]
+
+    SetUserBannedBody:
+      type: object
+      properties:
+        banned: { type: boolean }
+      required: [banned]
+      additionalProperties: false
 
     StoryAnalytics:
       type: object

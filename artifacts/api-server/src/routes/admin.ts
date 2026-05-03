@@ -9,7 +9,10 @@ import {
   authorFollowsTable,
   storyRepostsTable,
   storyCommentsTable,
+  usersTable,
 } from "@workspace/db";
+import { z } from "zod";
+import { logAdminAction } from "../lib/admin-audit";
 import {
   AdminLoginBody,
   AdminDeleteStoryParams,
@@ -101,6 +104,12 @@ router.delete("/admin/stories/:id", adminAuth, async (req, res): Promise<void> =
     res.status(404).json({ error: "Not found" });
     return;
   }
+  await logAdminAction(req, {
+    action: "delete_story",
+    targetType: "story",
+    targetId: deleted.id,
+    metadata: { title: deleted.title, authorName: deleted.authorName },
+  });
   res.sendStatus(204);
 });
 
@@ -123,6 +132,12 @@ router.patch("/admin/stories/:id", adminAuth, async (req, res): Promise<void> =>
     res.status(404).json({ error: "Not found" });
     return;
   }
+  await logAdminAction(req, {
+    action: "update_story",
+    targetType: "story",
+    targetId: updated.id,
+    metadata: body.data,
+  });
   res.json(updated);
 });
 
@@ -421,5 +436,80 @@ router.get("/admin/metrics", adminAuth, async (_req, res): Promise<void> => {
     topStories,
   });
 });
+
+// --- Users -----------------------------------------------------------
+
+const ListUsersQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+const SetBannedParams = z.object({ id: z.coerce.number().int().positive() });
+const SetBannedBody = z.object({ banned: z.boolean() });
+
+async function shapeUserRows(
+  rows: Array<typeof usersTable.$inferSelect>,
+): Promise<Array<Record<string, unknown>>> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.handle);
+  const counts = await db
+    .select({ authorName: storiesTable.authorName, c: count() })
+    .from(storiesTable)
+    .where(inArray(storiesTable.authorName, ids))
+    .groupBy(storiesTable.authorName);
+  const cMap = new Map(counts.map((r) => [r.authorName, Number(r.c)]));
+  return rows.map((u) => ({
+    id: u.id,
+    handle: u.handle,
+    displayName: u.displayName,
+    avatarUrl: u.avatarUrl,
+    isAdmin: u.isAdmin,
+    banned: u.banned,
+    createdAt: u.createdAt.toISOString(),
+    storyCount: cMap.get(u.handle) ?? 0,
+  }));
+}
+
+router.get("/admin/users", adminAuth, async (req, res): Promise<void> => {
+  const q = ListUsersQuery.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(usersTable)
+    .orderBy(desc(usersTable.createdAt))
+    .limit(q.data.limit ?? 50);
+  res.json(await shapeUserRows(rows));
+});
+
+router.post(
+  "/admin/users/:id/ban",
+  adminAuth,
+  async (req, res): Promise<void> => {
+    const params = SetBannedParams.safeParse(req.params);
+    const body = SetBannedBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [updated] = await db
+      .update(usersTable)
+      .set({ banned: body.data.banned, updatedAt: new Date() })
+      .where(eq(usersTable.id, params.data.id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    await logAdminAction(req, {
+      action: body.data.banned ? "ban_user" : "unban_user",
+      targetType: "user",
+      targetId: updated.id,
+      metadata: { handle: updated.handle },
+    });
+    const [shaped] = await shapeUserRows([updated]);
+    res.json(shaped);
+  },
+);
 
 export default router;

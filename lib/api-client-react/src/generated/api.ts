@@ -20,12 +20,14 @@ import type {
   AddCommentBody,
   AddStoryToSeriesBody,
   AdminListReportsParams,
+  AdminListUsersParams,
   AdminLoginBody,
   AdminLoginResponse,
   AdminMetrics,
   AdminStats,
   AdminStoryRow,
   AdminUpdateStoryBody,
+  AdminUserRow,
   AuthorProfile,
   AuthorSearchHit,
   Bookmark,
@@ -83,6 +85,7 @@ import type {
   SearchAuthorsParams,
   Series,
   SeriesWithStories,
+  SetUserBannedBody,
   Story,
   StoryAnalytics,
   StoryComment,
@@ -3478,6 +3481,187 @@ export function useAdminGetStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List recent users (newest first)
+ */
+export const getAdminListUsersUrl = (params?: AdminListUsersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/users?${stringifiedParams}`
+    : `/api/admin/users`;
+};
+
+export const adminListUsers = async (
+  params?: AdminListUsersParams,
+  options?: RequestInit,
+): Promise<AdminUserRow[]> => {
+  return customFetch<AdminUserRow[]>(getAdminListUsersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListUsersQueryKey = (params?: AdminListUsersParams) => {
+  return [`/api/admin/users`, ...(params ? [params] : [])] as const;
+};
+
+export const getAdminListUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AdminListUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminListUsersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListUsers>>> = ({
+    signal,
+  }) => adminListUsers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListUsers>>
+>;
+export type AdminListUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List recent users (newest first)
+ */
+
+export function useAdminListUsers<
+  TData = Awaited<ReturnType<typeof adminListUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AdminListUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListUsersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Ban or unban a user
+ */
+export const getAdminSetUserBannedUrl = (id: number) => {
+  return `/api/admin/users/${id}/ban`;
+};
+
+export const adminSetUserBanned = async (
+  id: number,
+  setUserBannedBody: SetUserBannedBody,
+  options?: RequestInit,
+): Promise<AdminUserRow> => {
+  return customFetch<AdminUserRow>(getAdminSetUserBannedUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setUserBannedBody),
+  });
+};
+
+export const getAdminSetUserBannedMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetUserBanned>>,
+    TError,
+    { id: number; data: BodyType<SetUserBannedBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSetUserBanned>>,
+  TError,
+  { id: number; data: BodyType<SetUserBannedBody> },
+  TContext
+> => {
+  const mutationKey = ["adminSetUserBanned"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSetUserBanned>>,
+    { id: number; data: BodyType<SetUserBannedBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminSetUserBanned(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSetUserBannedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSetUserBanned>>
+>;
+export type AdminSetUserBannedMutationBody = BodyType<SetUserBannedBody>;
+export type AdminSetUserBannedMutationError = ErrorType<void>;
+
+/**
+ * @summary Ban or unban a user
+ */
+export const useAdminSetUserBanned = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSetUserBanned>>,
+    TError,
+    { id: number; data: BodyType<SetUserBannedBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSetUserBanned>>,
+  TError,
+  { id: number; data: BodyType<SetUserBannedBody> },
+  TContext
+> => {
+  return useMutation(getAdminSetUserBannedMutationOptions(options));
+};
 
 /**
  * @summary Public profile of an author with their published stories and counters

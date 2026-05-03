@@ -751,6 +751,22 @@ export interface ResolveReportBody {
   action: ResolveReportBodyAction;
 }
 
+export interface AdminUserRow {
+  id: number;
+  handle: string;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+  isAdmin: boolean;
+  banned: boolean;
+  createdAt: string;
+  storyCount: number;
+}
+
+export interface SetUserBannedBody {
+  banned: boolean;
+}
+
 export type StoryAnalyticsDailyItem = {
   day: string;
   views: number;
@@ -853,6 +869,14 @@ export const GetStoryAudioVoice = {
   nova: "nova",
   shimmer: "shimmer",
 } as const;
+
+export type AdminListUsersParams = {
+  /**
+   * @minimum 1
+   * @maximum 200
+   */
+  limit?: number;
+};
 
 export type GetAuthorFollowParams = {
   followerName?: string;

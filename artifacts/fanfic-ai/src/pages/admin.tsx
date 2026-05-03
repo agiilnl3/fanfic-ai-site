@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthor } from "@/hooks/use-author";
 import {
   useAdminLogin,
   useAdminListStories,
@@ -17,11 +17,14 @@ import {
   useAdminGetMetrics,
   useAdminListReports,
   useAdminResolveReport,
+  useAdminListUsers,
+  useAdminSetUserBanned,
   getAdminListStoriesQueryKey,
   getAdminGetStatsQueryKey,
   getAdminGetTariffQueryKey,
   getAdminGetMetricsQueryKey,
   getAdminListReportsQueryKey,
+  getAdminListUsersQueryKey,
   type AdminListReportsStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,23 +32,53 @@ import {
   Trash2,
   Loader2,
   ShieldCheck,
+  ShieldAlert,
+  ShieldOff,
   LogOut,
   Globe,
   Lock,
   EyeOff,
   Check,
   Save,
+  LayoutDashboard,
+  BookOpen,
+  Coins,
+  Flag,
+  Users,
 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+} from "recharts";
 
 const TOKEN_KEY = "fanfic_admin_token";
 const TIERS = ["free", "premium"] as const;
+type ReqOpts = { headers?: { "x-admin-token"?: string } };
+
+type TabId = "overview" | "stories" | "tariffs" | "reports" | "users";
+
+const TABS: ReadonlyArray<{ id: TabId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "reports", label: "Reports", icon: Flag },
+  { id: "users", label: "Users", icon: Users },
+  { id: "stories", label: "Stories", icon: BookOpen },
+  { id: "tariffs", label: "Tariffs", icon: Coins },
+];
 
 export default function AdminPage() {
   const { toast } = useToast();
+  const { isAdmin, isSignedIn } = useAuthor();
   const [token, setToken] = useState<string>(() => localStorage.getItem(TOKEN_KEY) || "");
   const [password, setPassword] = useState("");
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   useEffect(() => {
     if (token) localStorage.setItem(TOKEN_KEY, token);
@@ -63,8 +96,14 @@ export default function AdminPage() {
     },
   });
 
-  const enabled = !!token;
-  const requestOptions = { headers: { "x-admin-token": token } };
+  // A signed-in admin user gets through on the Clerk session — no token needed.
+  // Otherwise we fall back to the legacy x-admin-token flow.
+  const authedViaClerk = isSignedIn && isAdmin;
+  const enabled = authedViaClerk || !!token;
+  const requestOptions: ReqOpts = useMemo(
+    () => (authedViaClerk ? {} : { headers: { "x-admin-token": token } }),
+    [authedViaClerk, token],
+  );
 
   const { data: stats, error: statsError } = useAdminGetStats({
     query: { enabled, queryKey: getAdminGetStatsQueryKey() },
@@ -72,13 +111,13 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    if (statsError && token) {
+    if (statsError && token && !authedViaClerk) {
       setToken("");
       toast({ title: "Session expired", variant: "destructive" });
     }
-  }, [statsError, token, toast]);
+  }, [statsError, token, authedViaClerk, toast]);
 
-  if (!token) {
+  if (!enabled) {
     return (
       <Layout>
         <div className="container mx-auto px-4 py-20 max-w-md">
@@ -89,6 +128,10 @@ export default function AdminPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Sign in with an admin account, or enter the emergency
+                admin password below.
+              </p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -122,12 +165,19 @@ export default function AdminPage() {
 
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-12 max-w-6xl">
+      <div className="container mx-auto px-4 py-12 max-w-7xl">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-4xl font-bold">Admin Panel</h1>
-          <Button variant="outline" onClick={() => setToken("")}>
-            <LogOut className="w-4 h-4 mr-2" /> Sign out
-          </Button>
+          <div>
+            <h1 className="font-serif text-4xl font-bold">Admin Panel</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {authedViaClerk ? "Signed in via admin account" : "Token session"}
+            </p>
+          </div>
+          {!authedViaClerk && (
+            <Button variant="outline" onClick={() => setToken("")}>
+              <LogOut className="w-4 h-4 mr-2" /> Sign out
+            </Button>
+          )}
         </div>
 
         {stats && (
@@ -141,27 +191,42 @@ export default function AdminPage() {
           </div>
         )}
 
-        <Tabs defaultValue="stories">
-          <TabsList className="mb-6">
-            <TabsTrigger value="stories" data-testid="tab-stories">Stories</TabsTrigger>
-            <TabsTrigger value="tariffs" data-testid="tab-tariffs">Tariffs</TabsTrigger>
-            <TabsTrigger value="metrics" data-testid="tab-metrics">Metrics</TabsTrigger>
-            <TabsTrigger value="reports" data-testid="tab-reports">Reports</TabsTrigger>
-          </TabsList>
+        <div className="grid md:grid-cols-[200px_1fr] gap-6">
+          <nav
+            className="md:sticky md:top-20 md:self-start flex md:flex-col gap-1 overflow-x-auto md:overflow-visible"
+            aria-label="Admin sections"
+          >
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              const active = activeTab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setActiveTab(t.id)}
+                  data-testid={`tab-${t.id}`}
+                  className={
+                    "flex items-center gap-2 px-3 py-2 rounded-md text-sm whitespace-nowrap transition-colors " +
+                    (active
+                      ? "bg-primary text-primary-foreground"
+                      : "hover:bg-muted text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  <Icon className="w-4 h-4" />
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
 
-          <TabsContent value="stories">
-            <StoriesTab requestOptions={requestOptions} />
-          </TabsContent>
-          <TabsContent value="tariffs">
-            <TariffsTab requestOptions={requestOptions} />
-          </TabsContent>
-          <TabsContent value="metrics">
-            <MetricsTab requestOptions={requestOptions} />
-          </TabsContent>
-          <TabsContent value="reports">
-            <ReportsTab requestOptions={requestOptions} />
-          </TabsContent>
-        </Tabs>
+          <div className="min-w-0">
+            {activeTab === "overview" && <MetricsTab requestOptions={requestOptions} />}
+            {activeTab === "stories" && <StoriesTab requestOptions={requestOptions} />}
+            {activeTab === "tariffs" && <TariffsTab requestOptions={requestOptions} />}
+            {activeTab === "reports" && <ReportsTab requestOptions={requestOptions} />}
+            {activeTab === "users" && <UsersTab requestOptions={requestOptions} />}
+          </div>
+        </div>
       </div>
     </Layout>
   );
@@ -177,8 +242,6 @@ function StatCard({ label, value }: { label: string; value: number }) {
     </Card>
   );
 }
-
-type ReqOpts = { headers: { "x-admin-token": string } };
 
 function StoriesTab({ requestOptions }: { requestOptions: ReqOpts }) {
   const { toast } = useToast();
@@ -428,12 +491,10 @@ function MetricsTab({ requestOptions }: { requestOptions: ReqOpts }) {
     request: requestOptions,
   });
 
-  const maxActive = useMemo(() => {
-    if (!data?.dailyActive?.length) return 1;
-    return Math.max(
-      ...data.dailyActive.map((d) => Math.max(d.authors, d.stories)),
-      1,
-    );
+  // Recharts wants oldest → newest left-to-right.
+  const dailyAsc = useMemo(() => {
+    if (!data?.dailyActive) return [];
+    return [...data.dailyActive].sort((a, b) => (a.day < b.day ? -1 : 1));
   }, [data]);
 
   if (isLoading || !data) {
@@ -447,27 +508,18 @@ function MetricsTab({ requestOptions }: { requestOptions: ReqOpts }) {
           <CardTitle>Daily activity (last 30 days)</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-1 h-32" role="img" aria-label="Daily active authors and stories">
-            {data.dailyActive.slice(0, 30).reverse().map((d) => (
-              <div
-                key={d.day}
-                className="flex-1 flex flex-col justify-end gap-px"
-                title={`${d.day}: ${d.authors} authors, ${d.stories} stories`}
-              >
-                <div
-                  className="bg-primary/60 rounded-t"
-                  style={{ height: `${(d.authors / maxActive) * 100}%` }}
-                />
-                <div
-                  className="bg-amber-400/60"
-                  style={{ height: `${(d.stories / maxActive) * 100}%` }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-            <span><span className="inline-block w-3 h-3 bg-primary/60 mr-1 align-middle" />Authors</span>
-            <span><span className="inline-block w-3 h-3 bg-amber-400/60 mr-1 align-middle" />Stories</span>
+          <div className="h-72" data-testid="chart-daily-active">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dailyAsc} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="day" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="authors" name="Active authors" fill="hsl(var(--primary))" />
+                <Bar dataKey="stories" name="Stories created" fill="#fbbf24" />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
@@ -478,33 +530,29 @@ function MetricsTab({ requestOptions }: { requestOptions: ReqOpts }) {
             <CardTitle>Top authors</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted-foreground border-b">
-                <tr>
-                  <th className="py-2">Author</th>
-                  <th className="py-2 text-right">Stories</th>
-                  <th className="py-2 text-right">Likes</th>
-                  <th className="py-2 text-right">Followers</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topAuthors.map((a) => (
-                  <tr key={a.authorName} className="border-b last:border-0">
-                    <td className="py-2">{a.authorName}</td>
-                    <td className="py-2 text-right tabular-nums">{a.storyCount}</td>
-                    <td className="py-2 text-right tabular-nums">{a.likeCount}</td>
-                    <td className="py-2 text-right tabular-nums">{a.followerCount}</td>
-                  </tr>
-                ))}
-                {data.topAuthors.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-muted-foreground">
-                      No data yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="h-72" data-testid="chart-top-authors">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.topAuthors}
+                  layout="vertical"
+                  margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis
+                    type="category"
+                    dataKey="authorName"
+                    width={90}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="storyCount" name="Stories" fill="hsl(var(--primary))" />
+                  <Bar dataKey="likeCount" name="Likes" fill="#fbbf24" />
+                  <Bar dataKey="followerCount" name="Followers" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
@@ -513,40 +561,46 @@ function MetricsTab({ requestOptions }: { requestOptions: ReqOpts }) {
             <CardTitle>Top stories</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
-              <thead className="text-left text-muted-foreground border-b">
-                <tr>
-                  <th className="py-2">Title</th>
-                  <th className="py-2 text-right">Likes</th>
-                  <th className="py-2 text-right">Reposts</th>
-                  <th className="py-2 text-right">Comments</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topStories.map((s) => (
-                  <tr key={s.id} className="border-b last:border-0">
-                    <td className="py-2">
-                      <Link href={`/story/${s.id}`} className="hover:text-primary">
-                        {s.title}
-                      </Link>
-                      <div className="text-xs text-muted-foreground">
-                        by {s.authorName}
-                      </div>
-                    </td>
-                    <td className="py-2 text-right tabular-nums">{s.likeCount}</td>
-                    <td className="py-2 text-right tabular-nums">{s.repostCount}</td>
-                    <td className="py-2 text-right tabular-nums">{s.commentCount}</td>
-                  </tr>
-                ))}
-                {data.topStories.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-muted-foreground">
-                      No data yet.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="h-72" data-testid="chart-top-stories">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={data.topStories.map((s) => ({
+                    ...s,
+                    label: s.title.length > 24 ? s.title.slice(0, 22) + "…" : s.title,
+                  }))}
+                  layout="vertical"
+                  margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" width={120} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="likeCount" name="Likes" fill="hsl(var(--primary))" />
+                  <Bar dataKey="repostCount" name="Reposts" fill="#fbbf24" />
+                  <Bar dataKey="commentCount" name="Comments" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <ul className="mt-4 space-y-1 text-sm">
+              {data.topStories.map((s) => (
+                <li key={s.id} className="flex justify-between gap-2">
+                  <Link
+                    href={`/story/${s.id}`}
+                    className="truncate hover:text-primary"
+                    title={s.title}
+                  >
+                    {s.title}
+                  </Link>
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    by {s.authorName}
+                  </span>
+                </li>
+              ))}
+              {data.topStories.length === 0 && (
+                <li className="text-muted-foreground text-center py-4">No data yet.</li>
+              )}
+            </ul>
           </CardContent>
         </Card>
       </div>
@@ -668,6 +722,128 @@ function ReportsTab({ requestOptions }: { requestOptions: ReqOpts }) {
               </li>
             ))}
           </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function UsersTab({ requestOptions }: { requestOptions: ReqOpts }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const usersKey = getAdminListUsersQueryKey({ limit: 100 });
+  const { data: users, isLoading } = useAdminListUsers(
+    { limit: 100 },
+    { query: { queryKey: usersKey }, request: requestOptions },
+  );
+  const setBanned = useAdminSetUserBanned({
+    mutation: {
+      onSuccess: (_res, vars) => {
+        queryClient.invalidateQueries({ queryKey: usersKey });
+        toast({
+          title: vars.data.banned ? "User banned" : "User unbanned",
+        });
+      },
+      onError: () => toast({ title: "Action failed", variant: "destructive" }),
+    },
+    request: requestOptions,
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Recent users</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : (users ?? []).length === 0 ? (
+          <p className="text-muted-foreground text-sm py-6 text-center">No users.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-muted-foreground border-b">
+                <tr>
+                  <th className="py-2 pr-4">Handle</th>
+                  <th className="py-2 pr-4">Display name</th>
+                  <th className="py-2 pr-4">Role</th>
+                  <th className="py-2 pr-4">Stories</th>
+                  <th className="py-2 pr-4">Joined</th>
+                  <th className="py-2 pr-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(users ?? []).map((u) => (
+                  <tr
+                    key={u.id}
+                    className="border-b last:border-0"
+                    data-testid={`user-row-${u.id}`}
+                  >
+                    <td className="py-2 pr-4 font-mono">
+                      <Link
+                        href={`/author/${u.handle}`}
+                        className="hover:text-primary"
+                      >
+                        @{u.handle}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4">{u.displayName}</td>
+                    <td className="py-2 pr-4">
+                      {u.banned ? (
+                        <Badge variant="destructive">
+                          <ShieldOff className="w-3 h-3 mr-1" /> banned
+                        </Badge>
+                      ) : u.isAdmin ? (
+                        <Badge variant="default">
+                          <ShieldCheck className="w-3 h-3 mr-1" /> admin
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">user</Badge>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 tabular-nums">{u.storyCount}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">
+                      {format(new Date(u.createdAt), "MMM d, yyyy")}
+                    </td>
+                    <td className="py-2 pr-4 text-right whitespace-nowrap">
+                      {u.banned ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={setBanned.isPending}
+                          onClick={() =>
+                            setBanned.mutate({ id: u.id, data: { banned: false } })
+                          }
+                          data-testid={`button-unban-${u.id}`}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Unban
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={setBanned.isPending}
+                          onClick={() => {
+                            if (
+                              confirm(`Ban @${u.handle}? They won't be able to post.`)
+                            ) {
+                              setBanned.mutate({
+                                id: u.id,
+                                data: { banned: true },
+                              });
+                            }
+                          }}
+                          data-testid={`button-ban-${u.id}`}
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 mr-1" /> Ban
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </CardContent>
     </Card>
