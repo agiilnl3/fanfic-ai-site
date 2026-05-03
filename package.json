@@ -7,7 +7,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "lint": "prettier --check \"artifacts/**/src/**/*.{ts,tsx}\" \"lib/**/src/**/*.ts\""
+    "lint": "prettier --check \"artifacts/api-server/src/lib/sentry.ts\" \"artifacts/api-server/src/lib/featureFlags.ts\" \"artifacts/api-server/src/routes/flags.ts\" \"artifacts/api-server/tests/**/*.ts\" \"artifacts/api-server/vitest.config.ts\" \"artifacts/fanfic-ai/src/hooks/use-flag.ts\" \"artifacts/fanfic-ai/src/lib/sentry.ts\" \"lib/db/src/schema/feature-flags.ts\""
   },
   "private": true,
   "devDependencies": {

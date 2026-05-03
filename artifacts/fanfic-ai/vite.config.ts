@@ -81,6 +81,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // Emit source maps so Sentry can symbolicate production stack
+    // traces. Uploaded by the CI "Upload source maps to Sentry" step
+    // (gated on SENTRY_AUTH_TOKEN/ORG/PROJECT being present).
+    sourcemap: true,
   },
   server: {
     port,
