@@ -123,6 +123,57 @@ router.get("/series/:id", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/stories/:id/series-context", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid input" });
+    return;
+  }
+  const empty = {
+    seriesId: null,
+    seriesTitle: null,
+    position: null,
+    totalStories: null,
+    prevStoryId: null,
+    nextStoryId: null,
+  };
+  const [link] = await db
+    .select({ seriesId: seriesStoriesTable.seriesId })
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.storyId, id))
+    .limit(1);
+  if (!link) {
+    res.json(empty);
+    return;
+  }
+  const [series] = await db
+    .select({ id: seriesTable.id, title: seriesTable.title })
+    .from(seriesTable)
+    .where(eq(seriesTable.id, link.seriesId))
+    .limit(1);
+  if (!series) {
+    res.json(empty);
+    return;
+  }
+  const links = await db
+    .select({
+      storyId: seriesStoriesTable.storyId,
+      position: seriesStoriesTable.position,
+    })
+    .from(seriesStoriesTable)
+    .where(eq(seriesStoriesTable.seriesId, series.id))
+    .orderBy(asc(seriesStoriesTable.position));
+  const idx = links.findIndex((l) => l.storyId === id);
+  res.json({
+    seriesId: series.id,
+    seriesTitle: series.title,
+    position: idx >= 0 ? links[idx].position : null,
+    totalStories: links.length,
+    prevStoryId: idx > 0 ? links[idx - 1].storyId : null,
+    nextStoryId: idx >= 0 && idx < links.length - 1 ? links[idx + 1].storyId : null,
+  });
+});
+
 router.patch("/series/:id", async (req, res): Promise<void> => {
   const params = UpdateSeriesParams.safeParse(req.params);
   const body = UpdateSeriesBody.safeParse(req.body);

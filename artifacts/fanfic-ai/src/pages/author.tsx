@@ -11,6 +11,7 @@ import { Layout } from "@/components/layout";
 import { Seo } from "@/components/seo";
 import { StoryCard } from "@/components/story-card";
 import { FollowButton } from "@/components/follow-button";
+import { ReportButton } from "@/components/report-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { BookOpen, Heart, Users, UserPlus } from "lucide-react";
@@ -137,9 +138,12 @@ export default function AuthorPage() {
                   {reposts.map((entry) => (
                     <div key={entry.repostId} className="space-y-2">
                       <StoryCard story={entry.story} />
-                      <div className="text-xs text-muted-foreground px-1">
-                        Reposted {formatDistanceToNow(new Date(entry.repostedAt), { addSuffix: true })}
-                        {entry.note ? ` — “${entry.note}”` : ""}
+                      <div className="flex items-center justify-between gap-2 px-1">
+                        <div className="text-xs text-muted-foreground">
+                          Reposted {formatDistanceToNow(new Date(entry.repostedAt), { addSuffix: true })}
+                          {entry.note ? ` — “${entry.note}”` : ""}
+                        </div>
+                        <ReportButton targetType="repost" targetId={entry.repostId} />
                       </div>
                     </div>
                   ))}

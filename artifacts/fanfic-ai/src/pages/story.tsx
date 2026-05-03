@@ -28,9 +28,11 @@ import {
   useSetReadingProgress,
   useGetStoryAnalytics,
   useGetStoryTags,
+  useGetStorySeriesContext,
   useSetStoryTags,
   getGetStoryAnalyticsQueryKey,
   getGetStoryTagsQueryKey,
+  getGetStorySeriesContextQueryKey,
 } from "@workspace/api-client-react";
 import { BookmarkButton } from "@/components/bookmark-button";
 import { ReportButton } from "@/components/report-button";
@@ -220,6 +222,12 @@ export default function StoryReading() {
 
   const { data: storyTags } = useGetStoryTags(storyId, {
     query: { enabled: !!storyId, queryKey: getGetStoryTagsQueryKey(storyId) },
+  });
+  const { data: seriesContext } = useGetStorySeriesContext(storyId, {
+    query: {
+      enabled: !!storyId,
+      queryKey: getGetStorySeriesContextQueryKey(storyId),
+    },
   });
   const [tagDraft, setTagDraft] = useState("");
   useEffect(() => {
@@ -715,6 +723,61 @@ export default function StoryReading() {
                 <ReportButton targetType="story" targetId={story.id} />
               )}
             </div>
+            {seriesContext?.seriesId && (
+              <div
+                className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm text-white/80"
+                data-testid="series-nav"
+              >
+                {seriesContext.prevStoryId ? (
+                  <Link href={`/story/${seriesContext.prevStoryId}`}>
+                    <Badge
+                      variant="outline"
+                      className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
+                      data-testid="link-series-prev"
+                    >
+                      ← Previous
+                    </Badge>
+                  </Link>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="bg-background/10 border-white/10 text-white/40"
+                  >
+                    ← Previous
+                  </Badge>
+                )}
+                <Link href={`/series/${seriesContext.seriesId}`}>
+                  <Badge
+                    variant="outline"
+                    className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
+                    data-testid="link-series-home"
+                  >
+                    {seriesContext.seriesTitle}
+                    {seriesContext.totalStories
+                      ? ` · Part ${(seriesContext.position ?? 0) + 1} of ${seriesContext.totalStories}`
+                      : ""}
+                  </Badge>
+                </Link>
+                {seriesContext.nextStoryId ? (
+                  <Link href={`/story/${seriesContext.nextStoryId}`}>
+                    <Badge
+                      variant="outline"
+                      className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer"
+                      data-testid="link-series-next"
+                    >
+                      Next →
+                    </Badge>
+                  </Link>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="bg-background/10 border-white/10 text-white/40"
+                  >
+                    Next →
+                  </Badge>
+                )}
+              </div>
+            )}
             {(storyTags ?? []).length > 0 && (
               <div className="mt-3 flex flex-wrap justify-center gap-2">
                 {(storyTags ?? []).map((t) => (

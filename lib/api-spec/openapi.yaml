@@ -1031,6 +1031,24 @@ paths:
                 items:
                   $ref: "#/components/schemas/AuthorSearchHit"
 
+  /stories/{id}/series-context:
+    get:
+      operationId: getStorySeriesContext
+      tags: [series]
+      summary: Get the series this story belongs to (if any) plus prev/next story IDs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Series context, or null fields if the story is not in a series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorySeriesContext"
+
   /stories/{id}/repost:
     get:
       operationId: getStoryRepost
@@ -2265,6 +2283,23 @@ components:
         storyCount: { type: integer }
       required: [id, slug, label, storyCount]
 
+    StorySeriesContext:
+      type: object
+      properties:
+        seriesId:
+          type: ["integer", "null"]
+        seriesTitle:
+          type: ["string", "null"]
+        position:
+          type: ["integer", "null"]
+        totalStories:
+          type: ["integer", "null"]
+        prevStoryId:
+          type: ["integer", "null"]
+        nextStoryId:
+          type: ["integer", "null"]
+      required: [seriesId, seriesTitle, position, totalStories, prevStoryId, nextStoryId]
+
     UpdateStoryTagsBody:
       type: object
       properties:
@@ -2399,7 +2434,7 @@ components:
       type: object
       properties:
         id: { type: integer }
-        targetType: { type: string, enum: [story, comment] }
+        targetType: { type: string, enum: [story, comment, repost] }
         targetId: { type: integer }
         reporterName: { type: string }
         reason: { type: string }
@@ -2412,7 +2447,7 @@ components:
     CreateReportBody:
       type: object
       properties:
-        targetType: { type: string, enum: [story, comment] }
+        targetType: { type: string, enum: [story, comment, repost] }
         targetId: { type: integer }
         reporterName: { type: string, minLength: 1 }
         reason: { type: string, maxLength: 500 }

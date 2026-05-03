@@ -83,6 +83,7 @@ import type {
   StoryAnalytics,
   StoryComment,
   StoryLikeInfo,
+  StorySeriesContext,
   StoryStats,
   StoryViewBody,
   StoryWithIllustrations,
@@ -3795,6 +3796,94 @@ export function useSearchAuthors<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getSearchAuthorsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the series this story belongs to (if any) plus prev/next story IDs
+ */
+export const getGetStorySeriesContextUrl = (id: number) => {
+  return `/api/stories/${id}/series-context`;
+};
+
+export const getStorySeriesContext = async (
+  id: number,
+  options?: RequestInit,
+): Promise<StorySeriesContext> => {
+  return customFetch<StorySeriesContext>(getGetStorySeriesContextUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStorySeriesContextQueryKey = (id: number) => {
+  return [`/api/stories/${id}/series-context`] as const;
+};
+
+export const getGetStorySeriesContextQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStorySeriesContext>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorySeriesContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStorySeriesContextQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStorySeriesContext>>
+  > = ({ signal }) => getStorySeriesContext(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStorySeriesContext>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStorySeriesContextQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStorySeriesContext>>
+>;
+export type GetStorySeriesContextQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the series this story belongs to (if any) plus prev/next story IDs
+ */
+
+export function useGetStorySeriesContext<
+  TData = Awaited<ReturnType<typeof getStorySeriesContext>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorySeriesContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStorySeriesContextQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

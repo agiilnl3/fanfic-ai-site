@@ -467,6 +467,21 @@ export interface AdminMetrics {
   topStories: AdminMetricsTopStoriesItem[];
 }
 
+export interface StorySeriesContext {
+  /** @nullable */
+  seriesId: number | null;
+  /** @nullable */
+  seriesTitle: string | null;
+  /** @nullable */
+  position: number | null;
+  /** @nullable */
+  totalStories: number | null;
+  /** @nullable */
+  prevStoryId: number | null;
+  /** @nullable */
+  nextStoryId: number | null;
+}
+
 export interface UpdateStoryTagsBody {
   slugs: string[];
   /** @minLength 1 */
@@ -589,6 +604,7 @@ export type ReportTargetType =
 export const ReportTargetType = {
   story: "story",
   comment: "comment",
+  repost: "repost",
 } as const;
 
 export type ReportStatus = (typeof ReportStatus)[keyof typeof ReportStatus];
@@ -619,6 +635,7 @@ export type CreateReportBodyTargetType =
 export const CreateReportBodyTargetType = {
   story: "story",
   comment: "comment",
+  repost: "repost",
 } as const;
 
 export interface CreateReportBody {

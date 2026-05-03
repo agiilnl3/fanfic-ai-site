@@ -1070,6 +1070,22 @@ export const SearchAuthorsResponseItem = zod.object({
 export const SearchAuthorsResponse = zod.array(SearchAuthorsResponseItem);
 
 /**
+ * @summary Get the series this story belongs to (if any) plus prev/next story IDs
+ */
+export const GetStorySeriesContextParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetStorySeriesContextResponse = zod.object({
+  seriesId: zod.number().nullable(),
+  seriesTitle: zod.string().nullable(),
+  position: zod.number().nullable(),
+  totalStories: zod.number().nullable(),
+  prevStoryId: zod.number().nullable(),
+  nextStoryId: zod.number().nullable(),
+});
+
+/**
  * @summary Get repost count for a story and whether the requester reposted
  */
 export const GetStoryRepostParams = zod.object({
@@ -1312,7 +1328,7 @@ export const AdminListReportsQueryParams = zod.object({
 
 export const AdminListReportsResponseItem = zod.object({
   id: zod.number(),
-  targetType: zod.enum(["story", "comment"]),
+  targetType: zod.enum(["story", "comment", "repost"]),
   targetId: zod.number(),
   reporterName: zod.string(),
   reason: zod.string(),
@@ -1336,7 +1352,7 @@ export const AdminResolveReportBody = zod.object({
 
 export const AdminResolveReportResponse = zod.object({
   id: zod.number(),
-  targetType: zod.enum(["story", "comment"]),
+  targetType: zod.enum(["story", "comment", "repost"]),
   targetId: zod.number(),
   reporterName: zod.string(),
   reason: zod.string(),
@@ -1353,7 +1369,7 @@ export const AdminResolveReportResponse = zod.object({
 export const createReportBodyReasonMax = 500;
 
 export const CreateReportBody = zod.object({
-  targetType: zod.enum(["story", "comment"]),
+  targetType: zod.enum(["story", "comment", "repost"]),
   targetId: zod.number(),
   reporterName: zod.string().min(1),
   reason: zod.string().max(createReportBodyReasonMax).optional(),

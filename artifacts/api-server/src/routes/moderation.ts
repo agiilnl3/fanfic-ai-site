@@ -7,6 +7,7 @@ import {
   hiddenCommentsTable,
   storiesTable,
   storyCommentsTable,
+  storyRepostsTable,
 } from "@workspace/db";
 import {
   CreateReportBody,
@@ -24,6 +25,7 @@ async function attachPreviews(
   if (rows.length === 0) return [];
   const storyIds = rows.filter((r) => r.targetType === "story").map((r) => r.targetId);
   const commentIds = rows.filter((r) => r.targetType === "comment").map((r) => r.targetId);
+  const repostIds = rows.filter((r) => r.targetType === "repost").map((r) => r.targetId);
   const stories = storyIds.length
     ? await db
         .select({ id: storiesTable.id, title: storiesTable.title })
@@ -36,14 +38,32 @@ async function attachPreviews(
         .from(storyCommentsTable)
         .where(inArray(storyCommentsTable.id, commentIds))
     : [];
+  const reposts = repostIds.length
+    ? await db
+        .select({
+          id: storyRepostsTable.id,
+          reposterName: storyRepostsTable.reposterName,
+          note: storyRepostsTable.note,
+        })
+        .from(storyRepostsTable)
+        .where(inArray(storyRepostsTable.id, repostIds))
+    : [];
   const sMap = new Map(stories.map((s) => [s.id, s.title]));
   const cMap = new Map(comments.map((c) => [c.id, c.body]));
+  const rMap = new Map(
+    reposts.map((r) => [
+      r.id,
+      r.note ? `@${r.reposterName}: ${r.note}` : `@${r.reposterName}`,
+    ]),
+  );
   return rows.map((r) => ({
     ...r,
     targetPreview:
       r.targetType === "story"
         ? sMap.get(r.targetId) ?? null
-        : (cMap.get(r.targetId)?.slice(0, 200) ?? null),
+        : r.targetType === "comment"
+          ? cMap.get(r.targetId)?.slice(0, 200) ?? null
+          : rMap.get(r.targetId)?.slice(0, 200) ?? null,
   }));
 }
 
@@ -128,6 +148,13 @@ router.post(
           .update(storiesTable)
           .set({ status: "draft", updatedAt: new Date() })
           .where(eq(storiesTable.id, report.targetId));
+      } else if (report.targetType === "repost") {
+        // Reposts have no "hidden" join table; the safe action is to delete
+        // the repost row so it disappears from author profiles and from
+        // engagement aggregations.
+        await db
+          .delete(storyRepostsTable)
+          .where(eq(storyRepostsTable.id, report.targetId));
       } else {
         // Cascade-hide: the reported comment AND every descendant reply.
         // We do a small BFS over parent_id since threads are 2 levels max,
