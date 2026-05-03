@@ -64,7 +64,12 @@ export function ssrOgPlugin(): Plugin {
     return `${block}\n${html}`;
   }
 
-  function getOrigin(req: IncomingMessage): string {
+  // Public-facing origin used only for emitting absolute og:image / og:url
+  // values in the HTML response. NEVER used as a server-side fetch target —
+  // see fetchStoryMeta below.
+  function getPublicOrigin(req: IncomingMessage): string {
+    const configured = process.env.PUBLIC_SITE_ORIGIN;
+    if (configured) return configured.replace(/\/$/, "");
     const proto =
       (req.headers["x-forwarded-proto"] as string)?.split(",")[0] ?? "http";
     const host =
@@ -76,7 +81,6 @@ export function ssrOgPlugin(): Plugin {
 
   async function fetchStoryMeta(
     storyId: number,
-    origin: string,
   ): Promise<{
     title: string;
     summary: string | null;
@@ -84,10 +88,13 @@ export function ssrOgPlugin(): Plugin {
     genre: string;
     status: string;
   } | null> {
+    // Trusted bases only. We deliberately do NOT include any
+    // request-derived origin here — Host / X-Forwarded-Host are
+    // attacker-controlled and would let a crafted request turn this
+    // SSR fetch into an SSRF primitive.
     const candidates = [
       process.env.PUBLIC_API_BASE_URL,
       "http://127.0.0.1:8080",
-      origin,
     ].filter(Boolean) as string[];
     for (const base of candidates) {
       try {
@@ -120,8 +127,8 @@ export function ssrOgPlugin(): Plugin {
           const accept = String(req.headers.accept ?? "");
           if (!accept.includes("text/html")) return next();
           const storyId = Number(m[1]);
-          const origin = getOrigin(req);
-          const meta = await fetchStoryMeta(storyId, origin);
+          const origin = getPublicOrigin(req);
+          const meta = await fetchStoryMeta(storyId);
           if (!meta || meta.status !== "published") return next();
           const baseHtml = await loadHtml(url);
           const description =
