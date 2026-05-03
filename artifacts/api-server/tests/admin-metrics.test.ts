@@ -50,9 +50,11 @@ describe("/admin/metrics", () => {
         .onConflictDoNothing();
     }
     for (let i = 0; i < 5; i++) {
-      await db
-        .insert(storyCommentsTable)
-        .values({ storyId: publishedId, authorName: `c_${author}_${i}`, body: "ok" });
+      await db.insert(storyCommentsTable).values({
+        storyId: publishedId,
+        authorName: `c_${author}_${i}`,
+        body: "ok",
+      });
     }
   });
 
@@ -71,9 +73,7 @@ describe("/admin/metrics", () => {
       .get("/api/admin/metrics")
       .set("x-admin-token", adminToken);
     expect(res.status).toBe(200);
-    const ids: number[] = res.body.topStories.map(
-      (s: { id: number }) => s.id,
-    );
+    const ids: number[] = res.body.topStories.map((s: { id: number }) => s.id);
     expect(ids).not.toContain(draftId);
   });
 });

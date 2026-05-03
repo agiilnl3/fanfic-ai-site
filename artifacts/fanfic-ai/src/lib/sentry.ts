@@ -10,7 +10,9 @@ export function initSentry(): void {
     Sentry.init({
       dsn,
       environment: import.meta.env.MODE,
-      tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? "0.1"),
+      tracesSampleRate: Number(
+        import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? "0.1",
+      ),
     });
     initialized = true;
   } catch {

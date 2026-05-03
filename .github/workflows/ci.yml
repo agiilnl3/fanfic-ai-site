@@ -31,6 +31,11 @@ jobs:
       PORT: 3000
       VITE_API_BASE_URL: http://localhost:3000
       E2E_BASE_URL: http://localhost:5173
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT_API: ${{ secrets.SENTRY_PROJECT_API }}
+      SENTRY_PROJECT_WEB: ${{ secrets.SENTRY_PROJECT_WEB }}
+      SENTRY_RELEASE: ${{ github.sha }}
 
     steps:
       - uses: actions/checkout@v4
@@ -59,26 +64,52 @@ jobs:
       - name: API integration tests
         run: pnpm --filter @workspace/api-server run test
 
+      - name: Build api-server
+        run: pnpm --filter @workspace/api-server run build
+
+      - name: Build fanfic-ai
+        run: pnpm --filter @workspace/fanfic-ai run build
+
+      - name: Upload api-server source maps to Sentry
+        if: env.SENTRY_AUTH_TOKEN != '' && env.SENTRY_ORG != '' && env.SENTRY_PROJECT_API != ''
+        run: |
+          npx --yes @sentry/cli releases new "$SENTRY_RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_API"
+          npx --yes @sentry/cli releases files "$SENTRY_RELEASE" upload-sourcemaps artifacts/api-server/dist \
+            --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_API" --rewrite
+          npx --yes @sentry/cli releases finalize "$SENTRY_RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_API"
+
+      - name: Upload fanfic-ai source maps to Sentry
+        if: env.SENTRY_AUTH_TOKEN != '' && env.SENTRY_ORG != '' && env.SENTRY_PROJECT_WEB != ''
+        run: |
+          npx --yes @sentry/cli releases new "$SENTRY_RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_WEB"
+          npx --yes @sentry/cli releases files "$SENTRY_RELEASE" upload-sourcemaps artifacts/fanfic-ai/dist/public \
+            --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_WEB" --rewrite
+          npx --yes @sentry/cli releases finalize "$SENTRY_RELEASE" --org "$SENTRY_ORG" --project "$SENTRY_PROJECT_WEB"
+
       - name: Install Playwright browser
         run: pnpm --filter @workspace/e2e-tests exec playwright install --with-deps chromium
 
       - name: Start backend (api-server)
         run: |
-          pnpm --filter @workspace/api-server run build
           pnpm --filter @workspace/api-server run start &
           echo $! > /tmp/api.pid
-          for i in $(seq 1 40); do
-            curl -sf http://localhost:3000/api/billing/config && break || sleep 1;
-          done
-
-      - name: Start frontend (fanfic-ai)
-        run: |
-          pnpm --filter @workspace/fanfic-ai run build || true
-          pnpm --filter @workspace/fanfic-ai run dev &
-          echo $! > /tmp/web.pid
+          ok=0
           for i in $(seq 1 60); do
-            curl -sf http://localhost:5173 && break || sleep 1;
+            if curl -sf http://localhost:3000/api/billing/config; then ok=1; break; fi
+            sleep 1
           done
+          if [ "$ok" != "1" ]; then echo "api-server failed to become healthy"; exit 1; fi
+
+      - name: Start frontend (fanfic-ai preview)
+        run: |
+          pnpm --filter @workspace/fanfic-ai exec vite preview --port 5173 --strictPort --host 0.0.0.0 &
+          echo $! > /tmp/web.pid
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173 >/dev/null; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then echo "fanfic-ai failed to become healthy"; exit 1; fi
 
       - name: E2E tests
         run: pnpm --filter @workspace/e2e-tests run test

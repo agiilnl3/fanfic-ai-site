@@ -1,5 +1,9 @@
 import { eq, and } from "drizzle-orm";
-import { db, featureFlagsTable, featureFlagOverridesTable } from "@workspace/db";
+import {
+  db,
+  featureFlagsTable,
+  featureFlagOverridesTable,
+} from "@workspace/db";
 
 function hashUserToBucket(userId: number, flagName: string): number {
   let h = 2166136261 >>> 0;
@@ -59,7 +63,10 @@ export async function setFlagOverride(
     .insert(featureFlagOverridesTable)
     .values({ flagName, userId, enabled })
     .onConflictDoUpdate({
-      target: [featureFlagOverridesTable.flagName, featureFlagOverridesTable.userId],
+      target: [
+        featureFlagOverridesTable.flagName,
+        featureFlagOverridesTable.userId,
+      ],
       set: { enabled },
     });
 }

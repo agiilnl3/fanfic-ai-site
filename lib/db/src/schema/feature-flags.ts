@@ -1,4 +1,12 @@
-import { pgTable, serial, text, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  boolean,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export const featureFlagsTable = pgTable(
   "feature_flags",

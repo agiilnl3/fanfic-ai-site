@@ -1,4 +1,10 @@
-import type { Request, Response, NextFunction, RequestHandler, ErrorRequestHandler } from "express";
+import type {
+  Request,
+  Response,
+  NextFunction,
+  RequestHandler,
+  ErrorRequestHandler,
+} from "express";
 import { logger } from "./logger";
 
 type SentryModule = typeof import("@sentry/node");
@@ -32,7 +38,10 @@ export async function traceOpenAI<T>(
   return sentry.startSpan({ name: op, op: "ai.openai" }, fn);
 }
 
-export function captureError(err: unknown, ctx?: Record<string, unknown>): void {
+export function captureError(
+  err: unknown,
+  ctx?: Record<string, unknown>,
+): void {
   if (!initialized || !sentry) return;
   try {
     sentry.captureException(err, ctx ? { extra: ctx } : undefined);
@@ -50,7 +59,9 @@ export function sentryUserContextMiddleware(): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (initialized && sentry) {
       try {
-        const user = (req as Request & { user?: { id?: number; email?: string } }).user;
+        const user = (
+          req as Request & { user?: { id?: number; email?: string } }
+        ).user;
         if (user?.id != null) {
           sentry.setUser({ id: String(user.id), email: user.email });
         }
