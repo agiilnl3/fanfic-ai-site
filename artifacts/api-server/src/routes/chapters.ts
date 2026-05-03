@@ -202,7 +202,6 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
     // Serialize sibling-position + canonical-flag computation against
     // any concurrent /branch or /continue on the same story.
     const inserted: Chapter[] = [];
-    let promotedFirstCanonical = false;
     await db.transaction(async (tx) => {
       await lockStoryChapters(tx, story.id);
       const siblings = await tx
@@ -215,8 +214,6 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
           ),
         );
       const startPos = siblings.length;
-      const hasExistingCanonical = siblings.some((s) => s.isCanonical);
-      promotedFirstCanonical = !hasExistingCanonical;
       for (let i = 0; i < cleaned.length; i++) {
         const b = cleaned[i];
         const [row] = await tx
@@ -228,10 +225,10 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
             branchLabel: (b.branchLabel ?? "").slice(0, 80),
             text: b.text,
             position: startPos + i,
-            // Only the *first* new branch may be promoted, and only when
-            // no existing sibling already holds canonical — preserves
-            // the "exactly one canonical sibling" invariant.
-            isCanonical: !hasExistingCanonical && i === 0,
+            // Generated branches are always candidates. The author must
+            // explicitly call /canonical to promote one, so generation
+            // never silently changes what readers/PDFs/audio see.
+            isCanonical: false,
             authorUserId: req.user!.id,
             authorHandle: req.user!.handle,
           })
@@ -239,10 +236,6 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
         inserted.push(row);
       }
     });
-
-    if (promotedFirstCanonical) {
-      await syncStoryFullText(story.id);
-    }
 
     res.json({
       parentChapterId: parent.id,
