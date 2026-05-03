@@ -5,7 +5,7 @@ export const notificationsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     recipientName: text("recipient_name").notNull(),
-    type: text("type").notNull(), // "comment" | "co_author_chapter" | "follow" | "like"
+    type: text("type").notNull(), // "comment" | "co_author_chapter" | "follow" | "like" | "repost" | "collab_invite" | "collab_accept"
     storyId: integer("story_id"),
     actorName: text("actor_name").notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>(),

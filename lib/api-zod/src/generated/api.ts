@@ -773,6 +773,143 @@ export const RemoveCoAuthorResponse = zod.object({
 });
 
 /**
+ * @summary List collaborator invitations for a story
+ */
+export const ListCollaboratorsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCollaboratorsResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  primaryUserId: zod.number().nullish(),
+  collaborators: zod.array(
+    zod.object({
+      userId: zod.number(),
+      handle: zod.string(),
+      displayName: zod.string(),
+      avatarUrl: zod.string().nullish(),
+      role: zod.enum(["writer", "editor"]),
+      status: zod.enum(["pending", "accepted", "declined", "revoked"]),
+      invitedAt: zod.string(),
+      respondedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Invite a registered user (by handle) to co-author a story
+ */
+export const InviteCollaboratorParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const inviteCollaboratorBodyRoleDefault = `writer`;
+
+export const InviteCollaboratorBody = zod.object({
+  handle: zod
+    .string()
+    .min(1)
+    .describe("Handle of the registered user to invite."),
+  role: zod
+    .enum(["writer", "editor"])
+    .default(inviteCollaboratorBodyRoleDefault),
+});
+
+export const InviteCollaboratorResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  primaryUserId: zod.number().nullish(),
+  collaborators: zod.array(
+    zod.object({
+      userId: zod.number(),
+      handle: zod.string(),
+      displayName: zod.string(),
+      avatarUrl: zod.string().nullish(),
+      role: zod.enum(["writer", "editor"]),
+      status: zod.enum(["pending", "accepted", "declined", "revoked"]),
+      invitedAt: zod.string(),
+      respondedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Accept or decline an invitation (invitee only)
+ */
+export const RespondCollaboratorInviteParams = zod.object({
+  id: zod.coerce.number(),
+  userId: zod.coerce.number(),
+});
+
+export const RespondCollaboratorInviteBody = zod.object({
+  action: zod.enum(["accept", "decline"]),
+});
+
+export const RespondCollaboratorInviteResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  primaryUserId: zod.number().nullish(),
+  collaborators: zod.array(
+    zod.object({
+      userId: zod.number(),
+      handle: zod.string(),
+      displayName: zod.string(),
+      avatarUrl: zod.string().nullish(),
+      role: zod.enum(["writer", "editor"]),
+      status: zod.enum(["pending", "accepted", "declined", "revoked"]),
+      invitedAt: zod.string(),
+      respondedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Revoke or leave a collaboration (owner or self)
+ */
+export const RevokeCollaboratorParams = zod.object({
+  id: zod.coerce.number(),
+  userId: zod.coerce.number(),
+});
+
+export const RevokeCollaboratorResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  primaryUserId: zod.number().nullish(),
+  collaborators: zod.array(
+    zod.object({
+      userId: zod.number(),
+      handle: zod.string(),
+      displayName: zod.string(),
+      avatarUrl: zod.string().nullish(),
+      role: zod.enum(["writer", "editor"]),
+      status: zod.enum(["pending", "accepted", "declined", "revoked"]),
+      invitedAt: zod.string(),
+      respondedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary List chapter authorship metadata for a story
+ */
+export const ListStoryChaptersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListStoryChaptersResponse = zod.object({
+  storyId: zod.number(),
+  primaryAuthor: zod.string(),
+  chapters: zod.array(
+    zod.object({
+      chapterIndex: zod.number(),
+      userId: zod.number(),
+      handle: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary Verify admin password and return a session token (currently equal to the password)
  */
 
@@ -1019,7 +1156,15 @@ export const ListNotificationsQueryParams = zod.object({
 export const ListNotificationsResponseItem = zod.object({
   id: zod.number(),
   recipientName: zod.string(),
-  type: zod.enum(["comment", "co_author_chapter", "follow", "like", "repost"]),
+  type: zod.enum([
+    "comment",
+    "co_author_chapter",
+    "follow",
+    "like",
+    "repost",
+    "collab_invite",
+    "collab_accept",
+  ]),
   actorName: zod.string(),
   storyId: zod.number().nullish(),
   payload: zod.record(zod.string(), zod.unknown()).nullish(),

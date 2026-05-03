@@ -6,7 +6,9 @@ export type NotificationType =
   | "follow"
   | "like"
   | "repost"
-  | "co_author_chapter";
+  | "co_author_chapter"
+  | "collab_invite"
+  | "collab_accept";
 
 const FIELD: Record<NotificationType, keyof NotificationPrefs> = {
   comment: "comment",
@@ -14,6 +16,8 @@ const FIELD: Record<NotificationType, keyof NotificationPrefs> = {
   like: "like",
   repost: "repost",
   co_author_chapter: "coAuthorChapter",
+  collab_invite: "collabInvite",
+  collab_accept: "collabAccept",
 };
 
 export async function getPrefsFor(authorName: string): Promise<NotificationPrefs> {
@@ -30,6 +34,8 @@ export async function getPrefsFor(authorName: string): Promise<NotificationPrefs
     like: true,
     repost: true,
     coAuthorChapter: true,
+    collabInvite: true,
+    collabAccept: true,
     updatedAt: new Date(),
   };
 }

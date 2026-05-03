@@ -7,6 +7,7 @@ import { LikeButton } from "@/components/like-button";
 import { RepostButton } from "@/components/repost-button";
 import { IllustrationReorderDialog } from "@/components/illustration-reorder-dialog";
 import { CommentsSection } from "@/components/comments-section";
+import { ManageCollaboratorsDialog } from "@/components/manage-collaborators-dialog";
 import {
   useGetStory,
   useUpdateStory,
@@ -17,11 +18,11 @@ import {
   useRegenerateStorySection,
   useContinueStory,
   useListCoAuthors,
-  useAddCoAuthor,
-  useRemoveCoAuthor,
+  useListStoryChapters,
   getGetStoryQueryKey,
   getGetIllustrationsQueryKey,
   getListCoAuthorsQueryKey,
+  getListStoryChaptersQueryKey,
   getGetStoryAudioUrl,
   getExportStoryPdfUrl,
   useRecordStoryView,
@@ -49,7 +50,7 @@ import { format } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown, Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -106,26 +107,17 @@ export default function StoryReading() {
   const isPrimaryAuthor = !!authorName && story?.authorName === authorName;
   const isCoAuthor = !!authorName && coAuthors.includes(authorName);
   const isAuthor = isPrimaryAuthor || isCoAuthor;
-  const [coAuthorDraft, setCoAuthorDraft] = useState("");
-  const addCoAuthorMutation = useAddCoAuthor({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
-        setCoAuthorDraft("");
-        toast({ title: t("story.coAuthorAdded") });
-      },
-      onError: () => toast({ title: t("story.coAuthorAddFailed"), variant: "destructive" }),
+
+  const { data: chapterAuthorData } = useListStoryChapters(storyId, {
+    query: {
+      enabled: !!storyId,
+      queryKey: getListStoryChaptersQueryKey(storyId),
     },
   });
-  const removeCoAuthorMutation = useRemoveCoAuthor({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListCoAuthorsQueryKey(storyId) });
-        toast({ title: t("story.coAuthorRemoved") });
-      },
-      onError: () => toast({ title: t("story.coAuthorRemoveFailed"), variant: "destructive" }),
-    },
-  });
+  const chapterAuthorByIndex = new Map<number, { userId: number; handle: string }>();
+  for (const c of chapterAuthorData?.chapters ?? []) {
+    chapterAuthorByIndex.set(c.chapterIndex, { userId: c.userId, handle: c.handle });
+  }
 
   useEffect(() => {
     if (editMode && story?.fullText) {
@@ -578,10 +570,26 @@ export default function StoryReading() {
     regenerateIllustrationMutation.isPending &&
     (regenerateIllustrationMutation.variables as { illustrationId: number } | undefined)?.illustrationId === ill.id;
 
+  // Walk paragraphs once to compute the chapter index of each paragraph.
+  // Chapter 0 = original story body; each `## Title` paragraph opens
+  // chapter N+1 (matches the backend's `## ` heading count in /continue).
+  const paragraphChapterIndex: number[] = [];
+  {
+    let chapter = 0;
+    for (const p of paragraphs) {
+      if (p.startsWith("## ")) chapter += 1;
+      paragraphChapterIndex.push(chapter);
+    }
+  }
+
   const elements: React.ReactNode[] = [];
   paragraphs.forEach((p, i) => {
     const thisSectionIdx = paragraphSectionIndex(i);
     const isRegenSection = regeneratingSectionIdx === thisSectionIdx;
+    const isChapterHeading = p.startsWith("## ");
+    const chapterIdx = paragraphChapterIndex[i];
+    const chapterAuthor = chapterAuthorByIndex.get(chapterIdx);
+    const headingText = isChapterHeading ? p.replace(/^##\s+/, "") : "";
 
     elements.push(
       <div
@@ -589,7 +597,7 @@ export default function StoryReading() {
         data-paragraph-index={i}
         className={`relative group/para ${isRegenSection ? "opacity-40 pointer-events-none" : ""}`}
       >
-        {isAuthor && !editMode && (
+        {isAuthor && !editMode && !isChapterHeading && (
           <div className="absolute -left-10 top-1 opacity-0 group-hover/para:opacity-100 transition-opacity">
             <Button
               size="icon"
@@ -607,7 +615,38 @@ export default function StoryReading() {
             </Button>
           </div>
         )}
-        <p className="mb-6 leading-relaxed">{p}</p>
+        {isChapterHeading ? (
+          <div className="mt-12 mb-6">
+            <h2
+              className="font-serif text-3xl md:text-4xl"
+              data-testid={`chapter-heading-${chapterIdx}`}
+            >
+              {headingText}
+            </h2>
+            {chapterAuthor && chapterAuthor.handle !== story.authorName && (
+              <div
+                className="mt-2 text-sm text-muted-foreground italic"
+                data-testid={`chapter-byline-${chapterIdx}`}
+              >
+                {t("story.chapterBy")}{" "}
+                <Link
+                  href={`/author/${encodeURIComponent(chapterAuthor.handle)}`}
+                  className="hover:text-primary hover:underline"
+                >
+                  @{chapterAuthor.handle}
+                </Link>
+                <Badge
+                  variant="outline"
+                  className="ml-2 text-[10px] uppercase tracking-wider"
+                >
+                  {t("collab.coAuthorBadge")}
+                </Badge>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="mb-6 leading-relaxed">{p}</p>
+        )}
       </div>,
     );
 
@@ -884,73 +923,33 @@ export default function StoryReading() {
 
         {isPrimaryAuthor && (
           <div className="container mx-auto px-4 max-w-4xl mt-6 relative z-20">
-            <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="rounded-lg border border-border/50 bg-card/40 backdrop-blur p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="min-w-0">
                 <h3 className="font-serif text-sm uppercase tracking-wider text-muted-foreground">
                   {t("story.coAuthors")}
                 </h3>
-                <span className="text-xs text-muted-foreground">
-                  {t("story.coAuthorsHint")}
-                </span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {coAuthors.length === 0
+                    ? t("story.noCoAuthors")
+                    : t("collab.acceptedSummary", {
+                        names: coAuthors.join(", "),
+                        count: coAuthors.length,
+                      })}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-2 mb-3">
-                {coAuthors.length === 0 && (
-                  <span className="text-sm text-muted-foreground italic">{t("story.noCoAuthors")}</span>
-                )}
-                {coAuthors.map((name) => (
-                  <Badge key={name} variant="secondary" className="gap-2">
-                    {name}
-                    <button
-                      type="button"
-                      className="hover:text-destructive"
-                      disabled={removeCoAuthorMutation.isPending}
-                      onClick={() =>
-                        removeCoAuthorMutation.mutate({
-                          id: story.id,
-                          data: {
-                            requesterAuthorName: authorName,
-                            coAuthorName: name,
-                          },
-                        })
-                      }
-                      aria-label={t("story.removeCoAuthorAria", { name })}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const name = coAuthorDraft.trim();
-                  if (!name) return;
-                  addCoAuthorMutation.mutate({
-                    id: story.id,
-                    data: { requesterAuthorName: authorName, coAuthorName: name },
-                  });
-                }}
-              >
-                <input
-                  type="text"
-                  value={coAuthorDraft}
-                  onChange={(e) => setCoAuthorDraft(e.target.value)}
-                  placeholder={t("story.addCoAuthorPlaceholder")}
-                  className="flex-1 h-9 px-3 rounded-md border border-border bg-background text-sm"
-                />
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={addCoAuthorMutation.isPending || !coAuthorDraft.trim()}
-                >
-                  {addCoAuthorMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    t("story.addCoAuthor")
-                  )}
-                </Button>
-              </form>
+              <ManageCollaboratorsDialog
+                storyId={story.id}
+                trigger={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="button-manage-collaborators"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    {t("collab.manageButton")}
+                  </Button>
+                }
+              />
             </div>
           </div>
         )}

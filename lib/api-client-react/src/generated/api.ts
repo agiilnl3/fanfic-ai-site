@@ -31,9 +31,11 @@ import type {
   Bookmark,
   BookmarkBody,
   BookmarkInfo,
+  ChapterAuthorList,
   CoAuthorList,
   CoAuthorMutationBody,
   CoAuthorRemoveBody,
+  CollaboratorList,
   ContinueStoryBody,
   CreateReportBody,
   CreateSeriesBody,
@@ -57,6 +59,7 @@ import type {
   HealthStatus,
   HistoryEntry,
   Illustration,
+  InviteCollaboratorBody,
   LikeBody,
   ListNotificationsParams,
   ListSeriesParams,
@@ -76,6 +79,7 @@ import type {
   RepostFeedEntry,
   RepostInfo,
   ResolveReportBody,
+  RespondInviteBody,
   SearchAuthorsParams,
   Series,
   SeriesWithStories,
@@ -2630,6 +2634,443 @@ export const useRemoveCoAuthor = <
 > => {
   return useMutation(getRemoveCoAuthorMutationOptions(options));
 };
+
+/**
+ * @summary List collaborator invitations for a story
+ */
+export const getListCollaboratorsUrl = (id: number) => {
+  return `/api/stories/${id}/collaborators`;
+};
+
+export const listCollaborators = async (
+  id: number,
+  options?: RequestInit,
+): Promise<CollaboratorList> => {
+  return customFetch<CollaboratorList>(getListCollaboratorsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCollaboratorsQueryKey = (id: number) => {
+  return [`/api/stories/${id}/collaborators`] as const;
+};
+
+export const getListCollaboratorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCollaborators>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCollaborators>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListCollaboratorsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCollaborators>>
+  > = ({ signal }) => listCollaborators(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCollaborators>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCollaboratorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCollaborators>>
+>;
+export type ListCollaboratorsQueryError = ErrorType<void>;
+
+/**
+ * @summary List collaborator invitations for a story
+ */
+
+export function useListCollaborators<
+  TData = Awaited<ReturnType<typeof listCollaborators>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCollaborators>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCollaboratorsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Invite a registered user (by handle) to co-author a story
+ */
+export const getInviteCollaboratorUrl = (id: number) => {
+  return `/api/stories/${id}/collaborators`;
+};
+
+export const inviteCollaborator = async (
+  id: number,
+  inviteCollaboratorBody: InviteCollaboratorBody,
+  options?: RequestInit,
+): Promise<CollaboratorList> => {
+  return customFetch<CollaboratorList>(getInviteCollaboratorUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(inviteCollaboratorBody),
+  });
+};
+
+export const getInviteCollaboratorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    TError,
+    { id: number; data: BodyType<InviteCollaboratorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof inviteCollaborator>>,
+  TError,
+  { id: number; data: BodyType<InviteCollaboratorBody> },
+  TContext
+> => {
+  const mutationKey = ["inviteCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    { id: number; data: BodyType<InviteCollaboratorBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return inviteCollaborator(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InviteCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof inviteCollaborator>>
+>;
+export type InviteCollaboratorMutationBody = BodyType<InviteCollaboratorBody>;
+export type InviteCollaboratorMutationError = ErrorType<void>;
+
+/**
+ * @summary Invite a registered user (by handle) to co-author a story
+ */
+export const useInviteCollaborator = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    TError,
+    { id: number; data: BodyType<InviteCollaboratorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof inviteCollaborator>>,
+  TError,
+  { id: number; data: BodyType<InviteCollaboratorBody> },
+  TContext
+> => {
+  return useMutation(getInviteCollaboratorMutationOptions(options));
+};
+
+/**
+ * @summary Accept or decline an invitation (invitee only)
+ */
+export const getRespondCollaboratorInviteUrl = (id: number, userId: number) => {
+  return `/api/stories/${id}/collaborators/${userId}/respond`;
+};
+
+export const respondCollaboratorInvite = async (
+  id: number,
+  userId: number,
+  respondInviteBody: RespondInviteBody,
+  options?: RequestInit,
+): Promise<CollaboratorList> => {
+  return customFetch<CollaboratorList>(
+    getRespondCollaboratorInviteUrl(id, userId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(respondInviteBody),
+    },
+  );
+};
+
+export const getRespondCollaboratorInviteMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof respondCollaboratorInvite>>,
+    TError,
+    { id: number; userId: number; data: BodyType<RespondInviteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof respondCollaboratorInvite>>,
+  TError,
+  { id: number; userId: number; data: BodyType<RespondInviteBody> },
+  TContext
+> => {
+  const mutationKey = ["respondCollaboratorInvite"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof respondCollaboratorInvite>>,
+    { id: number; userId: number; data: BodyType<RespondInviteBody> }
+  > = (props) => {
+    const { id, userId, data } = props ?? {};
+
+    return respondCollaboratorInvite(id, userId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RespondCollaboratorInviteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof respondCollaboratorInvite>>
+>;
+export type RespondCollaboratorInviteMutationBody = BodyType<RespondInviteBody>;
+export type RespondCollaboratorInviteMutationError = ErrorType<void>;
+
+/**
+ * @summary Accept or decline an invitation (invitee only)
+ */
+export const useRespondCollaboratorInvite = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof respondCollaboratorInvite>>,
+    TError,
+    { id: number; userId: number; data: BodyType<RespondInviteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof respondCollaboratorInvite>>,
+  TError,
+  { id: number; userId: number; data: BodyType<RespondInviteBody> },
+  TContext
+> => {
+  return useMutation(getRespondCollaboratorInviteMutationOptions(options));
+};
+
+/**
+ * @summary Revoke or leave a collaboration (owner or self)
+ */
+export const getRevokeCollaboratorUrl = (id: number, userId: number) => {
+  return `/api/stories/${id}/collaborators/${userId}`;
+};
+
+export const revokeCollaborator = async (
+  id: number,
+  userId: number,
+  options?: RequestInit,
+): Promise<CollaboratorList> => {
+  return customFetch<CollaboratorList>(getRevokeCollaboratorUrl(id, userId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getRevokeCollaboratorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revokeCollaborator>>,
+    TError,
+    { id: number; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof revokeCollaborator>>,
+  TError,
+  { id: number; userId: number },
+  TContext
+> => {
+  const mutationKey = ["revokeCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof revokeCollaborator>>,
+    { id: number; userId: number }
+  > = (props) => {
+    const { id, userId } = props ?? {};
+
+    return revokeCollaborator(id, userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RevokeCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof revokeCollaborator>>
+>;
+
+export type RevokeCollaboratorMutationError = ErrorType<void>;
+
+/**
+ * @summary Revoke or leave a collaboration (owner or self)
+ */
+export const useRevokeCollaborator = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revokeCollaborator>>,
+    TError,
+    { id: number; userId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof revokeCollaborator>>,
+  TError,
+  { id: number; userId: number },
+  TContext
+> => {
+  return useMutation(getRevokeCollaboratorMutationOptions(options));
+};
+
+/**
+ * @summary List chapter authorship metadata for a story
+ */
+export const getListStoryChaptersUrl = (id: number) => {
+  return `/api/stories/${id}/chapters`;
+};
+
+export const listStoryChapters = async (
+  id: number,
+  options?: RequestInit,
+): Promise<ChapterAuthorList> => {
+  return customFetch<ChapterAuthorList>(getListStoryChaptersUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStoryChaptersQueryKey = (id: number) => {
+  return [`/api/stories/${id}/chapters`] as const;
+};
+
+export const getListStoryChaptersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStoryChapters>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryChapters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListStoryChaptersQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listStoryChapters>>
+  > = ({ signal }) => listStoryChapters(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStoryChapters>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStoryChaptersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStoryChapters>>
+>;
+export type ListStoryChaptersQueryError = ErrorType<void>;
+
+/**
+ * @summary List chapter authorship metadata for a story
+ */
+
+export function useListStoryChapters<
+  TData = Awaited<ReturnType<typeof listStoryChapters>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryChapters>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStoryChaptersQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Verify admin password and return a session token (currently equal to the password)

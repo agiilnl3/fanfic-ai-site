@@ -258,6 +258,86 @@ export interface CoAuthorRemoveBody {
   coAuthorName: string;
 }
 
+export type CollaboratorRole =
+  (typeof CollaboratorRole)[keyof typeof CollaboratorRole];
+
+export const CollaboratorRole = {
+  writer: "writer",
+  editor: "editor",
+} as const;
+
+export type CollaboratorStatus =
+  (typeof CollaboratorStatus)[keyof typeof CollaboratorStatus];
+
+export const CollaboratorStatus = {
+  pending: "pending",
+  accepted: "accepted",
+  declined: "declined",
+  revoked: "revoked",
+} as const;
+
+export interface Collaborator {
+  userId: number;
+  handle: string;
+  displayName: string;
+  /** @nullable */
+  avatarUrl?: string | null;
+  role: CollaboratorRole;
+  status: CollaboratorStatus;
+  invitedAt: string;
+  /** @nullable */
+  respondedAt?: string | null;
+}
+
+export interface CollaboratorList {
+  storyId: number;
+  primaryAuthor: string;
+  /** @nullable */
+  primaryUserId?: number | null;
+  collaborators: Collaborator[];
+}
+
+export type InviteCollaboratorBodyRole =
+  (typeof InviteCollaboratorBodyRole)[keyof typeof InviteCollaboratorBodyRole];
+
+export const InviteCollaboratorBodyRole = {
+  writer: "writer",
+  editor: "editor",
+} as const;
+
+export interface InviteCollaboratorBody {
+  /**
+   * Handle of the registered user to invite.
+   * @minLength 1
+   */
+  handle: string;
+  role?: InviteCollaboratorBodyRole;
+}
+
+export type RespondInviteBodyAction =
+  (typeof RespondInviteBodyAction)[keyof typeof RespondInviteBodyAction];
+
+export const RespondInviteBodyAction = {
+  accept: "accept",
+  decline: "decline",
+} as const;
+
+export interface RespondInviteBody {
+  action: RespondInviteBodyAction;
+}
+
+export interface ChapterAuthorRecord {
+  chapterIndex: number;
+  userId: number;
+  handle: string;
+}
+
+export interface ChapterAuthorList {
+  storyId: number;
+  primaryAuthor: string;
+  chapters: ChapterAuthorRecord[];
+}
+
 export interface AdminLoginBody {
   /** @minLength 1 */
   password: string;
@@ -349,6 +429,8 @@ export const NotificationType = {
   follow: "follow",
   like: "like",
   repost: "repost",
+  collab_invite: "collab_invite",
+  collab_accept: "collab_accept",
 } as const;
 
 /**

@@ -10,6 +10,9 @@ import {
   storyViewsTable,
   authorFollowsTable,
   notificationsTable,
+  usersTable,
+  storyCollaboratorsTable,
+  chapterAuthorsTable,
 } from "@workspace/db";
 import { ilike, or, isNull } from "drizzle-orm";
 import {
@@ -60,6 +63,13 @@ import {
   DeleteStoryCommentQueryParams,
   ReorderIllustrationsParams,
   ReorderIllustrationsBody,
+  ListCollaboratorsParams,
+  InviteCollaboratorParams,
+  InviteCollaboratorBody,
+  RespondCollaboratorInviteParams,
+  RespondCollaboratorInviteBody,
+  RevokeCollaboratorParams,
+  ListStoryChaptersParams,
 } from "@workspace/api-zod";
 import { checkAndBumpStory, checkAndBumpIllustration } from "../lib/usage";
 import { notifyRecipient } from "../lib/notification-bus";
@@ -1212,12 +1222,33 @@ Write the NEXT chapter (~700 words). Keep characters, tone, and style consistent
     }
 
     const appended = `${story.fullText ?? ""}\n\n## ${chapterTitle}\n\n${chapterText}`;
+    // Chapter index = number of `## ` headings already present (zero-indexed
+    // for chapters BEYOND the original first chapter, which has no heading).
+    const existingChapterCount = ((story.fullText ?? "").match(/^## /gm) || []).length;
+    const newChapterIndex = existingChapterCount + 1; // index 0 = original story body
 
     const [updated] = await db
       .update(storiesTable)
       .set({ fullText: appended, updatedAt: new Date() })
       .where(eq(storiesTable.id, story.id))
       .returning();
+
+    // Record chapter authorship for byline rendering.
+    if (req.user) {
+      try {
+        await db
+          .insert(chapterAuthorsTable)
+          .values({
+            storyId: story.id,
+            chapterIndex: newChapterIndex,
+            userId: req.user.id,
+            authorHandle: req.user.handle,
+          })
+          .onConflictDoNothing();
+      } catch (err) {
+        logger.warn({ err }, "failed to record chapter authorship");
+      }
+    }
 
     // Notify the primary author if a co-author wrote this chapter
     if (story.authorName && story.authorName !== body.data.authorName) {
@@ -1646,6 +1677,374 @@ router.post("/stories/:id/co-authors/remove", writeLimiter, async (req, res): Pr
     storyId: updated.id,
     primaryAuthor: updated.authorName,
     coAuthors: updated.coAuthors ?? [],
+  });
+});
+
+// ---------- Collaborators (rich invitations) ----------
+
+type CollaboratorRow = {
+  userId: number;
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: string;
+  status: string;
+  invitedAt: string;
+  respondedAt: string | null;
+};
+
+async function loadCollaboratorList(storyId: number): Promise<CollaboratorRow[]> {
+  const rows = await db
+    .select({
+      userId: storyCollaboratorsTable.userId,
+      handle: usersTable.handle,
+      displayName: usersTable.displayName,
+      avatarUrl: usersTable.avatarUrl,
+      role: storyCollaboratorsTable.role,
+      status: storyCollaboratorsTable.status,
+      invitedAt: storyCollaboratorsTable.invitedAt,
+      respondedAt: storyCollaboratorsTable.respondedAt,
+    })
+    .from(storyCollaboratorsTable)
+    .innerJoin(usersTable, eq(usersTable.id, storyCollaboratorsTable.userId))
+    .where(eq(storyCollaboratorsTable.storyId, storyId))
+    .orderBy(desc(storyCollaboratorsTable.invitedAt));
+  return rows.map((r) => ({
+    userId: r.userId,
+    handle: r.handle,
+    displayName: r.displayName,
+    avatarUrl: r.avatarUrl,
+    role: r.role,
+    status: r.status,
+    invitedAt: r.invitedAt.toISOString(),
+    respondedAt: r.respondedAt ? r.respondedAt.toISOString() : null,
+  }));
+}
+
+async function syncStoryCoAuthorsArray(storyId: number): Promise<void> {
+  // Keep stories.co_authors text[] in sync with accepted writer collaborators
+  // so the existing canEditStory + UI byline keep working without joins.
+  const accepted = await db
+    .select({ handle: usersTable.handle })
+    .from(storyCollaboratorsTable)
+    .innerJoin(usersTable, eq(usersTable.id, storyCollaboratorsTable.userId))
+    .where(
+      and(
+        eq(storyCollaboratorsTable.storyId, storyId),
+        eq(storyCollaboratorsTable.status, "accepted"),
+        eq(storyCollaboratorsTable.role, "writer"),
+      ),
+    );
+  const handles = accepted.map((r) => r.handle);
+  await db
+    .update(storiesTable)
+    .set({ coAuthors: handles, updatedAt: new Date() })
+    .where(eq(storiesTable.id, storyId));
+}
+
+router.get("/stories/:id/collaborators", async (req, res): Promise<void> => {
+  const params = ListCollaboratorsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const collaborators = await loadCollaboratorList(story.id);
+  // Pending invitations leak who-was-invited; only owner or any listed
+  // collaborator (accepted, pending, or even past) gets the full picture.
+  // Everyone else sees only accepted writers (which are already public via
+  // the chapter byline + stories.coAuthors text[] anyway).
+  const callerId = req.user?.id;
+  const isOwner = !!callerId && story.userId === callerId;
+  const isCollaborator =
+    !!callerId && collaborators.some((c) => c.userId === callerId);
+  const visible =
+    isOwner || isCollaborator
+      ? collaborators
+      : collaborators.filter((c) => c.status === "accepted");
+  res.json({
+    storyId: story.id,
+    primaryAuthor: story.authorName,
+    primaryUserId: story.userId,
+    collaborators: visible,
+  });
+});
+
+router.post(
+  "/stories/:id/collaborators",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = InviteCollaboratorParams.safeParse(req.params);
+    const body = InviteCollaboratorBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    if (!req.user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const isOwner =
+      story.userId != null
+        ? story.userId === req.user.id
+        : req.user.handle === story.authorName;
+    if (!isOwner) {
+      res.status(403).json({ error: "Only the primary author can invite collaborators" });
+      return;
+    }
+    const handle = body.data.handle.trim().replace(/^@/, "");
+    if (!handle || handle === req.user.handle) {
+      res.status(400).json({ error: "Invalid handle" });
+      return;
+    }
+    const [invitee] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.handle, handle))
+      .limit(1);
+    if (!invitee) {
+      res.status(404).json({ error: "No user with that handle" });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(storyCollaboratorsTable)
+      .where(
+        and(
+          eq(storyCollaboratorsTable.storyId, story.id),
+          eq(storyCollaboratorsTable.userId, invitee.id),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      if (existing.status === "pending" || existing.status === "accepted") {
+        res.status(400).json({ error: "Already invited" });
+        return;
+      }
+      // Re-invite after decline/revoke: reset to pending.
+      await db
+        .update(storyCollaboratorsTable)
+        .set({
+          status: "pending",
+          role: body.data.role,
+          invitedAt: new Date(),
+          respondedAt: null,
+          invitedByUserId: req.user.id,
+        })
+        .where(eq(storyCollaboratorsTable.id, existing.id));
+    } else {
+      await db.insert(storyCollaboratorsTable).values({
+        storyId: story.id,
+        userId: invitee.id,
+        role: body.data.role,
+        status: "pending",
+        invitedByUserId: req.user.id,
+      });
+    }
+    try {
+      await db.insert(notificationsTable).values({
+        recipientName: invitee.handle,
+        type: "collab_invite",
+        actorName: req.user.handle,
+        storyId: story.id,
+        payload: {
+          storyTitle: story.title,
+          role: body.data.role,
+          inviterUserId: req.user.id,
+          inviteeUserId: invitee.id,
+        },
+      });
+      notifyRecipient(invitee.handle);
+    } catch (err) {
+      logger.warn({ err }, "failed to insert collab_invite notification");
+    }
+    const collaborators = await loadCollaboratorList(story.id);
+    res.json({
+      storyId: story.id,
+      primaryAuthor: story.authorName,
+      primaryUserId: story.userId,
+      collaborators,
+    });
+  },
+);
+
+router.post(
+  "/stories/:id/collaborators/:userId/respond",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = RespondCollaboratorInviteParams.safeParse(req.params);
+    const body = RespondCollaboratorInviteBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    if (!req.user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    if (req.user.id !== params.data.userId) {
+      res.status(403).json({ error: "Only the invitee may respond" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const [invite] = await db
+      .select()
+      .from(storyCollaboratorsTable)
+      .where(
+        and(
+          eq(storyCollaboratorsTable.storyId, story.id),
+          eq(storyCollaboratorsTable.userId, req.user.id),
+        ),
+      )
+      .limit(1);
+    if (!invite || invite.status !== "pending") {
+      res.status(404).json({ error: "Invitation not found" });
+      return;
+    }
+    const nextStatus = body.data.action === "accept" ? "accepted" : "declined";
+    await db
+      .update(storyCollaboratorsTable)
+      .set({ status: nextStatus, respondedAt: new Date() })
+      .where(eq(storyCollaboratorsTable.id, invite.id));
+    if (nextStatus === "accepted") {
+      await syncStoryCoAuthorsArray(story.id);
+      // Notify the primary author that the invite was accepted.
+      try {
+        await db.insert(notificationsTable).values({
+          recipientName: story.authorName,
+          type: "collab_accept",
+          actorName: req.user.handle,
+          storyId: story.id,
+          payload: { storyTitle: story.title, role: invite.role },
+        });
+        notifyRecipient(story.authorName);
+      } catch (err) {
+        logger.warn({ err }, "failed to insert collab_accept notification");
+      }
+    }
+    const collaborators = await loadCollaboratorList(story.id);
+    res.json({
+      storyId: story.id,
+      primaryAuthor: story.authorName,
+      primaryUserId: story.userId,
+      collaborators,
+    });
+  },
+);
+
+router.delete(
+  "/stories/:id/collaborators/:userId",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = RevokeCollaboratorParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    if (!req.user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const isOwner =
+      story.userId != null
+        ? story.userId === req.user.id
+        : req.user.handle === story.authorName;
+    const isSelf = req.user.id === params.data.userId;
+    if (!isOwner && !isSelf) {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+    const [invite] = await db
+      .select()
+      .from(storyCollaboratorsTable)
+      .where(
+        and(
+          eq(storyCollaboratorsTable.storyId, story.id),
+          eq(storyCollaboratorsTable.userId, params.data.userId),
+        ),
+      )
+      .limit(1);
+    if (!invite) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    await db
+      .update(storyCollaboratorsTable)
+      .set({ status: "revoked", respondedAt: new Date() })
+      .where(eq(storyCollaboratorsTable.id, invite.id));
+    await syncStoryCoAuthorsArray(story.id);
+    const collaborators = await loadCollaboratorList(story.id);
+    res.json({
+      storyId: story.id,
+      primaryAuthor: story.authorName,
+      primaryUserId: story.userId,
+      collaborators,
+    });
+  },
+);
+
+router.get("/stories/:id/chapters", async (req, res): Promise<void> => {
+  const params = ListStoryChaptersParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, params.data.id))
+    .limit(1);
+  if (!story) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const rows = await db
+    .select({
+      chapterIndex: chapterAuthorsTable.chapterIndex,
+      userId: chapterAuthorsTable.userId,
+      handle: chapterAuthorsTable.authorHandle,
+    })
+    .from(chapterAuthorsTable)
+    .where(eq(chapterAuthorsTable.storyId, story.id))
+    .orderBy(chapterAuthorsTable.chapterIndex);
+  res.json({
+    storyId: story.id,
+    primaryAuthor: story.authorName,
+    chapters: rows,
   });
 });
 

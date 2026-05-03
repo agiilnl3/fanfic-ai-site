@@ -18,6 +18,8 @@ function allowedTypes(prefs: Awaited<ReturnType<typeof getPrefsFor>>): string[] 
   if (prefs.like) list.push("like");
   if (prefs.repost) list.push("repost");
   if (prefs.coAuthorChapter) list.push("co_author_chapter");
+  if (prefs.collabInvite) list.push("collab_invite");
+  if (prefs.collabAccept) list.push("collab_accept");
   return list;
 }
 

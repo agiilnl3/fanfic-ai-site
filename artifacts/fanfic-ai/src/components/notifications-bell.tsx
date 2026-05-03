@@ -7,18 +7,21 @@ import {
   useGetUnreadNotificationCount,
   useListNotifications,
   useMarkNotificationsRead,
+  useRespondCollaboratorInvite,
   getGetUnreadNotificationCountQueryKey,
   getListNotificationsQueryKey,
+  getListCollaboratorsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthor } from "@/hooks/use-author";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Bell, MessageCircle, UserPlus, Heart, Repeat2, BookPlus, Sparkles } from "lucide-react";
+import { Bell, MessageCircle, UserPlus, Heart, Repeat2, BookPlus, Sparkles, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function iconForType(type: string) {
@@ -27,6 +30,7 @@ function iconForType(type: string) {
   if (type === "like") return Heart;
   if (type === "repost") return Repeat2;
   if (type === "co_author_chapter") return BookPlus;
+  if (type === "collab_invite" || type === "collab_accept") return Users;
   return Sparkles;
 }
 
@@ -70,6 +74,21 @@ export function NotificationsBell() {
     };
   }, [enabled, recipient, queryClient, unreadKey, listKey]);
 
+  const { toast } = useToast();
+  const respondInvite = useRespondCollaboratorInvite({
+    mutation: {
+      onSuccess: (_data, vars) => {
+        queryClient.invalidateQueries({ queryKey: listKey });
+        queryClient.invalidateQueries({
+          queryKey: getListCollaboratorsQueryKey(vars.id),
+        });
+        toast({ title: t("collab.responded") });
+      },
+      onError: () =>
+        toast({ title: t("collab.inviteFailed"), variant: "destructive" }),
+    },
+  });
+
   const markRead = useMarkNotificationsRead({
     mutation: {
       onSuccess: (next) => {
@@ -99,9 +118,21 @@ export function NotificationsBell() {
     payload?: Record<string, unknown> | null;
   }) => {
     const title = (n.payload?.storyTitle as string | undefined) ?? t("notifications.yourStory");
-    const known = ["comment", "follow", "like", "repost", "co_author_chapter"];
-    const key =
-      n.type === "co_author_chapter" ? "coAuthorChapter" : n.type;
+    const known = [
+      "comment",
+      "follow",
+      "like",
+      "repost",
+      "co_author_chapter",
+      "collab_invite",
+      "collab_accept",
+    ];
+    const keyMap: Record<string, string> = {
+      co_author_chapter: "coAuthorChapter",
+      collab_invite: "collabInvite",
+      collab_accept: "collabAccept",
+    };
+    const key = keyMap[n.type] ?? n.type;
     if (known.includes(n.type)) {
       return t(`notifications.${key}`, { actor: n.actorName, title });
     }
@@ -143,6 +174,12 @@ export function NotificationsBell() {
             {notifications.map((n) => {
               const Icon = iconForType(n.type);
               const href = n.storyId ? `/story/${n.storyId}` : `/author/${encodeURIComponent(n.actorName)}`;
+              const inviteeUserId =
+                n.type === "collab_invite"
+                  ? (n.payload?.inviteeUserId as number | undefined)
+                  : undefined;
+              const showInviteActions =
+                n.type === "collab_invite" && !!n.storyId && !!inviteeUserId;
               return (
                 <li key={n.id}>
                   <Link
@@ -154,11 +191,51 @@ export function NotificationsBell() {
                     )}
                   >
                     <Icon className="w-4 h-4 mt-0.5 text-primary shrink-0" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm leading-snug">{summarize(n)}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
                         {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: dateLocale })}
                       </p>
+                      {showInviteActions && (
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-7 px-2 text-xs"
+                            disabled={respondInvite.isPending}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              respondInvite.mutate({
+                                id: n.storyId!,
+                                userId: inviteeUserId!,
+                                data: { action: "accept" },
+                              });
+                            }}
+                            data-testid={`button-accept-invite-${n.id}`}
+                          >
+                            {t("collab.accept")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs"
+                            disabled={respondInvite.isPending}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              respondInvite.mutate({
+                                id: n.storyId!,
+                                userId: inviteeUserId!,
+                                data: { action: "decline" },
+                              });
+                            }}
+                            data-testid={`button-decline-invite-${n.id}`}
+                          >
+                            {t("collab.decline")}
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </Link>
                 </li>

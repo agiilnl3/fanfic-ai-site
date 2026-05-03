@@ -728,6 +728,145 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/collaborators:
+    get:
+      operationId: listCollaborators
+      tags: [collab]
+      summary: List collaborator invitations for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Collaborator list with status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollaboratorList"
+        "404":
+          description: Not found
+    post:
+      operationId: inviteCollaborator
+      tags: [collab]
+      summary: Invite a registered user (by handle) to co-author a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteCollaboratorBody"
+      responses:
+        "200":
+          description: Updated collaborator list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollaboratorList"
+        "400":
+          description: Invalid handle or already invited
+        "401":
+          description: Authentication required
+        "403":
+          description: Only the primary author can invite collaborators
+        "404":
+          description: Story or invitee not found
+
+  /stories/{id}/collaborators/{userId}/respond:
+    post:
+      operationId: respondCollaboratorInvite
+      tags: [collab]
+      summary: Accept or decline an invitation (invitee only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RespondInviteBody"
+      responses:
+        "200":
+          description: Updated collaborator list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollaboratorList"
+        "401":
+          description: Authentication required
+        "403":
+          description: Only the invitee may respond
+        "404":
+          description: Invitation not found
+
+  /stories/{id}/collaborators/{userId}:
+    delete:
+      operationId: revokeCollaborator
+      tags: [collab]
+      summary: Revoke or leave a collaboration (owner or self)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated collaborator list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollaboratorList"
+        "401":
+          description: Authentication required
+        "403":
+          description: Not authorized
+        "404":
+          description: Not found
+
+  /stories/{id}/chapters:
+    get:
+      operationId: listStoryChapters
+      tags: [collab]
+      summary: List chapter authorship metadata for a story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Per-chapter authorship records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChapterAuthorList"
+        "404":
+          description: Not found
+
   /admin/login:
     post:
       operationId: adminLogin
@@ -1991,6 +2130,89 @@ components:
           minLength: 1
       required: [requesterAuthorName, coAuthorName]
 
+    Collaborator:
+      type: object
+      properties:
+        userId:
+          type: integer
+        handle:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [writer, editor]
+        status:
+          type: string
+          enum: [pending, accepted, declined, revoked]
+        invitedAt:
+          type: string
+        respondedAt:
+          type: ["string", "null"]
+      required: [userId, handle, displayName, role, status, invitedAt]
+
+    CollaboratorList:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        primaryAuthor:
+          type: string
+        primaryUserId:
+          type: ["integer", "null"]
+        collaborators:
+          type: array
+          items:
+            $ref: "#/components/schemas/Collaborator"
+      required: [storyId, primaryAuthor, collaborators]
+
+    InviteCollaboratorBody:
+      type: object
+      properties:
+        handle:
+          type: string
+          minLength: 1
+          description: Handle of the registered user to invite.
+        role:
+          type: string
+          enum: [writer, editor]
+          default: writer
+      required: [handle]
+
+    RespondInviteBody:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [accept, decline]
+      required: [action]
+
+    ChapterAuthorRecord:
+      type: object
+      properties:
+        chapterIndex:
+          type: integer
+        userId:
+          type: integer
+        handle:
+          type: string
+      required: [chapterIndex, userId, handle]
+
+    ChapterAuthorList:
+      type: object
+      properties:
+        storyId:
+          type: integer
+        primaryAuthor:
+          type: string
+        chapters:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChapterAuthorRecord"
+      required: [storyId, primaryAuthor, chapters]
+
     AdminLoginBody:
       type: object
       properties:
@@ -2116,7 +2338,7 @@ components:
           type: string
         type:
           type: string
-          enum: [comment, co_author_chapter, follow, like, repost]
+          enum: [comment, co_author_chapter, follow, like, repost, collab_invite, collab_accept]
         actorName:
           type: string
         storyId:
