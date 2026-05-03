@@ -175,15 +175,19 @@ export default function StoryReading() {
       queryKey: getGetChapterTreeQueryKey(storyId),
     },
   });
+  // Ref-backed so the long-lived scroll handler always reads the
+  // current chain (canonical or saved branch) without re-subscribing.
+  const activeChainRef = React.useRef<
+    Array<{ id: number; paraCount: number }>
+  >([]);
   const chapterIdForParagraph = (paraIdx: number): number | null => {
+    const chain = activeChainRef.current;
     let cum = 0;
-    for (const c of activeChain) {
+    for (const c of chain) {
       cum += c.paraCount;
       if (paraIdx < cum) return c.id;
     }
-    return activeChain.length > 0
-      ? activeChain[activeChain.length - 1].id
-      : null;
+    return chain.length > 0 ? chain[chain.length - 1].id : null;
   };
   const { data: savedProgress } = useGetReadingProgress(
     storyId,
@@ -298,6 +302,10 @@ export default function StoryReading() {
         paraCount: c.text.split(/\n\n+/).filter((p) => p.trim()).length,
       }));
   }, [chapterTree, savedProgress]);
+
+  React.useEffect(() => {
+    activeChainRef.current = activeChain;
+  }, [activeChain]);
 
   // Resume scroll position once both the saved progress and the rendered
   // paragraphs exist. We only fire once per (storyId, authorName) so a
