@@ -30,6 +30,7 @@ import {
   getExportStoryPdfUrl,
   useRecordStoryView,
   useSetReadingProgress,
+  useGetChapterTree,
   useGetReadingProgress,
   getGetReadingProgressQueryKey,
   useGetStoryAnalytics,
@@ -162,6 +163,45 @@ export default function StoryReading() {
   // percentage alone is too coarse on long stories (a 5% delta can be
   // ~30 paragraphs into a novella).
   const setProgress = useSetReadingProgress();
+
+  // Fetch the chapters tree so we can stamp progress with the canonical
+  // chapter id the reader is currently on. When the canonical path is
+  // later rewritten (someone switches a branch), the stored chapterId
+  // lets us still resume in the right chapter rather than the wrong
+  // paragraph offset.
+  const { data: chapterTree } = useGetChapterTree(storyId, {
+    query: {
+      enabled: !!storyId,
+      queryKey: getGetChapterTreeQueryKey(storyId),
+    },
+  });
+  // Build paragraph-index → chapterId lookup from the canonical chain.
+  // Each canonical chapter contributes (paragraphs split on \n\n) rows
+  // to fullText, in order. We accumulate cumulative paragraph counts
+  // and binary-search-by-walk on update.
+  const chapterBoundaries = React.useMemo(() => {
+    if (!chapterTree) return [] as Array<{ end: number; chapterId: number }>;
+    const all = chapterTree.chapters ?? [];
+    const path = chapterTree.canonicalPath ?? [];
+    const out: Array<{ end: number; chapterId: number }> = [];
+    let cum = 0;
+    for (const id of path) {
+      const c = all.find((x) => x.id === id);
+      if (!c) continue;
+      const paraCount = c.text.split(/\n\n+/).filter((p) => p.trim()).length;
+      cum += paraCount;
+      out.push({ end: cum - 1, chapterId: c.id });
+    }
+    return out;
+  }, [chapterTree]);
+  const chapterIdForParagraph = (paraIdx: number): number | null => {
+    for (const b of chapterBoundaries) {
+      if (paraIdx <= b.end) return b.chapterId;
+    }
+    return chapterBoundaries.length > 0
+      ? chapterBoundaries[chapterBoundaries.length - 1].chapterId
+      : null;
+  };
   const { data: savedProgress } = useGetReadingProgress(
     storyId,
     { authorName: authorName || "" },
@@ -230,9 +270,15 @@ export default function StoryReading() {
       lastSentAt = Date.now();
       lastSentPct = pct;
       lastSentPara = paraIdx;
+      const chapterId = chapterIdForParagraph(paraIdx);
       setProgress.mutate({
         id: storyId,
-        data: { authorName, progress: pct, paragraphIndex: paraIdx },
+        data: {
+          authorName,
+          progress: pct,
+          paragraphIndex: paraIdx,
+          ...(chapterId != null ? { chapterId } : {}),
+        },
       });
     };
     const computeTopParagraphIndex = (): number => {

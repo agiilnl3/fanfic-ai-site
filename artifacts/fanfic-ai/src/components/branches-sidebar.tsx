@@ -191,10 +191,22 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
                         )}
                       </div>
                       {previewing === s.id && (
-                        <p className="text-[11px] text-muted-foreground line-clamp-6 pl-5 leading-relaxed">
-                          {s.text.slice(0, 600)}
-                          {s.text.length > 600 ? "…" : ""}
-                        </p>
+                        <div
+                          className="pl-5 space-y-2 max-h-96 overflow-y-auto rounded border border-dashed border-muted bg-background/40 p-2"
+                          data-testid={`branch-fulltext-${s.id}`}
+                        >
+                          {s.text
+                            .split(/\n\n+/)
+                            .filter((p) => p.trim().length > 0)
+                            .map((para, i) => (
+                              <p
+                                key={i}
+                                className="text-xs text-foreground/80 leading-relaxed font-serif"
+                              >
+                                {para}
+                              </p>
+                            ))}
+                        </div>
                       )}
                     </li>
                   ))}
