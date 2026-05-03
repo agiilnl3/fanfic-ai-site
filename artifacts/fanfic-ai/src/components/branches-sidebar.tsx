@@ -6,8 +6,10 @@ import {
   useSetReadingProgress,
   getGetChapterTreeQueryKey,
   getGetStoryQueryKey,
+  getGetReadingProgressQueryKey,
   type Chapter,
 } from "@workspace/api-client-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,7 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
   const qc = useQueryClient();
   const [seedByParent, setSeedByParent] = useState<Record<number, string>>({});
   const [previewing, setPreviewing] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   const { data: tree, isLoading } = useGetChapterTree(storyId, {
     query: { enabled: !!storyId, queryKey: getGetChapterTreeQueryKey(storyId) },
@@ -66,10 +69,14 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
   // "reader-side branch switching" without rewriting the canon.
   const setProgress = useSetReadingProgress({
     mutation: {
-      onSuccess: () =>
-        toast({
-          title: t("branches.savedPath", "Saved your reading path"),
-        }),
+      onSuccess: () => {
+        // Invalidate reading-progress so the main reader re-renders the
+        // chosen branch path immediately instead of after a refresh.
+        qc.invalidateQueries({
+          queryKey: getGetReadingProgressQueryKey(storyId, { authorName }),
+        });
+        toast({ title: t("branches.savedPath", "Saved your reading path") });
+      },
       onError: () =>
         toast({
           title: t("branches.savePathFailed", "Could not save your path"),
@@ -185,10 +192,29 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
       data-testid="branches-sidebar"
     >
       <header className="flex items-center gap-2">
-        <GitBranch className="w-4 h-4 text-primary" />
-        <h3 className="font-serif text-lg">{t("branches.title", "Branches")}</h3>
+        <button
+          type="button"
+          className="flex items-center gap-2 flex-1 text-left"
+          onClick={() => setCollapsed((c) => !c)}
+          data-testid="branches-toggle"
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? (
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          )}
+          <GitBranch className="w-4 h-4 text-primary" />
+          <h3 className="font-serif text-lg">
+            {t("branches.title", "Branches")}
+          </h3>
+          <span className="text-xs text-muted-foreground">
+            ({canonicalChapters.length})
+          </span>
+        </button>
       </header>
 
+      {collapsed ? null : (
       <ol className="space-y-3">
         {canonicalChapters.map((c, idx) => {
           const siblings = (byParent.get(c.parentChapterId) ?? []).filter(
@@ -349,6 +375,7 @@ export function BranchesSidebar({ storyId, authorName, canEdit }: Props) {
           );
         })}
       </ol>
+      )}
     </aside>
   );
 }

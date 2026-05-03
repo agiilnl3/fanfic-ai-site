@@ -5,6 +5,7 @@ import {
   bookmarksTable,
   readingProgressTable,
   storiesTable,
+  chaptersTable,
 } from "@workspace/db";
 import {
   AddBookmarkParams,
@@ -210,7 +211,23 @@ router.post("/stories/:id/progress", async (req, res): Promise<void> => {
   const author = body.data.authorName.trim();
   const progress = Math.max(0, Math.min(100, body.data.progress));
   const paragraphIndex = Math.max(0, body.data.paragraphIndex ?? 0);
-  const chapterId = body.data.chapterId ?? null;
+  let chapterId = body.data.chapterId ?? null;
+  // Verify the chapterId actually belongs to this story before we
+  // persist it — otherwise a malicious or stale client could pin a
+  // reader's progress to an unrelated story's chapter.
+  if (chapterId != null) {
+    const owned = await db
+      .select({ id: chaptersTable.id })
+      .from(chaptersTable)
+      .where(
+        and(
+          eq(chaptersTable.id, chapterId),
+          eq(chaptersTable.storyId, params.data.id),
+        ),
+      )
+      .limit(1);
+    if (owned.length === 0) chapterId = null;
+  }
   const [row] = await db
     .insert(readingProgressTable)
     .values({
