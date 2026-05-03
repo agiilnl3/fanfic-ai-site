@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, or, isNull } from "drizzle-orm";
 import {
   db,
   bookmarksTable,
@@ -70,13 +70,21 @@ router.delete("/stories/:id/bookmark", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
+  // Prefer stable Clerk user_id ownership; fall back to handle only for
+  // legacy rows whose user_id was not yet recorded.
+  const ownership = req.user
+    ? or(
+        eq(bookmarksTable.userId, req.user.id),
+        and(
+          isNull(bookmarksTable.userId),
+          eq(bookmarksTable.authorName, req.user.handle),
+        ),
+      )
+    : eq(bookmarksTable.authorName, query.data.authorName.trim());
   await db
     .delete(bookmarksTable)
     .where(
-      and(
-        eq(bookmarksTable.storyId, params.data.id),
-        eq(bookmarksTable.authorName, query.data.authorName.trim()),
-      ),
+      and(eq(bookmarksTable.storyId, params.data.id), ownership!),
     );
   res.json({ storyId: params.data.id, bookmarked: false });
 });

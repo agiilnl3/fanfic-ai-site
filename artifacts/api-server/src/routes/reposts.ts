@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, count, desc, inArray } from "drizzle-orm";
+import { and, eq, count, desc, inArray, or, isNull } from "drizzle-orm";
 import {
   db,
   storyRepostsTable,
@@ -114,13 +114,19 @@ router.delete("/stories/:id/repost", writeLimiter, async (req, res): Promise<voi
     return;
   }
   const reposter = query.data.reposterName.trim();
+  const ownership = req.user
+    ? or(
+        eq(storyRepostsTable.userId, req.user.id),
+        and(
+          isNull(storyRepostsTable.userId),
+          eq(storyRepostsTable.reposterName, req.user.handle),
+        ),
+      )
+    : eq(storyRepostsTable.reposterName, reposter);
   await db
     .delete(storyRepostsTable)
     .where(
-      and(
-        eq(storyRepostsTable.storyId, params.data.id),
-        eq(storyRepostsTable.reposterName, reposter),
-      ),
+      and(eq(storyRepostsTable.storyId, params.data.id), ownership!),
     );
   res.json(await repostInfo(params.data.id, reposter));
 });

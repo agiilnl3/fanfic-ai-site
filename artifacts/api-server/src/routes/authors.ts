@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc, count, inArray, sql } from "drizzle-orm";
+import { and, eq, desc, count, inArray, sql, or, isNull } from "drizzle-orm";
 import {
   db,
   storiesTable,
@@ -283,13 +283,19 @@ router.delete("/authors/:name/follow", writeLimiter, async (req, res): Promise<v
   }
   const author = params.data.name;
   const follower = query.data.followerName.trim();
+  const ownership = req.user
+    ? or(
+        eq(authorFollowsTable.followerUserId, req.user.id),
+        and(
+          isNull(authorFollowsTable.followerUserId),
+          eq(authorFollowsTable.followerName, req.user.handle),
+        ),
+      )
+    : eq(authorFollowsTable.followerName, follower);
   await db
     .delete(authorFollowsTable)
     .where(
-      and(
-        eq(authorFollowsTable.authorName, author),
-        eq(authorFollowsTable.followerName, follower),
-      ),
+      and(eq(authorFollowsTable.authorName, author), ownership!),
     );
   res.json(await followCounts(author, follower));
 });

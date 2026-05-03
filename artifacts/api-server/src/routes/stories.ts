@@ -11,7 +11,7 @@ import {
   authorFollowsTable,
   notificationsTable,
 } from "@workspace/db";
-import { ilike, or } from "drizzle-orm";
+import { ilike, or, isNull } from "drizzle-orm";
 import {
   hiddenStoriesTable,
   storyTagsTable,
@@ -1518,13 +1518,19 @@ router.delete("/stories/:id/like", writeLimiter, async (req, res): Promise<void>
     res.status(400).json({ error: "authorName required" });
     return;
   }
+  const ownership = req.user
+    ? or(
+        eq(storyLikesTable.userId, req.user.id),
+        and(
+          isNull(storyLikesTable.userId),
+          eq(storyLikesTable.authorName, req.user.handle),
+        ),
+      )
+    : eq(storyLikesTable.authorName, authorName);
   await db
     .delete(storyLikesTable)
     .where(
-      and(
-        eq(storyLikesTable.storyId, params.data.id),
-        eq(storyLikesTable.authorName, authorName),
-      ),
+      and(eq(storyLikesTable.storyId, params.data.id), ownership!),
     );
   const info = await getLikeInfo(params.data.id, authorName);
   res.json(info);
@@ -1760,7 +1766,12 @@ router.delete(
       res.status(404).json({ error: "Comment not found" });
       return;
     }
-    if (existing.authorName !== authorName) {
+    const owns = req.user
+      ? existing.userId != null
+        ? existing.userId === req.user.id
+        : existing.authorName === req.user.handle
+      : existing.authorName === authorName;
+    if (!owns && !req.user?.isAdmin) {
       res.status(403).json({ error: "Only the comment's author may delete it" });
       return;
     }
