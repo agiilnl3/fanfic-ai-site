@@ -92,6 +92,7 @@ import type {
   RegenerateIllustrationBody,
   RegenerateSectionBody,
   RegenerateSectionResponse,
+  RemixStoryBody,
   RemoveBookmarkParams,
   RemoveStoryFromSeriesParams,
   ReorderIllustrationsBody,
@@ -1285,6 +1286,185 @@ export const useDeleteStory = <
 > => {
   return useMutation(getDeleteStoryMutationOptions(options));
 };
+
+/**
+ * Creates a new draft story whose `parentStoryId` points at the original.
+Copies title (suffixed with "Remix"), genre, art style, length setting and
+seed prompt. Body, illustrations and metadata are NOT copied — the remix
+is generated fresh by the new author.
+
+ * @summary Fork a published story as a new draft owned by the requester
+ */
+export const getRemixStoryUrl = (id: number) => {
+  return `/api/stories/${id}/remix`;
+};
+
+export const remixStory = async (
+  id: number,
+  remixStoryBody: RemixStoryBody,
+  options?: RequestInit,
+): Promise<Story> => {
+  return customFetch<Story>(getRemixStoryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(remixStoryBody),
+  });
+};
+
+export const getRemixStoryMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof remixStory>>,
+    TError,
+    { id: number; data: BodyType<RemixStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof remixStory>>,
+  TError,
+  { id: number; data: BodyType<RemixStoryBody> },
+  TContext
+> => {
+  const mutationKey = ["remixStory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof remixStory>>,
+    { id: number; data: BodyType<RemixStoryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return remixStory(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemixStoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof remixStory>>
+>;
+export type RemixStoryMutationBody = BodyType<RemixStoryBody>;
+export type RemixStoryMutationError = ErrorType<void>;
+
+/**
+ * @summary Fork a published story as a new draft owned by the requester
+ */
+export const useRemixStory = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof remixStory>>,
+    TError,
+    { id: number; data: BodyType<RemixStoryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof remixStory>>,
+  TError,
+  { id: number; data: BodyType<RemixStoryBody> },
+  TContext
+> => {
+  return useMutation(getRemixStoryMutationOptions(options));
+};
+
+/**
+ * @summary List published remixes of this story
+ */
+export const getListStoryForksUrl = (id: number) => {
+  return `/api/stories/${id}/forks`;
+};
+
+export const listStoryForks = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Story[]> => {
+  return customFetch<Story[]>(getListStoryForksUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStoryForksQueryKey = (id: number) => {
+  return [`/api/stories/${id}/forks`] as const;
+};
+
+export const getListStoryForksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStoryForks>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryForks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListStoryForksQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listStoryForks>>> = ({
+    signal,
+  }) => listStoryForks(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStoryForks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStoryForksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStoryForks>>
+>;
+export type ListStoryForksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List published remixes of this story
+ */
+
+export function useListStoryForks<
+  TData = Awaited<ReturnType<typeof listStoryForks>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listStoryForks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStoryForksQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Publish a story to the public feed

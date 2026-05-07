@@ -350,6 +350,61 @@ paths:
         "404":
           description: Not found
 
+  /stories/{id}/remix:
+    post:
+      operationId: remixStory
+      tags: [stories]
+      summary: Fork a published story as a new draft owned by the requester
+      description: |
+        Creates a new draft story whose `parentStoryId` points at the original.
+        Copies title (suffixed with "Remix"), genre, art style, length setting and
+        seed prompt. Body, illustrations and metadata are NOT copied — the remix
+        is generated fresh by the new author.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemixStoryBody"
+      responses:
+        "201":
+          description: New draft remix
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Story"
+        "403":
+          description: Source story is not published or is private
+        "404":
+          description: Source story not found
+
+  /stories/{id}/forks:
+    get:
+      operationId: listStoryForks
+      tags: [stories]
+      summary: List published remixes of this story
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Array of published remixes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+
   /stories/{id}/publish:
     post:
       operationId: publishStory
@@ -2481,6 +2536,9 @@ components:
           type: boolean
           default: false
           description: Conjurer-only privacy flag. Private stories are hidden from feeds and listings.
+        parentStoryId:
+          type: ["integer", "null"]
+          description: ID of the original story this one was remixed from, or null for original stories.
       required:
         - id
         - title
@@ -3388,6 +3446,15 @@ components:
         storyId: { type: integer }
         bookmarked: { type: boolean }
       required: [storyId, bookmarked]
+
+    RemixStoryBody:
+      type: object
+      properties:
+        authorName:
+          type: string
+          minLength: 1
+          description: Pen name of the new author creating the remix.
+      required: [authorName]
 
     ReadingProgressInfo:
       type: object

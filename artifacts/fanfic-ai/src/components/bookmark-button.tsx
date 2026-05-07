@@ -5,6 +5,7 @@ import {
   useRemoveBookmark,
   getGetBookmarkInfoQueryKey,
   getListBookmarksQueryKey,
+  type BookmarkInfo,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthor } from "@/hooks/use-author";
@@ -31,7 +32,13 @@ export function BookmarkButton({
     query: { queryKey, enabled: true, staleTime: 30_000 },
   });
 
-  const refresh = () => {
+  const setBookmarked = (next: boolean) => {
+    queryClient.setQueryData<BookmarkInfo | undefined>(queryKey, (old) =>
+      old ? { ...old, bookmarked: next } : { storyId, bookmarked: next },
+    );
+  };
+
+  const settle = () => {
     queryClient.invalidateQueries({ queryKey });
     if (authorName)
       queryClient.invalidateQueries({
@@ -41,22 +48,43 @@ export function BookmarkButton({
 
   const add = useAddBookmark({
     mutation: {
-      onSuccess: () => {
-        refresh();
-        toast({ title: t("bookmark.savedToast") });
+      onMutate: async () => {
+        await queryClient.cancelQueries({ queryKey });
+        const prev = queryClient.getQueryData<BookmarkInfo | undefined>(queryKey);
+        setBookmarked(true);
+        return { prev };
       },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
+        toast({ title: t("bookmark.failed", "Could not save"), variant: "destructive" });
+      },
+      onSuccess: () => toast({ title: t("bookmark.savedToast") }),
+      onSettled: settle,
     },
   });
+
   const remove = useRemoveBookmark({
     mutation: {
-      onSuccess: () => {
-        refresh();
-        toast({ title: t("bookmark.removedToast") });
+      onMutate: async () => {
+        await queryClient.cancelQueries({ queryKey });
+        const prev = queryClient.getQueryData<BookmarkInfo | undefined>(queryKey);
+        setBookmarked(false);
+        return { prev };
       },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
+        toast({ title: t("bookmark.failed", "Could not remove"), variant: "destructive" });
+      },
+      onSuccess: () => toast({ title: t("bookmark.removedToast") }),
+      onSettled: settle,
     },
   });
 
   const bookmarked = !!data?.bookmarked;
+  // Lock both add and remove while either is in flight; otherwise rapid
+  // double-clicks can interleave and leave the cache out of sync with
+  // the server until the next 30s staleTime refetch.
+  const busy = add.isPending || remove.isPending;
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -80,9 +108,10 @@ export function BookmarkButton({
       <button
         type="button"
         onClick={handleClick}
+        disabled={busy}
         aria-label={bookmarked ? t("bookmark.removeAria") : t("bookmark.addAria")}
         aria-pressed={bookmarked}
-        className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors"
+        className="inline-flex items-center text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
         data-testid={`button-bookmark-compact-${storyId}`}
       >
         {bookmarked ? (
@@ -100,6 +129,7 @@ export function BookmarkButton({
       variant={bookmarked ? "default" : "outline"}
       size="sm"
       onClick={handleClick}
+      disabled={busy}
       aria-pressed={bookmarked}
       data-testid={`button-bookmark-${storyId}`}
     >

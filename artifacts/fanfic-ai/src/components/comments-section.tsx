@@ -79,23 +79,56 @@ export function CommentsSection({ storyId }: { storyId: number }) {
 
   const addMutation = useAddStoryComment({
     mutation: {
-      onSuccess: () => {
+      onMutate: async (vars) => {
+        await queryClient.cancelQueries({ queryKey });
+        const prev = queryClient.getQueryData<StoryComment[] | undefined>(queryKey);
+        // Negative ids guarantee no collision with server ids; the row is
+        // replaced wholesale on invalidate after onSettled.
+        const tempId = -Date.now();
+        const optimistic: StoryComment = {
+          id: tempId,
+          storyId,
+          authorName: vars.data.authorName,
+          body: vars.data.body,
+          createdAt: new Date().toISOString(),
+          parentId: vars.data.parentId ?? null,
+          paragraphIndex: vars.data.paragraphIndex ?? null,
+        };
+        queryClient.setQueryData<StoryComment[]>(queryKey, [
+          ...(prev ?? []),
+          optimistic,
+        ]);
+        // Clear the input optimistically so the user can keep typing.
         setDraft("");
         setReplyDraft("");
         setReplyOpen(null);
-        refresh();
-        toast({ title: t("comments.posted") });
+        return { prev };
       },
-      onError: () =>
-        toast({ title: t("comments.postFailed"), variant: "destructive" }),
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
+        toast({ title: t("comments.postFailed"), variant: "destructive" });
+      },
+      onSuccess: () => toast({ title: t("comments.posted") }),
+      onSettled: refresh,
     },
   });
 
   const deleteMutation = useDeleteStoryComment({
     mutation: {
-      onSuccess: () => refresh(),
-      onError: () =>
-        toast({ title: t("comments.deleteFailed"), variant: "destructive" }),
+      onMutate: async (vars) => {
+        await queryClient.cancelQueries({ queryKey });
+        const prev = queryClient.getQueryData<StoryComment[] | undefined>(queryKey);
+        queryClient.setQueryData<StoryComment[]>(
+          queryKey,
+          (prev ?? []).filter((c) => c.id !== vars.commentId),
+        );
+        return { prev };
+      },
+      onError: (_err, _vars, ctx) => {
+        if (ctx?.prev !== undefined) queryClient.setQueryData(queryKey, ctx.prev);
+        toast({ title: t("comments.deleteFailed"), variant: "destructive" });
+      },
+      onSettled: refresh,
     },
   });
 
@@ -148,6 +181,10 @@ export function CommentsSection({ storyId }: { storyId: number }) {
       deleteMutation.isPending &&
       (deleteMutation.variables as { commentId: number } | undefined)
         ?.commentId === node.id;
+    // Lock every delete row while ANY delete is in flight so two
+    // overlapping requests can't race their snapshot rollbacks and
+    // leave a deleted comment ghost-restored in the cache.
+    const deleteLocked = deleteMutation.isPending;
     return (
       <li
         key={node.id}
@@ -178,7 +215,7 @@ export function CommentsSection({ storyId }: { storyId: number }) {
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                disabled={isDeleting}
+                disabled={deleteLocked}
                 onClick={() =>
                   deleteMutation.mutate({
                     id: storyId,

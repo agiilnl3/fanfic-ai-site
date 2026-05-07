@@ -32,6 +32,7 @@ import {
   DeleteStoryParams,
   PublishStoryParams,
   GetIllustrationsParams,
+  RemixStoryBody,
   GenerateIllustrationBody,
   GenerateIllustrationParams,
   DeleteIllustrationParams,
@@ -259,8 +260,16 @@ router.get("/stories", async (req, res): Promise<void> => {
           .from(storiesTable)
           .orderBy(desc(storiesTable.createdAt));
 
+  // Strip moderation-hidden rows from the public listing. Admin tooling
+  // reads /admin/stories instead, which is allowed to see everything.
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable);
+  const hiddenIds = new Set<number>(hiddenRows.map((h) => h.id));
+  const moderated = stories.filter((s) => !hiddenIds.has(s.id));
+
   // Hide private stories from anyone but their author/co-authors.
-  const visible = filterVisibleStories(stories, req.user);
+  const visible = filterVisibleStories(moderated, req.user);
   res.json(await attachCounts(visible));
 });
 
@@ -1365,6 +1374,99 @@ router.delete("/stories/:id", async (req, res): Promise<void> => {
 
   await db.delete(storiesTable).where(eq(storiesTable.id, params.data.id));
   res.sendStatus(204);
+});
+
+router.post("/stories/:id/remix", writeLimiter, async (req, res): Promise<void> => {
+  const idNum = Number(req.params.id);
+  if (!Number.isInteger(idNum) || idNum <= 0) {
+    res.status(400).json({ error: "Invalid story id" });
+    return;
+  }
+  const body = RemixStoryBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [source] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, idNum))
+    .limit(1);
+  if (!source) {
+    res.status(404).json({ error: "Source story not found" });
+    return;
+  }
+  // Only published, non-private stories may be remixed.
+  if (source.status !== "published" || source.isPrivate) {
+    res.status(403).json({ error: "Story is not available for remixing" });
+    return;
+  }
+  // Moderation-hidden sources are 404 to remixers, mirroring how the
+  // public /stories/:id GET treats them — never leak their existence.
+  const [hiddenRow] = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable)
+    .where(eq(hiddenStoriesTable.storyId, source.id))
+    .limit(1);
+  if (hiddenRow) {
+    res.status(404).json({ error: "Source story not found" });
+    return;
+  }
+
+  const remixSuffix = " (Remix)";
+  const baseTitle = source.title.endsWith(remixSuffix)
+    ? source.title
+    : `${source.title}${remixSuffix}`;
+
+  const [remix] = await db
+    .insert(storiesTable)
+    .values({
+      title: baseTitle,
+      genre: source.genre,
+      artStyle: source.artStyle,
+      lengthSetting: source.lengthSetting,
+      seedPrompt: source.seedPrompt,
+      authorName: body.data.authorName,
+      userId: req.user?.id ?? null,
+      status: "draft",
+      isPrivate: false,
+      parentStoryId: source.id,
+    })
+    .returning();
+
+  res.status(201).json(remix);
+});
+
+router.get("/stories/:id/forks", async (req, res): Promise<void> => {
+  const idNum = Number(req.params.id);
+  if (!Number.isInteger(idNum) || idNum <= 0) {
+    res.status(400).json({ error: "Invalid story id" });
+    return;
+  }
+  // Exclude moderation-hidden forks so the public lineage view does
+  // not surface stories we've taken down for cause.
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable);
+  const hiddenIds = hiddenRows.map((h) => h.id);
+
+  const baseConditions = [
+    eq(storiesTable.parentStoryId, idNum),
+    eq(storiesTable.status, "published"),
+    eq(storiesTable.isPrivate, false),
+  ];
+  const whereExpr =
+    hiddenIds.length > 0
+      ? and(...baseConditions, notInArray(storiesTable.id, hiddenIds))
+      : and(...baseConditions);
+
+  const forks = await db
+    .select()
+    .from(storiesTable)
+    .where(whereExpr)
+    .orderBy(desc(storiesTable.createdAt));
+  res.json(await attachCounts(forks));
 });
 
 router.post("/stories/:id/publish", async (req, res): Promise<void> => {

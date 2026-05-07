@@ -32,6 +32,7 @@ import {
   useGenerateStoryTrailer,
   useGetStoryTrailer,
   getGetStoryTrailerQueryKey,
+  useRemixStory,
   useRecordStoryView,
   useSetReadingProgress,
   useGetChapterTree,
@@ -48,6 +49,7 @@ import {
   getGetStorySeriesContextQueryKey,
 } from "@workspace/api-client-react";
 import { BookmarkButton } from "@/components/bookmark-button";
+import { RemixButton } from "@/components/remix-button";
 import { ReportButton } from "@/components/report-button";
 import type { Illustration, Chapter } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
@@ -60,7 +62,7 @@ import { format } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import {
   BookOpen, Share2, Globe, Lock, RefreshCw, Trash2, Loader2,
-  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown, Users, Film,
+  RotateCcw, Pencil, Edit3, Check, X, Volume2, FileDown, BookPlus, MessageCircle, ArrowUpDown, Users, Film, GitFork,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1069,10 +1071,32 @@ export default function StoryReading() {
                 <span className="tabular-nums">{story.commentCount}</span>
               </a>
               <BookmarkButton storyId={story.id} />
+              {!isAuthor &&
+                story.status === "published" &&
+                !story.isPrivate && (
+                  <RemixButton
+                    storyId={story.id}
+                    authorName={authorName}
+                  />
+                )}
               {!isAuthor && (
                 <ReportButton targetType="story" targetId={story.id} />
               )}
             </div>
+            {story.parentStoryId && (
+              <div className="mt-3 flex justify-center">
+                <Link href={`/story/${story.parentStoryId}`}>
+                  <Badge
+                    variant="outline"
+                    className="bg-background/30 backdrop-blur-md border-white/20 text-white hover:bg-background/50 cursor-pointer gap-1"
+                    data-testid="badge-remixed-from"
+                  >
+                    <GitFork className="w-3 h-3" />
+                    {t("story.remixedFrom", "Remixed from original")}
+                  </Badge>
+                </Link>
+              </div>
+            )}
             {seriesContext?.seriesId && (
               <div
                 className="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm text-white/80"

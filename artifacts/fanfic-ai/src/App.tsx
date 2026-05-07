@@ -8,6 +8,7 @@ import { publishableKeyFromHost } from "@clerk/react/internal";
 import { shadcn } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CommandPalette } from "@/components/command-palette";
 import { Loader2 } from "lucide-react";
 
 import Home from "@/pages/home";
@@ -197,6 +198,7 @@ function App() {
         <ClerkProviderWithRouting>
           <TooltipProvider>
             <Router />
+            <CommandPalette />
             <Toaster />
           </TooltipProvider>
         </ClerkProviderWithRouting>

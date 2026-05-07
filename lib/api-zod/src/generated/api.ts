@@ -98,6 +98,12 @@ export const ListStoriesResponseItem = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 export const ListStoriesResponse = zod.array(ListStoriesResponseItem);
 
@@ -274,6 +280,12 @@ export const GetForYouFeedResponseItem = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 export const GetForYouFeedResponse = zod.array(GetForYouFeedResponseItem);
 
@@ -449,6 +461,12 @@ export const GetPublicFeedResponseItem = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 export const GetPublicFeedResponse = zod.array(GetPublicFeedResponseItem);
 
@@ -548,6 +566,12 @@ export const GetStoryResponse = zod
       .default(getStoryResponseOneIsPrivateDefault)
       .describe(
         "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+      ),
+    parentStoryId: zod
+      .number()
+      .nullish()
+      .describe(
+        "ID of the original story this one was remixed from, or null for original stories.",
       ),
   })
   .and(
@@ -662,6 +686,12 @@ export const UpdateStoryResponse = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 
 /**
@@ -670,6 +700,114 @@ export const UpdateStoryResponse = zod.object({
 export const DeleteStoryParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * Creates a new draft story whose `parentStoryId` points at the original.
+Copies title (suffixed with "Remix"), genre, art style, length setting and
+seed prompt. Body, illustrations and metadata are NOT copied — the remix
+is generated fresh by the new author.
+
+ * @summary Fork a published story as a new draft owned by the requester
+ */
+export const RemixStoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RemixStoryBody = zod.object({
+  authorName: zod
+    .string()
+    .min(1)
+    .describe("Pen name of the new author creating the remix."),
+});
+
+/**
+ * @summary List published remixes of this story
+ */
+export const ListStoryForksParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const listStoryForksResponseCoAuthorsDefault = [];
+export const listStoryForksResponseIsPrivateDefault = false;
+
+export const ListStoryForksResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
+  authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(listStoryForksResponseCoAuthorsDefault),
+  coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("idle"),
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(listStoryForksResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
+});
+export const ListStoryForksResponse = zod.array(ListStoryForksResponseItem);
 
 /**
  * @summary Publish a story to the public feed
@@ -750,6 +888,12 @@ export const PublishStoryResponse = zod.object({
     .default(publishStoryResponseIsPrivateDefault)
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
     ),
 });
 
@@ -1030,6 +1174,12 @@ export const ContinueStoryResponse = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 
 /**
@@ -1166,6 +1316,12 @@ export const RegenerateStoryTextResponse = zod.object({
     .default(regenerateStoryTextResponseIsPrivateDefault)
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
     ),
 });
 
@@ -1632,6 +1788,12 @@ export const AdminUpdateStoryResponse = zod.object({
     .describe(
       "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
     ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
 });
 
 /**
@@ -1787,6 +1949,12 @@ export const GetAuthorProfileResponse = zod.object({
         .default(getAuthorProfileResponseStoriesItemIsPrivateDefault)
         .describe(
           "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+        ),
+      parentStoryId: zod
+        .number()
+        .nullish()
+        .describe(
+          "ID of the original story this one was remixed from, or null for original stories.",
         ),
     }),
   ),
@@ -2069,6 +2237,12 @@ export const ListAuthorRepostsResponseItem = zod.object({
       .default(listAuthorRepostsResponseStoryIsPrivateDefault)
       .describe(
         "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+      ),
+    parentStoryId: zod
+      .number()
+      .nullish()
+      .describe(
+        "ID of the original story this one was remixed from, or null for original stories.",
       ),
   }),
 });
@@ -2597,6 +2771,12 @@ export const ListBookmarksResponseItem = zod.object({
         .describe(
           "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
         ),
+      parentStoryId: zod
+        .number()
+        .nullish()
+        .describe(
+          "ID of the original story this one was remixed from, or null for original stories.",
+        ),
     })
     .optional(),
 });
@@ -2685,6 +2865,12 @@ export const ListReadingHistoryResponseItem = zod.object({
       .default(listReadingHistoryResponseStoryIsPrivateDefault)
       .describe(
         "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+      ),
+    parentStoryId: zod
+      .number()
+      .nullish()
+      .describe(
+        "ID of the original story this one was remixed from, or null for original stories.",
       ),
   }),
 });
@@ -2907,6 +3093,12 @@ export const GetSeriesResponse = zod
               .describe(
                 "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
               ),
+            parentStoryId: zod
+              .number()
+              .nullish()
+              .describe(
+                "ID of the original story this one was remixed from, or null for original stories.",
+              ),
           })
           .and(
             zod.object({
@@ -3058,6 +3250,12 @@ export const AddStoryToSeriesResponse = zod
               )
               .describe(
                 "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+              ),
+            parentStoryId: zod
+              .number()
+              .nullish()
+              .describe(
+                "ID of the original story this one was remixed from, or null for original stories.",
               ),
           })
           .and(

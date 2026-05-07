@@ -106,6 +106,11 @@ treat them as incomplete drafts.
   readingProgress?: number | null;
   /** Conjurer-only privacy flag. Private stories are hidden from feeds and listings. */
   isPrivate?: boolean;
+  /**
+   * ID of the original story this one was remixed from, or null for original stories.
+   * @nullable
+   */
+  parentStoryId?: number | null;
 }
 
 export interface StoryComment {
@@ -767,6 +772,14 @@ export interface BookmarkBody {
 export interface BookmarkInfo {
   storyId: number;
   bookmarked: boolean;
+}
+
+export interface RemixStoryBody {
+  /**
+   * Pen name of the new author creating the remix.
+   * @minLength 1
+   */
+  authorName: string;
 }
 
 export interface ReadingProgressInfo {

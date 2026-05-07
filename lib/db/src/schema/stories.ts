@@ -29,6 +29,7 @@ export const storiesTable = pgTable(
     trailerStatus: text("trailer_status"),
     trailerHash: text("trailer_hash"),
     isPrivate: boolean("is_private").notNull().default(false),
+    parentStoryId: integer("parent_story_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
