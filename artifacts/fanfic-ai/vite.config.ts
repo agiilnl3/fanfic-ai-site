@@ -54,7 +54,10 @@ export default defineConfig({
           },
         ],
       },
-      devOptions: { enabled: true, type: "module" },
+      // PWA only meaningful for production builds; disabling in dev
+      // avoids the "globPattern doesn't match any files" warning that
+      // workbox emits because dev-dist starts empty.
+      devOptions: { enabled: false, type: "module" },
     }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined

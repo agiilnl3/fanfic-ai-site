@@ -17,5 +17,18 @@
   "dependencies": {
     "stripe": "20.0.0",
     "stripe-replit-sync": "1.0.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@tootallnate/once": ">=3.0.1",
+      "brace-expansion": ">=2.0.3",
+      "ip-address": ">=10.1.1",
+      "lodash": ">=4.18.0",
+      "path-to-regexp": ">=8.4.0",
+      "picomatch": ">=2.3.2",
+      "postcss": ">=8.5.10",
+      "serialize-javascript": ">=7.0.5",
+      "yaml": ">=2.8.3"
+    }
   }
 }

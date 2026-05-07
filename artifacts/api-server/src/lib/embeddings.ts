@@ -10,6 +10,7 @@ const MAX_INPUT_CHARS = 8000;
 // Flipped on the first INVALID_ENDPOINT response so we stop calling
 // /embeddings for the rest of the process.
 let embeddingsDisabled = false;
+let disabledWarned = false;
 export function embeddingsAvailable(): boolean {
   return !embeddingsDisabled;
 }
@@ -77,9 +78,12 @@ export async function embedStoryById(storyId: number): Promise<boolean> {
     const code = (err as { code?: string })?.code ?? "";
     if (code === "INVALID_ENDPOINT" || /not supported/i.test(msg)) {
       embeddingsDisabled = true;
-      logger.warn(
-        "OpenAI /embeddings unavailable; /feed/for-you using engagement fallback.",
-      );
+      if (!disabledWarned) {
+        disabledWarned = true;
+        logger.warn(
+          "OpenAI /embeddings unavailable; /feed/for-you using engagement fallback.",
+        );
+      }
       return false;
     }
     logger.warn({ err, storyId }, "embedStoryById failed");
