@@ -209,6 +209,44 @@ export function isTrailerJobInFlight(storyId: number): boolean {
   return inFlight.has(storyId);
 }
 
+/**
+ * Computes the same hash runTrailerJob will compute for a story right
+ * now, so the POST route can detect "the cached trailer is stale" and
+ * decide whether to re-render. Returns null if the story can't be
+ * trailered yet (missing fullText / not enough illustrations).
+ */
+export async function computeExpectedTrailerHash(
+  storyId: number,
+): Promise<string | null> {
+  const [story] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, storyId))
+    .limit(1);
+  if (!story || !story.fullText) return null;
+  const illos = await db
+    .select()
+    .from(illustrationsTable)
+    .where(eq(illustrationsTable.storyId, storyId))
+    .orderBy(illustrationsTable.sectionIndex);
+  if (illos.length < MIN_ILLUSTRATIONS) return null;
+  const picks = selectIllustrations(illos);
+  const timing = planTrailerTiming(picks.length);
+  const narrationText =
+    (story.summary && story.summary.length > 60
+      ? story.summary
+      : story.fullText.slice(0, 1200)) ?? "";
+  return computeHash([
+    "v2",
+    story.title,
+    story.fullText,
+    narrationText,
+    "nova",
+    timing.perImage,
+    ...picks.map((p) => `${p.id}:${p.imageUrl}`),
+  ]);
+}
+
 export async function runTrailerJob(storyId: number): Promise<void> {
   if (inFlight.has(storyId)) return;
   inFlight.add(storyId);

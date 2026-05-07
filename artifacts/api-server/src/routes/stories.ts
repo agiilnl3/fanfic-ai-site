@@ -102,6 +102,7 @@ import { synthesizeStoryNarration } from "../lib/ttsCache";
 import {
   startTrailerJobInBackground,
   isTrailerJobInFlight,
+  computeExpectedTrailerHash,
   type TrailerStatus,
 } from "../lib/trailer";
 import {
@@ -3173,16 +3174,26 @@ router.post(
         .json({ error: "Only the author or a co-author may render a trailer" });
       return;
     }
-    const status: TrailerStatus =
-      story.trailerStatus === "ready" && story.trailerUrl
-        ? "ready"
-        : isTrailerJobInFlight(id)
-          ? "rendering"
-          : "queued";
-    if (status === "ready") {
-      res.status(200).json({ storyId: id, status, url: story.trailerUrl });
+    // Cached trailer is only "ready" if it was rendered against the
+    // current story+illustration content. If the user edited the story
+    // or its illustrations after the last render, the stored hash will
+    // no longer match what runTrailerJob would compute now and we must
+    // kick a fresh render instead of returning the stale mp4.
+    const expectedHash = await computeExpectedTrailerHash(id);
+    const cacheValid =
+      story.trailerStatus === "ready" &&
+      !!story.trailerUrl &&
+      !!expectedHash &&
+      story.trailerHash === expectedHash;
+    if (cacheValid) {
+      res
+        .status(200)
+        .json({ storyId: id, status: "ready" as TrailerStatus, url: story.trailerUrl });
       return;
     }
+    const status: TrailerStatus = isTrailerJobInFlight(id)
+      ? "rendering"
+      : "queued";
     if (status === "queued") {
       await db
         .update(storiesTable)
@@ -3242,7 +3253,7 @@ router.get("/stories/:id/trailer", async (req, res): Promise<void> => {
 
 // ---------- Dynamic Open Graph image ----------
 
-router.get("/og/:storyId", async (req, res): Promise<void> => {
+router.get("/og/:storyId", writeLimiter, async (req, res): Promise<void> => {
   const id = Number(req.params.storyId);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).end();
@@ -3253,6 +3264,19 @@ router.get("/og/:storyId", async (req, res): Promise<void> => {
     res.status(404).end();
     return;
   }
+  const etag = `"og-${id}-${ogContentHash(input)}"`;
+  // Honour the conditional GET so social crawlers and CDNs don't
+  // re-trigger the sharp+SVG composite pipeline on every poll.
+  const ifNoneMatch = req.header("if-none-match");
+  if (ifNoneMatch && ifNoneMatch === etag) {
+    res.setHeader("ETag", etag);
+    res.setHeader(
+      "Cache-Control",
+      "public, max-age=600, s-maxage=86400, stale-while-revalidate=604800",
+    );
+    res.status(304).end();
+    return;
+  }
   try {
     const png = await renderOgImage(input);
     res.setHeader("Content-Type", "image/png");
@@ -3260,7 +3284,7 @@ router.get("/og/:storyId", async (req, res): Promise<void> => {
       "Cache-Control",
       "public, max-age=600, s-maxage=86400, stale-while-revalidate=604800",
     );
-    res.setHeader("ETag", `"og-${id}-${ogContentHash(input)}"`);
+    res.setHeader("ETag", etag);
     res.send(png);
   } catch (err) {
     req.log.warn({ err, id }, "OG render failed");

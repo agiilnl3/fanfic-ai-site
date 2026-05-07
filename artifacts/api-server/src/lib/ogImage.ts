@@ -139,6 +139,7 @@ export async function loadOgInputForStory(
       authorName: storiesTable.authorName,
       genre: storiesTable.genre,
       status: storiesTable.status,
+      isPrivate: storiesTable.isPrivate,
       posterCoverUrl: storiesTable.posterCoverUrl,
       coverImageUrl: storiesTable.coverImageUrl,
     })
@@ -147,7 +148,9 @@ export async function loadOgInputForStory(
     .limit(1);
   // Don't render OG images for non-published stories — these get
   // crawled by social platforms, so leaking draft titles is undesirable.
-  if (!story || story.status !== "published") return null;
+  // Private stories are never crawlable: their OG card would leak the
+  // title/author/genre to anyone who guessed the id.
+  if (!story || story.status !== "published" || story.isPrivate) return null;
 
   let imageUrl = story.posterCoverUrl ?? story.coverImageUrl ?? null;
   if (!imageUrl) {
