@@ -10,6 +10,36 @@ import { BookOpen, MessageCircle } from "lucide-react";
 import { LikeButton } from "@/components/like-button";
 import { BookmarkButton } from "@/components/bookmark-button";
 
+const COVER_WIDTHS = [400, 600, 800] as const;
+
+// Build a srcset against /api/storage/img/objects/* (the sharp
+// transcoder). Falls through unchanged for external / non-uploaded
+// covers (legacy stories, AI provider direct URLs, etc.). We split
+// path / query / fragment manually so an upstream URL that happens
+// to carry its own ?foo=1#bar doesn't produce malformed URLs like
+// `...uploads/x?foo=1?w=600...`. Such URLs are dropped through
+// unchanged because we can't safely rewrite them.
+function buildCoverImg(
+  url: string,
+): { src: string; srcSet?: string; sizes?: string } {
+  const prefix = "/api/storage/objects/";
+  if (!url.startsWith(prefix)) return { src: url };
+  const after = url.slice(prefix.length);
+  if (after.includes("?") || after.includes("#") || after.length === 0) {
+    return { src: url };
+  }
+  const make = (w: number): string => {
+    const qs = new URLSearchParams({ w: String(w), format: "webp" });
+    return `/api/storage/img/objects/${after}?${qs.toString()}`;
+  };
+  return {
+    src: make(600),
+    srcSet: COVER_WIDTHS.map((w) => `${make(w)} ${w}w`).join(", "),
+    sizes:
+      "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw",
+  };
+}
+
 export function StoryCard({ story }: { story: Story }) {
   const { t, i18n } = useTranslation();
   const tags = (story as Story & { tags?: { id: number; slug: string; label: string }[] }).tags;
@@ -38,13 +68,20 @@ export function StoryCard({ story }: { story: Story }) {
       <Card className="h-full bg-card hover:bg-card/80 transition-all border-border/50 overflow-hidden flex flex-col book-shadow hover:-translate-y-1 duration-300">
         <div className="aspect-[3/4] w-full relative bg-muted overflow-hidden">
           {story.coverImageUrl ? (
-            <img
-              src={story.coverImageUrl}
-              alt={story.title}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
-            />
+            (() => {
+              const img = buildCoverImg(story.coverImageUrl);
+              return (
+                <img
+                  src={img.src}
+                  srcSet={img.srcSet}
+                  sizes={img.sizes}
+                  alt={story.title}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-full h-full object-cover opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
+                />
+              );
+            })()
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-secondary">
               <BookOpen className="w-12 h-12 text-muted-foreground/30" />

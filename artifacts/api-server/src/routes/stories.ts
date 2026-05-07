@@ -906,6 +906,13 @@ router.get("/feed/for-you", async (req, res): Promise<void> => {
 
 // Faceted counts (genre / artStyle / tag) for the current text query.
 router.get("/stories/feed/facets", async (req, res): Promise<void> => {
+  // Anonymous, non-personalised aggregate. Safe to share across
+  // viewers — let the CDN absorb spikes; SWR keeps the response
+  // visually fresh while we recompute behind the scenes.
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
+  );
   const q = (req.query.q as string | undefined)?.trim();
   const baseConds = [and(eq(storiesTable.status, "published"), eq(storiesTable.isPrivate, false))];
   if (q) {
@@ -1200,6 +1207,12 @@ async function decorateForViewer<
 }
 
 router.get("/stories/stats", async (_req, res): Promise<void> => {
+  // Public dashboard counters; cheap to recompute but called from
+  // the landing page on every cold load.
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+  );
   const [total] = await db
     .select({ count: count() })
     .from(storiesTable);

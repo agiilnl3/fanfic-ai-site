@@ -26,6 +26,11 @@ function slugify(input: string): string {
 }
 
 router.get("/tags", async (_req, res): Promise<void> => {
+  // Public tag cloud — same data for every viewer.
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+  );
   const rows = await db
     .select({
       id: tagsTable.id,
