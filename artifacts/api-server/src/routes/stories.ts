@@ -1483,6 +1483,109 @@ router.get("/stories/:id/forks", async (req, res): Promise<void> => {
   res.json(await attachCounts(forks));
 });
 
+// ---------- Similar stories (pgvector cosine + genre/style fallback) ----------
+//
+// Powers the "If you liked this…" rail on the story page. Ranks by
+// cosine distance against the source story's own embedding; if the
+// source has no embedding yet (fresh draft, embeddings disabled, or
+// OpenAI down) we fall back to recent published stories that share
+// the same genre or art style — better than 404 / empty.
+router.get("/stories/:id/similar", async (req, res): Promise<void> => {
+  const idNum = Number(req.params.id);
+  if (!Number.isInteger(idNum) || idNum <= 0) {
+    res.status(400).json({ error: "Invalid story id" });
+    return;
+  }
+  const limit = Math.max(1, Math.min(24, Number(req.query.limit) || 6));
+
+  const [source] = await db
+    .select()
+    .from(storiesTable)
+    .where(eq(storiesTable.id, idNum))
+    .limit(1);
+  if (!source) {
+    res.status(404).json({ error: "Story not found" });
+    return;
+  }
+
+  // Don't leak private/draft sources via the recommender either.
+  if (source.status !== "published" || source.isPrivate) {
+    res.json([]);
+    return;
+  }
+
+  const hiddenRows = await db
+    .select({ id: hiddenStoriesTable.storyId })
+    .from(hiddenStoriesTable);
+  const exclude = new Set<number>(hiddenRows.map((h) => h.id));
+  exclude.add(idNum);
+  const excludeArr = Array.from(exclude);
+
+  // Reuse the same anonymous-cache policy as facets/stats: result is
+  // identical for every viewer for this story id, so the CDN can
+  // collapse the burst when a popular story trends.
+  res.setHeader(
+    "Cache-Control",
+    "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+  );
+
+  const fallback = async (): Promise<void> => {
+    const conds = [
+      eq(storiesTable.status, "published"),
+      eq(storiesTable.isPrivate, false),
+      or(
+        eq(storiesTable.genre, source.genre),
+        eq(storiesTable.artStyle, source.artStyle),
+      )!,
+      notInArray(storiesTable.id, excludeArr),
+    ];
+    const rows = await db
+      .select()
+      .from(storiesTable)
+      .where(and(...conds))
+      .orderBy(desc(storiesTable.createdAt))
+      .limit(limit);
+    res.json(await attachCounts(rows));
+  };
+
+  let nearestIds: number[];
+  try {
+    // Pull a few extra so visibility/hidden filtering can't leave us
+    // empty when a couple of nearest neighbours happen to be hidden.
+    const result = await pool.query<{ id: number }>(
+      `SELECT s.id
+         FROM stories s
+         JOIN story_embeddings src ON src.story_id = $1::int
+         JOIN story_embeddings e   ON e.story_id   = s.id
+        WHERE s.status = 'published'
+          AND s.is_private = false
+          AND NOT (s.id = ANY($2::int[]))
+        ORDER BY e.embedding <=> src.embedding
+        LIMIT $3`,
+      [idNum, excludeArr, limit],
+    );
+    nearestIds = result.rows.map((r) => r.id);
+  } catch (err) {
+    req.log.warn({ err }, "similar-stories pgvector query failed");
+    await fallback();
+    return;
+  }
+
+  if (nearestIds.length === 0) {
+    await fallback();
+    return;
+  }
+
+  const stories = await db
+    .select()
+    .from(storiesTable)
+    .where(inArray(storiesTable.id, nearestIds));
+  // Postgres returned them in similarity order; the WHERE-IN reshuffles.
+  const order = new Map(nearestIds.map((id, i) => [id, i]));
+  stories.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  res.json(await attachCounts(stories));
+});
+
 router.post("/stories/:id/publish", async (req, res): Promise<void> => {
   const params = PublishStoryParams.safeParse(req.params);
   if (!params.success) {

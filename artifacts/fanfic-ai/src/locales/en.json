@@ -146,8 +146,7 @@
     "scenePlaceholder": "Describe the scene you want to paint...",
     "tags": "Tags",
     "seoFallback": "A {{genre}} story by {{author}}",
-    "chapterBy": "Chapter written by",
-    "noCoAuthors": "No co-authors yet."
+    "chapterBy": "Chapter written by"
   },
   "collab": {
     "manageButton": "Manage co-authors",
@@ -538,5 +537,16 @@
     "myProfile": "My profile",
     "settings": "Settings",
     "signInToManage": "Sign in to manage your profile and notifications."
+  },
+  "similar": {
+    "title": "Similar stories"
+  },
+  "tag": {
+    "seoTitle": "#{{slug}} — stories",
+    "seoDesc": "Browse community-written fanfiction tagged #{{slug}} on FanFic AI.",
+    "title": "Tagged #{{slug}}",
+    "subtitle": "Every public story carrying this tag, newest first.",
+    "backToFeed": "Back to all stories",
+    "empty": "No stories yet for this tag."
   }
 }

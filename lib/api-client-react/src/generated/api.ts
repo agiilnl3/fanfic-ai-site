@@ -69,6 +69,7 @@ import type {
   GetMyUsageParams,
   GetPublicFeedParams,
   GetReadingProgressParams,
+  GetSimilarStoriesParams,
   GetStoryAnalyticsParams,
   GetStoryAudioParams,
   GetStoryLikeParams,
@@ -1460,6 +1461,116 @@ export function useListStoryForks<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getListStoryForksQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Stories similar to this one (pgvector cosine, genre fallback)
+ */
+export const getGetSimilarStoriesUrl = (
+  id: number,
+  params?: GetSimilarStoriesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/stories/${id}/similar?${stringifiedParams}`
+    : `/api/stories/${id}/similar`;
+};
+
+export const getSimilarStories = async (
+  id: number,
+  params?: GetSimilarStoriesParams,
+  options?: RequestInit,
+): Promise<Story[]> => {
+  return customFetch<Story[]>(getGetSimilarStoriesUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSimilarStoriesQueryKey = (
+  id: number,
+  params?: GetSimilarStoriesParams,
+) => {
+  return [`/api/stories/${id}/similar`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetSimilarStoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSimilarStories>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetSimilarStoriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSimilarStories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSimilarStoriesQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSimilarStories>>
+  > = ({ signal }) =>
+    getSimilarStories(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSimilarStories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSimilarStoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSimilarStories>>
+>;
+export type GetSimilarStoriesQueryError = ErrorType<void>;
+
+/**
+ * @summary Stories similar to this one (pgvector cosine, genre fallback)
+ */
+
+export function useGetSimilarStories<
+  TData = Awaited<ReturnType<typeof getSimilarStories>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params?: GetSimilarStoriesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getSimilarStories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSimilarStoriesQueryOptions(id, params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -810,6 +810,108 @@ export const ListStoryForksResponseItem = zod.object({
 export const ListStoryForksResponse = zod.array(ListStoryForksResponseItem);
 
 /**
+ * @summary Stories similar to this one (pgvector cosine, genre fallback)
+ */
+export const GetSimilarStoriesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getSimilarStoriesQueryLimitDefault = 6;
+export const getSimilarStoriesQueryLimitMax = 24;
+
+export const GetSimilarStoriesQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(getSimilarStoriesQueryLimitMax)
+    .default(getSimilarStoriesQueryLimitDefault),
+});
+
+export const getSimilarStoriesResponseCoAuthorsDefault = [];
+export const getSimilarStoriesResponseIsPrivateDefault = false;
+
+export const GetSimilarStoriesResponseItem = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  genre: zod.string(),
+  artStyle: zod.string(),
+  lengthSetting: zod.enum(["short", "medium", "long"]),
+  seedPrompt: zod.string().nullish(),
+  fullText: zod.string().nullish(),
+  summary: zod.string().nullish(),
+  characters: zod.string().nullish(),
+  status: zod
+    .enum(["draft", "published", "cancelled"])
+    .describe(
+      "`cancelled` is set by \/stories\/generate\/stream when the client\ndisconnects mid-generation; clients reading these rows should\ntreat them as incomplete drafts.\n",
+    ),
+  authorName: zod.string(),
+  coAuthors: zod
+    .array(zod.string())
+    .default(getSimilarStoriesResponseCoAuthorsDefault),
+  coverImageUrl: zod.string().nullish(),
+  posterCoverUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Dedicated 16:9 poster cover with title typography baked in. Generated asynchronously after publish; null while pending.",
+    ),
+  trailerUrl: zod
+    .string()
+    .nullish()
+    .describe("URL of the rendered video trailer mp4 (if any)."),
+  trailerStatus: zod
+    .union([
+      zod.literal("idle"),
+      zod.literal("queued"),
+      zod.literal("rendering"),
+      zod.literal("ready"),
+      zod.literal("failed"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Status of the most recent trailer render job."),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  likeCount: zod.number(),
+  commentCount: zod.number(),
+  tags: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        slug: zod.string(),
+        label: zod.string(),
+        storyCount: zod.number(),
+      }),
+    )
+    .optional()
+    .describe(
+      "Tags attached to this story. Populated by \/stories\/feed when viewerAuthorName is supplied.",
+    ),
+  readingProgress: zod
+    .number()
+    .nullish()
+    .describe(
+      "Viewer-specific reading progress percentage (0-100). Only set by \/stories\/feed when viewerAuthorName matches the requester.",
+    ),
+  isPrivate: zod
+    .boolean()
+    .default(getSimilarStoriesResponseIsPrivateDefault)
+    .describe(
+      "Conjurer-only privacy flag. Private stories are hidden from feeds and listings.",
+    ),
+  parentStoryId: zod
+    .number()
+    .nullish()
+    .describe(
+      "ID of the original story this one was remixed from, or null for original stories.",
+    ),
+});
+export const GetSimilarStoriesResponse = zod.array(
+  GetSimilarStoriesResponseItem,
+);
+
+/**
  * @summary Publish a story to the public feed
  */
 export const PublishStoryParams = zod.object({

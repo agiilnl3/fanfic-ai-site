@@ -405,6 +405,37 @@ paths:
                 items:
                   $ref: "#/components/schemas/Story"
 
+  /stories/{id}/similar:
+    get:
+      operationId: getSimilarStories
+      tags: [stories]
+      summary: Stories similar to this one (pgvector cosine, genre fallback)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 24
+            default: 6
+      responses:
+        "200":
+          description: Array of similar published stories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Story"
+        "404":
+          description: Source story not found
+
   /stories/{id}/publish:
     post:
       operationId: publishStory

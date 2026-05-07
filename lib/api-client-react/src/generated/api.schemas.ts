@@ -1161,6 +1161,14 @@ export const GetPublicFeedSort = {
   all: "all",
 } as const;
 
+export type GetSimilarStoriesParams = {
+  /**
+   * @minimum 1
+   * @maximum 24
+   */
+  limit?: number;
+};
+
 export type RegenerateIllustrationBody = {
   /** If provided, replaces the stored prompt for this regeneration and persists. */
   promptOverride?: string;

@@ -9,6 +9,7 @@ import { LikeButton } from "@/components/like-button";
 import { RepostButton } from "@/components/repost-button";
 import { IllustrationReorderDialog } from "@/components/illustration-reorder-dialog";
 import { CommentsSection } from "@/components/comments-section";
+import { SimilarStories } from "@/components/similar-stories";
 import { ParagraphCommentsPopover } from "@/components/paragraph-comments-popover";
 import { ManageCollaboratorsDialog } from "@/components/manage-collaborators-dialog";
 import { CharactersDialog } from "@/components/characters-dialog";
@@ -1706,6 +1707,7 @@ export default function StoryReading() {
             </div>
           )}
         </div>
+        <SimilarStories storyId={story.id} />
         <div id="comments-section">
           <CommentsSection storyId={story.id} />
         </div>

@@ -20,6 +20,7 @@ const Feed = lazy(() => import("@/pages/feed"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Admin = lazy(() => import("@/pages/admin"));
 const AuthorPage = lazy(() => import("@/pages/author"));
+const TagPage = lazy(() => import("@/pages/tag"));
 const Library = lazy(() => import("@/pages/library"));
 const Series = lazy(() => import("@/pages/series"));
 const SeriesDetail = lazy(() => import("@/pages/series-detail"));
@@ -146,6 +147,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/admin" component={Admin} />
         <Route path="/author/:name" component={AuthorPage} />
+        <Route path="/tag/:slug" component={TagPage} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
