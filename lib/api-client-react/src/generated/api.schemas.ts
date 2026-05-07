@@ -443,6 +443,16 @@ export interface ChapterTree {
   canonicalPath: number[];
 }
 
+export interface UpdateChapterBody {
+  /**
+   * @minLength 1
+   * @maxLength 50000
+   */
+  text?: string;
+  /** @maxLength 200 */
+  title?: string;
+}
+
 export interface BranchChapterBody {
   /** @minLength 1 */
   authorName: string;

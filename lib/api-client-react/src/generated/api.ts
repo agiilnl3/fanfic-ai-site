@@ -41,6 +41,7 @@ import type {
   BookmarkInfo,
   BranchChapterBody,
   BranchChapterResponse,
+  Chapter,
   ChapterAuthorList,
   ChapterTree,
   Character,
@@ -124,6 +125,7 @@ import type {
   UnlikeStoryParams,
   UnreadCount,
   UnrepostStoryParams,
+  UpdateChapterBody,
   UpdateCharacterBody,
   UpdateNotificationPrefsBody,
   UpdateReadingProgressBody,
@@ -4086,6 +4088,94 @@ export const useBranchChapter = <
   TContext
 > => {
   return useMutation(getBranchChapterMutationOptions(options));
+};
+
+/**
+ * @summary Edit the markdown text (and optional title) of an existing chapter
+ */
+export const getUpdateChapterUrl = (id: number, chapterId: number) => {
+  return `/api/stories/${id}/chapters/${chapterId}`;
+};
+
+export const updateChapter = async (
+  id: number,
+  chapterId: number,
+  updateChapterBody: UpdateChapterBody,
+  options?: RequestInit,
+): Promise<Chapter> => {
+  return customFetch<Chapter>(getUpdateChapterUrl(id, chapterId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateChapterBody),
+  });
+};
+
+export const getUpdateChapterMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateChapter>>,
+    TError,
+    { id: number; chapterId: number; data: BodyType<UpdateChapterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateChapter>>,
+  TError,
+  { id: number; chapterId: number; data: BodyType<UpdateChapterBody> },
+  TContext
+> => {
+  const mutationKey = ["updateChapter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateChapter>>,
+    { id: number; chapterId: number; data: BodyType<UpdateChapterBody> }
+  > = (props) => {
+    const { id, chapterId, data } = props ?? {};
+
+    return updateChapter(id, chapterId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateChapterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateChapter>>
+>;
+export type UpdateChapterMutationBody = BodyType<UpdateChapterBody>;
+export type UpdateChapterMutationError = ErrorType<void>;
+
+/**
+ * @summary Edit the markdown text (and optional title) of an existing chapter
+ */
+export const useUpdateChapter = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateChapter>>,
+    TError,
+    { id: number; chapterId: number; data: BodyType<UpdateChapterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateChapter>>,
+  TError,
+  { id: number; chapterId: number; data: BodyType<UpdateChapterBody> },
+  TContext
+> => {
+  return useMutation(getUpdateChapterMutationOptions(options));
 };
 
 /**

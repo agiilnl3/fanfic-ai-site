@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { FollowButton } from "@/components/follow-button";
 import { Layout } from "@/components/layout";
+import { ReadingProgressBar } from "@/components/reading-progress-bar";
+import { ChapterEditDialog } from "@/components/chapter-edit-dialog";
 import { Seo } from "@/components/seo";
 import { LikeButton } from "@/components/like-button";
 import { RepostButton } from "@/components/repost-button";
@@ -71,7 +73,7 @@ export default function StoryReading() {
   const { t, i18n } = useTranslation();
   const [, params] = useRoute("/story/:id");
   const storyId = Number(params?.id);
-  const { authorName } = useAuthor();
+  const { authorName, me } = useAuthor();
   const { toast } = useToast();
   const isRu = (i18n.resolvedLanguage ?? i18n.language ?? "en").startsWith("ru");
   const dateLocale = isRu ? ruLocale : undefined;
@@ -846,12 +848,26 @@ export default function StoryReading() {
         )}
         {isChapterHeading ? (
           <div className="mt-12 mb-6">
-            <h2
-              className="font-serif text-3xl md:text-4xl"
-              data-testid={`chapter-heading-${chapterIdx}`}
-            >
-              {headingText}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2
+                className="font-serif text-3xl md:text-4xl"
+                data-testid={`chapter-heading-${chapterIdx}`}
+              >
+                {headingText}
+              </h2>
+              {!editMode && canEditChapter(chapterIdx) && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  title={t("chapter.editTitle", "Edit chapter")}
+                  data-testid={`button-edit-chapter-${chapterIdx}`}
+                  onClick={() => openChapterEditor(chapterIdx)}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+              )}
+            </div>
             {chapterAuthor && chapterAuthor.handle !== story.authorName && (
               <div
                 className="mt-2 text-sm text-muted-foreground italic"
@@ -1007,6 +1023,47 @@ export default function StoryReading() {
     }
   });
 
+  // Chapter edit dialog: opened by the per-chapter "Edit chapter"
+  // pencil shown on chapter headings (and also for chapter 0, the
+  // root) for users who own the chapter or the story itself.
+  const [editingChapter, setEditingChapter] = useState<{
+    id: number;
+    text: string;
+    title?: string | null;
+  } | null>(null);
+  const chaptersById = React.useMemo(() => {
+    const m = new Map<number, Chapter>();
+    for (const c of chapterTree?.chapters ?? []) m.set(c.id, c);
+    return m;
+  }, [chapterTree]);
+  const canEditChapter = (chapterIdx: number): boolean => {
+    if (!isAuthor) {
+      // A non-co-author may still own a chapter they themselves
+      // contributed via /branch.
+      const owner = chapterAuthorByIndex.get(chapterIdx);
+      return !!owner && !!me?.id && owner.userId === me.id;
+    }
+    if (isPrimaryAuthor) return true;
+    // Co-authors can only edit chapters they personally wrote.
+    const owner = chapterAuthorByIndex.get(chapterIdx);
+    return !!owner && !!me?.id && owner.userId === me.id;
+  };
+  const openChapterEditor = (chapterIdx: number) => {
+    const chapterId = activeChain[chapterIdx]?.id;
+    if (chapterId == null) return;
+    const ch = chaptersById.get(chapterId);
+    if (!ch) return;
+    setEditingChapter({ id: ch.id, text: ch.text, title: ch.title });
+  };
+
+  // Reading-time + word-count for the sticky progress bar. Words/200wpm
+  // is the long-standing "average adult reading speed" heuristic; close
+  // enough for a header label without per-genre tuning.
+  const wordCount = renderedStoryText
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+  const totalMinutes = Math.max(1, Math.ceil(wordCount / 200));
+
   return (
     <Layout>
       <Seo
@@ -1017,6 +1074,12 @@ export default function StoryReading() {
         author={story.authorName}
         publishedTime={story.createdAt}
       />
+      {!editMode && (
+        <ReadingProgressBar
+          totalMinutes={totalMinutes}
+          wordCount={wordCount}
+        />
+      )}
       <article className="pb-32 animate-in fade-in duration-700">
         <header className="relative w-full h-[50vh] min-h-[400px] flex items-end justify-center pb-16 overflow-hidden">
           {story.coverImageUrl ? (
@@ -1445,6 +1508,33 @@ export default function StoryReading() {
             </div>
           ) : (
             <div className="story-prose">{elements}</div>
+          )}
+
+          {!editMode && canEditChapter(0) && activeChain[0]?.id != null && (
+            <div className="mt-8 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openChapterEditor(0)}
+                data-testid="button-edit-chapter-0"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-2" />
+                {t("chapter.editFirst", "Edit first chapter")}
+              </Button>
+            </div>
+          )}
+          {editingChapter && (
+            <ChapterEditDialog
+              open={!!editingChapter}
+              onOpenChange={(o) => {
+                if (!o) setEditingChapter(null);
+              }}
+              storyId={storyId}
+              chapterId={editingChapter.id}
+              initialText={editingChapter.text}
+              initialTitle={editingChapter.title ?? null}
+              showTitleField={editingChapter.id !== activeChain[0]?.id}
+            />
           )}
 
           {!editMode && (

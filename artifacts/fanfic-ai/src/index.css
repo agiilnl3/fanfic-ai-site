@@ -125,7 +125,75 @@
 }
 
 .dark {
-  /* Same as root because we only have one dark theme for this app */
+  /* Same as root — :root already encodes the dark palette. */
+}
+
+/* === Reading themes ===
+ * Pre-hydration script in index.html sets [data-theme="dark|light|sepia"]
+ * on <html> from localStorage to avoid theme-flash on load. The :root
+ * block above is the dark default; selectors below override variables
+ * for the lighter reading modes.
+ */
+[data-theme="light"] {
+  --background: 40 30% 97%;
+  --foreground: 230 35% 12%;
+  --border: 230 15% 85%;
+  --card: 40 30% 99%;
+  --card-foreground: 230 35% 12%;
+  --card-border: 230 15% 88%;
+  --sidebar: 40 25% 96%;
+  --sidebar-foreground: 230 35% 12%;
+  --sidebar-border: 230 15% 85%;
+  --sidebar-accent: 40 25% 92%;
+  --sidebar-accent-foreground: 230 35% 12%;
+  --popover: 40 30% 99%;
+  --popover-foreground: 230 35% 12%;
+  --popover-border: 230 15% 85%;
+  --primary: 30 75% 45%;
+  --primary-foreground: 40 30% 98%;
+  --secondary: 230 15% 92%;
+  --secondary-foreground: 230 35% 18%;
+  --muted: 230 15% 93%;
+  --muted-foreground: 230 15% 40%;
+  --accent: 230 15% 92%;
+  --accent-foreground: 230 35% 18%;
+  --input: 230 15% 88%;
+  --ring: 30 75% 45%;
+  --button-outline: rgba(0,0,0,.10);
+  --badge-outline: rgba(0,0,0,.05);
+  --elevate-1: rgba(0,0,0,.04);
+  --elevate-2: rgba(0,0,0,.09);
+}
+
+[data-theme="sepia"] {
+  --background: 36 38% 92%;
+  --foreground: 30 35% 18%;
+  --border: 32 25% 78%;
+  --card: 36 42% 95%;
+  --card-foreground: 30 35% 18%;
+  --card-border: 32 25% 80%;
+  --sidebar: 36 38% 90%;
+  --sidebar-foreground: 30 35% 18%;
+  --sidebar-border: 32 25% 78%;
+  --sidebar-accent: 36 30% 85%;
+  --sidebar-accent-foreground: 30 35% 18%;
+  --popover: 36 42% 95%;
+  --popover-foreground: 30 35% 18%;
+  --popover-border: 32 25% 80%;
+  --primary: 24 70% 40%;
+  --primary-foreground: 36 38% 95%;
+  --secondary: 34 25% 82%;
+  --secondary-foreground: 30 35% 22%;
+  --muted: 34 25% 85%;
+  --muted-foreground: 30 20% 38%;
+  --accent: 34 25% 82%;
+  --accent-foreground: 30 35% 22%;
+  --input: 32 25% 80%;
+  --ring: 24 70% 40%;
+  --button-outline: rgba(60,30,0,.12);
+  --badge-outline: rgba(60,30,0,.06);
+  --elevate-1: rgba(60,30,0,.04);
+  --elevate-2: rgba(60,30,0,.09);
 }
 
 @layer base {

@@ -1626,6 +1626,36 @@ export const BranchChapterResponse = zod.object({
 });
 
 /**
+ * @summary Edit the markdown text (and optional title) of an existing chapter
+ */
+export const UpdateChapterParams = zod.object({
+  id: zod.coerce.number(),
+  chapterId: zod.coerce.number(),
+});
+
+export const updateChapterBodyTextMax = 50000;
+
+export const updateChapterBodyTitleMax = 200;
+
+export const UpdateChapterBody = zod.object({
+  text: zod.string().min(1).max(updateChapterBodyTextMax).optional(),
+  title: zod.string().max(updateChapterBodyTitleMax).optional(),
+});
+
+export const UpdateChapterResponse = zod.object({
+  id: zod.number(),
+  storyId: zod.number(),
+  parentChapterId: zod.number().nullable(),
+  title: zod.string(),
+  branchLabel: zod.string(),
+  text: zod.string(),
+  position: zod.number(),
+  isCanonical: zod.boolean(),
+  authorHandle: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Mark a chapter as the canonical pick among its siblings
  */
 export const SetCanonicalChapterParams = zod.object({

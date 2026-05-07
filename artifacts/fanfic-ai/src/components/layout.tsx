@@ -15,6 +15,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { InstallPrompt } from "@/components/install-prompt";
 import { AuthMenu } from "@/components/auth-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -62,12 +63,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="hidden md:flex items-center gap-2">
             <NotificationsBell />
+            <ThemeToggle />
             <LanguageSwitcher />
             <AuthMenu />
           </div>
 
           <div className="md:hidden flex items-center gap-2">
             <NotificationsBell />
+            <ThemeToggle compact />
             <LanguageSwitcher />
             <AuthMenu compact />
             <Link href="/create" className="text-primary flex items-center justify-center p-2">

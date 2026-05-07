@@ -1154,6 +1154,42 @@ paths:
         "502":
           description: AI returned malformed output
 
+  /stories/{id}/chapters/{chapterId}:
+    patch:
+      operationId: updateChapter
+      tags: [stories]
+      summary: Edit the markdown text (and optional title) of an existing chapter
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: chapterId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateChapterBody"
+      responses:
+        "200":
+          description: The updated chapter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Chapter"
+        "401":
+          description: Authentication required
+        "403":
+          description: Not authorized to edit this chapter
+        "404":
+          description: Story or chapter not found
+
   /stories/{id}/chapters/{chapterId}/canonical:
     post:
       operationId: setCanonicalChapter
@@ -3021,6 +3057,17 @@ components:
             type: integer
           description: Ordered list of chapter ids forming the canonical chain (root → leaf).
       required: [storyId, chapters, canonicalPath]
+
+    UpdateChapterBody:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 50000
+        title:
+          type: string
+          maxLength: 200
 
     BranchChapterBody:
       type: object

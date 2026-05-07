@@ -10,6 +10,27 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0b0b14" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <script>
+      // Apply the persisted reading theme BEFORE React hydrates to
+      // avoid a dark→light flash. Falls back to "dark" for first-time
+      // visitors. Mirrored on `data-theme` so CSS variable scopes can
+      // target [data-theme="light"] / [data-theme="sepia"]. The "dark"
+      // class is also kept so any tailwind dark: utilities continue
+      // working.
+      (function () {
+        try {
+          var t = localStorage.getItem("ff-theme");
+          if (t !== "light" && t !== "sepia" && t !== "dark") t = "dark";
+          var root = document.documentElement;
+          root.setAttribute("data-theme", t);
+          if (t === "dark") root.classList.add("dark");
+          else root.classList.remove("dark");
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

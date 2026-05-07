@@ -12,8 +12,10 @@ import {
   BranchChapterParams,
   BranchChapterBody,
   SetCanonicalChapterParams,
+  UpdateChapterParams,
+  UpdateChapterBody,
 } from "@workspace/api-zod";
-import { canEditStory } from "../lib/storyAuthz";
+import { canEditStory, ownsByUserOrHandle } from "../lib/storyAuthz";
 import { checkAndBumpStory } from "../lib/usage";
 import { getUserPlan } from "../lib/subscriptions";
 import { gateModelForPlan } from "../lib/modelGating";
@@ -252,6 +254,100 @@ Generate exactly ${count} DISTINCT alternative next chapters that diverge meanin
       parentChapterId: parent.id,
       branches: inserted.map(serializeChapter),
     });
+  },
+);
+
+router.patch(
+  "/stories/:id/chapters/:chapterId",
+  writeLimiter,
+  async (req, res): Promise<void> => {
+    const params = UpdateChapterParams.safeParse(req.params);
+    const body = UpdateChapterBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    if (!req.user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+    const [story] = await db
+      .select()
+      .from(storiesTable)
+      .where(eq(storiesTable.id, params.data.id))
+      .limit(1);
+    if (!story) {
+      res.status(404).json({ error: "Story not found" });
+      return;
+    }
+    // Authz + mutation must run under the story's chapter advisory
+    // lock so we can't read a stale `chapter` and then race a
+    // concurrent /branch or /canonical that re-writes canonical state
+    // before we call syncStoryFullText.
+    let updated: Chapter | null = null;
+    let authzError: "forbidden" | "not_found" | null = null;
+    await db.transaction(async (tx) => {
+      await lockStoryChapters(tx, story.id);
+      const [chapter] = await tx
+        .select()
+        .from(chaptersTable)
+        .where(
+          and(
+            eq(chaptersTable.id, params.data.chapterId),
+            eq(chaptersTable.storyId, story.id),
+          ),
+        )
+        .limit(1);
+      if (!chapter) {
+        authzError = "not_found";
+        return;
+      }
+      // Authz: only the *primary* author can edit any chapter on
+      // their story. Everyone else — co-authors included — may only
+      // edit a chapter they personally authored (e.g. a /branch
+      // contribution). This matches the client's per-chapter gate
+      // and prevents a co-author from rewriting another co-author's
+      // contribution. canEditStory() (which would also cover
+      // co-authors) is intentionally NOT used here.
+      const isPrimary = ownsByUserOrHandle(story, req.user!);
+      const ownsChapter =
+        chapter.authorUserId != null && chapter.authorUserId === req.user!.id;
+      if (!isPrimary && !ownsChapter) {
+        authzError = "forbidden";
+        return;
+      }
+      const update: Partial<typeof chaptersTable.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+      if (typeof body.data.text === "string") update.text = body.data.text;
+      if (typeof body.data.title === "string") update.title = body.data.title;
+      const [row] = await tx
+        .update(chaptersTable)
+        .set(update)
+        .where(eq(chaptersTable.id, chapter.id))
+        .returning();
+      updated = row;
+    });
+    if (authzError === "not_found") {
+      res.status(404).json({ error: "Chapter not found" });
+      return;
+    }
+    if (authzError === "forbidden") {
+      res.status(403).json({ error: "Not authorized" });
+      return;
+    }
+    if (!updated) {
+      res.status(500).json({ error: "Update failed" });
+      return;
+    }
+    // Refresh the denormalized fullText so the reader / PDF / audio
+    // paths see the new chapter immediately. Safe to do outside the
+    // advisory lock: syncStoryFullText reads canonical state and
+    // overwrites stories.full_text in a single statement; the worst
+    // case for a concurrent canonical-flip racing us is one extra
+    // sync from the next mutation.
+    await syncStoryFullText(story.id);
+    res.json(serializeChapter(updated));
   },
 );
 

@@ -79,6 +79,7 @@
     "@clerk/themes": "^2.4.57",
     "@sentry/react": "^10.51.0",
     "@tanstack/react-virtual": "^3.13.24",
+    "@uiw/react-md-editor": "^4.1.0",
     "i18next": "^26.0.8",
     "i18next-browser-languagedetector": "^8.2.1",
     "react-helmet-async": "^3.0.0",
